@@ -14,6 +14,7 @@ Catch is a personal capture inbox built with PHP 8.2+, Fat-Free Framework, serve
 6. Run `php bin/migrate.php`.
 
 Production should keep `tls_verify = true`, use HTTPS, set a strong `app.key`, and expose only `public/`.
+The web-server user must have write access to `storage/cache`, `storage/logs`, `storage/sessions`, `storage/tmp`, and `storage/uploads`.
 
 ## Prerelease access
 
