@@ -1,0 +1,2 @@
+const key='catch-theme';
+export function initTheme(){const select=document.querySelector('[data-theme-select]');if(!select)return;const saved=localStorage.getItem(key)||'system';select.value=saved;select.addEventListener('change',()=>{const value=select.value;localStorage.setItem(key,value);if(value==='system')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=value;});}

@@ -1,0 +1,16 @@
+{
+  "name": "catch/capture-inbox",
+  "description": "Catch - Capture once. Decide later.",
+  "type": "project",
+  "require": {
+    "php": ">=8.2",
+    "ext-pdo": "*",
+    "ext-json": "*",
+    "ext-fileinfo": "*",
+    "ext-sodium": "*"
+  },
+  "scripts": {
+    "test": "php tests/run.php"
+  },
+  "config": {"sort-packages": true}
+}

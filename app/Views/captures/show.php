@@ -1,0 +1,9 @@
+<a class="back-link" href="/inbox">← Zur Inbox</a>
+<article class="detail">
+  <header><span class="type-label"><?=htmlspecialchars($capture['type'])?></span><h1><?=htmlspecialchars($capture['title']?:'Capture')?></h1><p><?=htmlspecialchars((new DateTime($capture['created_at']))->format('d.m.Y, H:i'))?> · <?=htmlspecialchars($capture['source'])?></p></header>
+  <?php if($capture['text']): ?><section><h2>Inhalt</h2><div class="prose"><?=nl2br(htmlspecialchars($capture['text']))?></div></section><?php endif; ?>
+  <?php if($capture['url']): ?><section><h2>Link</h2><a class="url-card" href="<?=htmlspecialchars($capture['url'])?>" target="_blank" rel="noopener noreferrer"><?=htmlspecialchars($capture['url'])?><span>↗</span></a></section><?php endif; ?>
+  <?php if($capture['extracted_text']): ?><details><summary>Extrahierter Text</summary><div class="prose"><?=nl2br(htmlspecialchars($capture['extracted_text']))?></div></details><?php endif; ?>
+  <?php if($capture['attachments']): ?><section><h2>Anhänge</h2><div class="attachment-list"><?php foreach($capture['attachments'] as $attachment): ?><div><strong><?=htmlspecialchars($attachment['original_name'])?></strong><span><?=htmlspecialchars($attachment['mime_type'])?> · <?=number_format($attachment['size_bytes']/1024,1,',','.')?> KB</span></div><?php endforeach;?></div></section><?php endif; ?>
+  <footer class="detail-actions"><form method="post" action="/captures/<?=urlencode($capture['id'])?>/archive"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-secondary">Archivieren</button></form><form method="post" action="/captures/<?=urlencode($capture['id'])?>/delete" onsubmit="return confirm('Capture wirklich löschen?')"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-danger">Löschen</button></form></footer>
+</article>

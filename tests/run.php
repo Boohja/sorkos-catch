@@ -1,0 +1,10 @@
+<?php
+declare(strict_types=1);
+$root=dirname(__DIR__);require $root.'/app/bootstrap.php';$failures=0;
+$test=function(string $name,callable $case)use(&$failures):void{try{$case();echo "PASS $name\n";}catch(Throwable $e){$failures++;echo "FAIL $name: {$e->getMessage()}\n";}};
+$test('UUID format',function(){if(!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',Catch\Core\Id::uuid()))throw new RuntimeException('Invalid UUID');});
+$test('Capture validation requires content',function(){$errors=(new Catch\Validation\CaptureValidator())->validate(['client_capture_id'=>'test','type'=>'text']);if(!isset($errors['content']))throw new RuntimeException('Content accepted');});
+$test('Capture validation accepts text',function(){$errors=(new Catch\Validation\CaptureValidator())->validate(['client_capture_id'=>'test','type'=>'text','text'=>'Hello']);if($errors)throw new RuntimeException(json_encode($errors));});
+$test('Prerelease access permits only the configured Sorkos user',function()use($root){$directory=sys_get_temp_dir().'/catch-access-'.bin2hex(random_bytes(6));mkdir($directory.'/config',0777,true);file_put_contents($directory.'/config/config.ini',"[access]\nprerelease=true\nallowed_sorkos_user_id=usr_allowed\n");$policy=new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));if(!$policy->allowsSorkosUserId('usr_allowed')||$policy->allowsSorkosUserId('usr_other')||$policy->allowsSorkosUserId(''))throw new RuntimeException('Prerelease allowlist failed');unlink($directory.'/config/config.ini');rmdir($directory.'/config');rmdir($directory);});
+$test('Released access does not require an allowlist',function()use($root){$directory=sys_get_temp_dir().'/catch-access-'.bin2hex(random_bytes(6));mkdir($directory.'/config',0777,true);file_put_contents($directory.'/config/config.ini',"[access]\nprerelease=false\n");$policy=new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));if(!$policy->allowsSorkosUserId('usr_any'))throw new RuntimeException('Released access was denied');unlink($directory.'/config/config.ini');rmdir($directory.'/config');rmdir($directory);});
+exit($failures?1:0);
