@@ -24,12 +24,12 @@ final class CaptureController
         $_POST['client_capture_id']=$_POST['client_capture_id']??Id::uuid(); $_POST['source']='web';
         if(($_POST['type']??'')==='url'){$_POST['url']=$_POST['text']??null;$_POST['text']=null;}
         try{$result=$this->service->create($user['id'],$_POST,$_FILES); Response::redirect('/captures/'.$result['capture']['id']);}
-        catch(\Throwable $e){$_SESSION['flash_error']=$e instanceof \InvalidArgumentException?'Bitte Inhalt, URL oder Datei angeben.':'Der Capture konnte nicht gespeichert werden.'; Response::redirect('/inbox');}
+        catch(\Throwable $e){$_SESSION['flash_error']=$e instanceof \InvalidArgumentException?'Add content, a URL, or a file.':'The capture could not be saved.'; Response::redirect('/inbox');}
     }
     public function show(\Base $f3,array $params): void
     {
         $user=$this->user(); $capture=$this->captures->find((string)$params['id'],$user['id']);
-        if(!$capture){$this->view->render('errors/404',['title'=>'Nicht gefunden','user'=>$user],404);return;}
+        if(!$capture){$this->view->render('errors/404',['title'=>'Not found','user'=>$user],404);return;}
         $this->view->render('captures/show',['title'=>$capture['title']?:'Capture','user'=>$user,'capture'=>$capture,'csrf'=>$this->csrf->token()]);
     }
     public function archive(\Base $f3,array $params): never { $user=$this->user(); if($this->csrf->valid($_POST['_csrf']??null))$this->captures->setStatus((string)$params['id'],$user['id'],'archived'); Response::redirect('/inbox'); }

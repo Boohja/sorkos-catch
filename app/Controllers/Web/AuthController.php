@@ -13,16 +13,16 @@ final class AuthController
     public function show(): void
     {
         if($this->auth->user())Response::redirect('/inbox');
-        $this->view->render('auth/login',['title'=>'Anmelden','csrf'=>$this->csrf->token(),'configured'=>$this->auth->configured(),'error'=>$_SESSION['auth_error']??null]);unset($_SESSION['auth_error']);
+        $this->view->render('auth/login',['title'=>'Log in','csrf'=>$this->csrf->token(),'configured'=>$this->auth->configured(),'error'=>$_SESSION['auth_error']??null]);unset($_SESSION['auth_error']);
     }
     public function start(): never
     {
-        try{Response::redirect($this->auth->authorizationUrl());}catch(\Throwable $error){$this->logFailure('authorization start',$error);$_SESSION['auth_error']='Sorkos Login ist noch nicht konfiguriert.';Response::redirect('/login');}
+        try{Response::redirect($this->auth->authorizationUrl());}catch(\Throwable $error){$this->logFailure('authorization start',$error);$_SESSION['auth_error']='Sorkos Login is not configured yet.';Response::redirect('/login');}
     }
     public function callback(): never
     {
-        if(($_GET['error']??'')==='access_denied'){$_SESSION['auth_error']='Die Anmeldung wurde abgebrochen.';Response::redirect('/login');}
-        try{$user=$this->auth->complete((string)($_GET['code']??''),(string)($_GET['state']??''));if(!$this->access->allowsSorkosUserId((string)($user['sorkos_user_id']??''))){$this->auth->logout();Response::redirect('/coming-soon?access=denied');}$this->auth->establishSession($user['id']);Response::redirect('/inbox');}catch(\Throwable $error){$this->logFailure('authorization callback',$error);$_SESSION['auth_error']='Die Anmeldung konnte nicht abgeschlossen werden.';Response::redirect('/login');}
+        if(($_GET['error']??'')==='access_denied'){$_SESSION['auth_error']='Login was cancelled.';Response::redirect('/login');}
+        try{$user=$this->auth->complete((string)($_GET['code']??''),(string)($_GET['state']??''));if(!$this->access->allowsSorkosUserId((string)($user['sorkos_user_id']??''))){$this->auth->logout();Response::redirect('/coming-soon?access=denied');}$this->auth->establishSession($user['id']);Response::redirect('/inbox');}catch(\Throwable $error){$this->logFailure('authorization callback',$error);$_SESSION['auth_error']='Login could not be completed.';Response::redirect('/login');}
     }
     public function logout(): never
     {

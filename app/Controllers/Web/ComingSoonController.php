@@ -20,10 +20,9 @@ final class ComingSoonController
     {
         header('Cache-Control: no-store');
         $this->view->render('coming-soon', [
-            'title' => 'Bald verfügbar',
+            'title' => 'Coming soon',
             'user' => $this->auth->user(),
             'csrf' => $this->csrf->token(),
-            'accessDenied' => ($_GET['access'] ?? '') === 'denied',
             'configured' => $this->auth->configured(),
         ]);
     }

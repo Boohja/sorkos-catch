@@ -10,7 +10,7 @@ export function initDevices(){
   const qrTarget=document.querySelector('[data-qr-code]');
   if(qrTarget&&typeof globalThis.qrcode==='function'){
     const qr=globalThis.qrcode(0,'M');qr.addData(qrTarget.dataset.qrValue);qr.make();
-    qrTarget.innerHTML=qr.createSvgTag({cellSize:5,margin:0,scalable:true,alt:'QR-Code zum Catch Setup-Kurzbefehl'});
+    qrTarget.innerHTML=qr.createSvgTag({cellSize:5,margin:0,scalable:true,alt:'QR code for the Catch Setup shortcut'});
   }
 
   const pairing=document.querySelector('[data-device-status-url][data-polling="true"]');

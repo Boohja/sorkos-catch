@@ -8,5 +8,5 @@ use Catch\Services\AuthService;
 final class HelpController
 {
     public function __construct(private readonly View $view,private readonly AuthService $auth,private readonly Config $config){}
-    public function show(): void{$this->view->render('help/index',['title'=>'Kurzbefehl-Hilfe','user'=>$this->auth->user(),'appUrl'=>rtrim((string)$this->config->get('app.url'),'/')]);}
+    public function show(): void{$this->view->render('help/index',['title'=>'Shortcut help','user'=>$this->auth->user(),'appUrl'=>rtrim((string)$this->config->get('app.url'),'/')]);}
 }
