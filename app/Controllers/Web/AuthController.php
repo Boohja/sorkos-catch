@@ -31,6 +31,6 @@ final class AuthController
 
     private function logFailure(string $stage,\Throwable $error): void
     {
-        error_log(sprintf("[%s] Sorkos %s failed: %s\n",gmdate(DATE_ATOM),$stage,$error->getMessage()),3,dirname(__DIR__,3).'/storage/logs/auth.log');
+        @error_log(sprintf("[%s] Sorkos %s failed: %s\n",gmdate(DATE_ATOM),$stage,$error->getMessage()),3,dirname(__DIR__,3).'/storage/logs/auth.log');
     }
 }

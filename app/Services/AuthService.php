@@ -32,6 +32,7 @@ final class AuthService
 
     public function establishSession(string $userId): void
     {
+        session_regenerate_id(true);
         $_SESSION['user_id']=$userId;$_SESSION['_csrf']=bin2hex(random_bytes(24));
     }
 
@@ -58,12 +59,63 @@ final class AuthService
 
     private function exchange(string $code): array
     {
-        if($code==='')throw new RuntimeException('The authorization code is missing.');$this->assertConfigured();
-        $verify=$this->config->bool('sorkos.tls_verify',true);$curl=curl_init(rtrim((string)$this->config->get('sorkos.base_url'),'/').'/token');
-        curl_setopt_array($curl,[CURLOPT_POST=>true,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>10,CURLOPT_HTTPHEADER=>['Accept: application/json','Content-Type: application/x-www-form-urlencoded'],CURLOPT_POSTFIELDS=>http_build_query(['grant_type'=>'authorization_code','code'=>$code,'client_id'=>$this->config->get('sorkos.client_id'),'client_secret'=>$this->config->get('sorkos.client_secret'),'redirect_uri'=>$this->config->get('sorkos.redirect_uri')]),CURLOPT_SSL_VERIFYPEER=>$verify,CURLOPT_SSL_VERIFYHOST=>$verify?2:0]);
-        $body=curl_exec($curl);$status=(int)curl_getinfo($curl,CURLINFO_RESPONSE_CODE);$error=curl_error($curl);curl_close($curl);
-        if($body===false||$status!==200)throw new RuntimeException('Sorkos token exchange failed'.($error!==''?': '.$error:'.'));
-        $decoded=json_decode((string)$body,true);if(!is_array($decoded)||!is_array($decoded['user']??null))throw new RuntimeException('Sorkos returned an invalid response.');return $decoded['user'];
+        if ($code === '') {
+            throw new RuntimeException('The authorization code is missing.');
+        }
+        $this->assertConfigured();
+
+        $verify = $this->config->bool('sorkos.tls_verify', true);
+        $curl = curl_init(rtrim((string) $this->config->get('sorkos.base_url'), '/') . '/token');
+        if ($curl === false) {
+            throw new RuntimeException('Sorkos token exchange could not be initialized.');
+        }
+
+        $configured = curl_setopt_array($curl, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 10,
+            CURLOPT_HTTPHEADER => ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'],
+            CURLOPT_POSTFIELDS => http_build_query([
+                'grant_type' => 'authorization_code',
+                'code' => $code,
+                'client_id' => $this->config->get('sorkos.client_id'),
+                'client_secret' => $this->config->get('sorkos.client_secret'),
+                'redirect_uri' => $this->config->get('sorkos.redirect_uri'),
+            ]),
+            CURLOPT_SSL_VERIFYPEER => $verify,
+            CURLOPT_SSL_VERIFYHOST => $verify ? 2 : 0,
+        ]);
+        if (!$configured) {
+            throw new RuntimeException('Sorkos token exchange could not be configured.');
+        }
+
+        $body = curl_exec($curl);
+        $status = (int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+        $transportError = curl_error($curl);
+
+        // CurlHandle is released automatically; the legacy close helper is deprecated in PHP 8.5.
+        $curl = null;
+
+        if ($body === false) {
+            throw new RuntimeException('Sorkos token exchange transport failed: ' . ($transportError ?: 'unknown cURL error'));
+        }
+
+        $decoded = json_decode((string) $body, true);
+        if ($status !== 200) {
+            $providerError = is_array($decoded)
+                ? trim((string) ($decoded['error_description'] ?? $decoded['error'] ?? ''))
+                : '';
+            throw new RuntimeException(sprintf(
+                'Sorkos token exchange failed with HTTP %d%s.',
+                $status,
+                $providerError !== '' ? ': ' . $providerError : ''
+            ));
+        }
+        if (!is_array($decoded) || !is_array($decoded['user'] ?? null)) {
+            throw new RuntimeException('Sorkos returned an invalid response.');
+        }
+
+        return $decoded['user'];
     }
 
     private function assertConfigured(): void
