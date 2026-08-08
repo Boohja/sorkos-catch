@@ -1,0 +1,628 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Catch Public API",
+    "version": "0.1.0-prerelease",
+    "description": "The complete inventory of publicly reachable machine endpoints currently implemented by Catch. Pairing creates one device token. That token is used to submit captures for the account that owns the device.\n\n**Try it out sends real requests to the current Catch installation.** Pairing consumes a valid setup code, and capture requests store data.\n\nRoutes marked **Reserved** exist in the application, but pairing currently issues only `capture:write` tokens. Catch does not currently issue the `full` tokens required by those operations."
+  },
+  "externalDocs": {
+    "description": "iOS Shortcut setup guide",
+    "url": "/help"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This Catch installation"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Pairing",
+      "description": "Exchange a pairing code created in the signed-in Catch frontend for a device token. There is no public device-listing API."
+    },
+    {
+      "name": "Shortcut",
+      "description": "iOS Shortcut convenience endpoints. Every response has exactly two string fields: `error` and `result`."
+    },
+    {
+      "name": "Captures",
+      "description": "Versioned, client-neutral capture API."
+    },
+    {
+      "name": "Reserved full access",
+      "description": "Implemented capture-management routes that require a `full` token. No such token is currently issued through the public pairing flow."
+    },
+    {
+      "name": "Operations",
+      "description": "Unauthenticated service-health information."
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Operations"],
+        "summary": "Check application and database availability",
+        "operationId": "getHealth",
+        "description": "Public operational probe. It does not expose account data.",
+        "responses": {
+          "200": {
+            "description": "Application process is responding.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Health" },
+                "example": {
+                  "status": "ok",
+                  "database": "connected",
+                  "time": "2026-08-08T12:00:00+00:00"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/pair": {
+      "post": {
+        "tags": ["Pairing"],
+        "summary": "Pair any supported client",
+        "operationId": "pairDevice",
+        "description": "Channel-neutral pairing endpoint intended for clients such as future Android apps or browser extensions. It does **not** list or manage devices. Device creation and listing remain signed-in frontend routes under `/devices`. A successful request consumes the pairing code and returns the only plaintext copy of the new device token.",
+        "requestBody": { "$ref": "#/components/requestBodies/PairingRequest" },
+        "responses": {
+          "201": {
+            "description": "Device paired. Store the returned token securely.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PairingResponse" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/InvalidPairingCode" },
+          "500": { "$ref": "#/components/responses/ApiFailure" },
+          "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/shortcut/pair": {
+      "post": {
+        "tags": ["Shortcut"],
+        "summary": "Pair an iOS Shortcut",
+        "operationId": "pairShortcut",
+        "description": "iOS-specific alias of `/api/devices/pair`. It uses the same pairing service but returns the flat Shortcut response envelope. On success, `result` is the new device token.",
+        "requestBody": { "$ref": "#/components/requestBodies/PairingRequest" },
+        "responses": {
+          "201": {
+            "description": "Device paired. `result` contains the device token.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+                "example": { "error": "", "result": "catch_device_example-token" }
+              }
+            }
+          },
+          "401": {
+            "description": "Pairing code is invalid or has already been consumed.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+                "example": { "error": "The pairing code is invalid.", "result": "" }
+              }
+            }
+          },
+          "500": { "$ref": "#/components/responses/ShortcutFailure" },
+          "503": { "$ref": "#/components/responses/ShortcutDatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/shortcut/captures": {
+      "post": {
+        "tags": ["Shortcut"],
+        "summary": "Submit a capture from iOS Shortcuts",
+        "operationId": "createShortcutCapture",
+        "description": "iOS-friendly alias of `POST /api/v1/captures`. It accepts the same JSON or multipart fields and returns the flat Shortcut envelope. On success, `result` is the capture ID. Reusing `client_capture_id` for the same account returns the existing capture instead of creating a duplicate.",
+        "security": [{ "deviceToken": [] }],
+        "requestBody": { "$ref": "#/components/requestBodies/CaptureRequest" },
+        "responses": {
+          "200": {
+            "description": "An idempotent retry found the existing capture. `result` contains its ID.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+                "example": { "error": "", "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
+              }
+            }
+          },
+          "201": {
+            "description": "Capture created. `result` contains its ID.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+                "example": { "error": "", "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/ShortcutUnauthorized" },
+          "422": { "$ref": "#/components/responses/ShortcutValidationFailed" },
+          "500": { "$ref": "#/components/responses/ShortcutFailure" },
+          "503": { "$ref": "#/components/responses/ShortcutDatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/v1/captures": {
+      "get": {
+        "tags": ["Reserved full access"],
+        "summary": "List captures (reserved)",
+        "operationId": "listCaptures",
+        "description": "Requires a `full` token. Pairing currently issues only `capture:write`, so this route is not presently usable by paired public clients.",
+        "security": [{ "fullDeviceToken": [] }],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Capture status to list.",
+            "schema": { "$ref": "#/components/schemas/CaptureStatus" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Captures in descending creation order, limited to 100 by the current implementation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Capture" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "tags": ["Captures"],
+        "summary": "Submit a capture",
+        "operationId": "createCapture",
+        "description": "Client-neutral capture endpoint. A paired `capture:write` device token is sufficient. Reusing `client_capture_id` for the same account makes the request idempotent.",
+        "security": [{ "deviceToken": [] }],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Used as `client_capture_id` when that body field is absent.",
+            "schema": { "type": "string", "maxLength": 128 }
+          }
+        ],
+        "requestBody": { "$ref": "#/components/requestBodies/CaptureRequest" },
+        "responses": {
+          "200": {
+            "description": "An idempotent retry found the existing capture.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CreateCaptureResponse" } }
+            }
+          },
+          "201": {
+            "description": "Capture created.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/CreateCaptureResponse" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "422": { "$ref": "#/components/responses/ValidationFailed" },
+          "500": { "$ref": "#/components/responses/ApiFailure" },
+          "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/v1/captures/{id}": {
+      "get": {
+        "tags": ["Reserved full access"],
+        "summary": "Get one capture (reserved)",
+        "operationId": "getCapture",
+        "description": "Requires a `full` token, which the public pairing flow does not currently issue.",
+        "security": [{ "fullDeviceToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CaptureId" }],
+        "responses": {
+          "200": {
+            "description": "Capture and attachment metadata.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["data"],
+                  "properties": { "data": { "$ref": "#/components/schemas/Capture" } }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/CaptureNotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Reserved full access"],
+        "summary": "Soft-delete a capture (reserved)",
+        "operationId": "deleteCapture",
+        "description": "Marks a capture as deleted. Requires a `full` token, which the public pairing flow does not currently issue.",
+        "security": [{ "fullDeviceToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CaptureId" }],
+        "responses": {
+          "200": {
+            "description": "Capture marked deleted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatusResponse" },
+                "example": { "status": "deleted" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/CaptureNotFound" }
+        }
+      }
+    },
+    "/api/v1/captures/{id}/archive": {
+      "post": {
+        "tags": ["Reserved full access"],
+        "summary": "Archive a capture (reserved)",
+        "operationId": "archiveCapture",
+        "description": "Marks a capture as archived. Requires a `full` token, which the public pairing flow does not currently issue.",
+        "security": [{ "fullDeviceToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CaptureId" }],
+        "responses": {
+          "200": {
+            "description": "Capture marked archived.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StatusResponse" },
+                "example": { "status": "archived" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/CaptureNotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "deviceToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "catch_device_…",
+        "description": "Device token returned once by a successful pairing request. The issued `capture:write` scope can submit captures."
+      },
+      "fullDeviceToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "catch_device_…",
+        "description": "Reserved `full` token. The application currently has no public flow that issues one."
+      }
+    },
+    "parameters": {
+      "CaptureId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Server-generated capture UUID.",
+        "schema": { "type": "string", "format": "uuid" }
+      }
+    },
+    "requestBodies": {
+      "PairingRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/PairingRequest" }
+          },
+          "application/x-www-form-urlencoded": {
+            "schema": { "$ref": "#/components/schemas/PairingRequest" }
+          }
+        }
+      },
+      "CaptureRequest": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/CaptureInput" }
+          },
+          "multipart/form-data": {
+            "schema": {
+              "allOf": [
+                { "$ref": "#/components/schemas/CaptureInput" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "attachments[]": {
+                      "type": "array",
+                      "items": { "type": "string", "format": "binary" },
+                      "description": "Zero or more attachments. Each file is limited to 15 MiB by the example configuration."
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "InvalidPairingCode": {
+        "description": "Pairing code is invalid or has already been consumed.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" },
+            "example": {
+              "error": {
+                "code": "invalid_pairing_code",
+                "message": "The pairing code is invalid."
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Bearer token is absent, invalid, or lacks the required permission.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" },
+            "example": {
+              "error": {
+                "code": "unauthorized",
+                "message": "A token with the required permission is needed."
+              }
+            }
+          }
+        }
+      },
+      "ShortcutUnauthorized": {
+        "description": "Bearer token is absent, invalid, or lacks `capture:write`.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+            "example": { "error": "A token with the required permission is needed.", "result": "" }
+          }
+        }
+      },
+      "ValidationFailed": {
+        "description": "Capture fields failed validation.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ValidationError" }
+          }
+        }
+      },
+      "ShortcutValidationFailed": {
+        "description": "Capture fields failed validation. Messages are flattened for iOS Shortcuts.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+            "example": { "error": "A stable client_capture_id is required. Provide text, a URL, or an attachment.", "result": "" }
+          }
+        }
+      },
+      "CaptureNotFound": {
+        "description": "No capture with that ID belongs to the authenticated account.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" },
+            "example": { "error": { "code": "not_found", "message": "Capture not found." } }
+          }
+        }
+      },
+      "ApiFailure": {
+        "description": "The server could not complete the operation.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" }
+          }
+        }
+      },
+      "ShortcutFailure": {
+        "description": "The server could not complete the Shortcut operation.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+            "example": { "error": "The request could not be completed.", "result": "" }
+          }
+        }
+      },
+      "DatabaseUnavailable": {
+        "description": "Database is unconfigured or unavailable.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ApiError" },
+            "example": { "error": { "code": "database_unavailable", "message": "Database is not configured or unavailable." } }
+          }
+        }
+      },
+      "ShortcutDatabaseUnavailable": {
+        "description": "Database is unconfigured or unavailable.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
+            "example": { "error": "Database is not configured or unavailable.", "result": "" }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "PairingRequest": {
+        "type": "object",
+        "required": ["pairing_code"],
+        "properties": {
+          "pairing_code": {
+            "type": "string",
+            "description": "16-character code created for a setup-state device. Separators and letter case are ignored.",
+            "example": "ABCD-EFGH-JKLM-NPQR"
+          }
+        }
+      },
+      "PairingResponse": {
+        "type": "object",
+        "required": ["device_token", "token_type", "capture_endpoint"],
+        "properties": {
+          "device_token": { "type": "string", "example": "catch_device_example-token" },
+          "token_type": { "type": "string", "enum": ["Bearer"] },
+          "capture_endpoint": { "type": "string", "format": "uri", "example": "https://catch.sorkos.net/api/shortcut/captures" }
+        }
+      },
+      "ShortcutResponse": {
+        "type": "object",
+        "required": ["error", "result"],
+        "additionalProperties": false,
+        "properties": {
+          "error": { "type": "string", "description": "Empty on success; otherwise the human-readable error." },
+          "result": { "type": "string", "description": "Empty on failure; otherwise the operation's scalar result." }
+        }
+      },
+      "CaptureInput": {
+        "type": "object",
+        "required": ["client_capture_id", "type"],
+        "properties": {
+          "client_capture_id": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Stable client-generated ID used for per-account idempotency.",
+            "example": "64e2943d-66e3-49f9-82b1-71612cc52f80"
+          },
+          "type": { "$ref": "#/components/schemas/CaptureType" },
+          "title": { "type": "string", "nullable": true, "maxLength": 500 },
+          "text": { "type": "string", "nullable": true, "example": "Review proposal" },
+          "url": { "type": "string", "format": "uri", "nullable": true },
+          "extracted_text": { "type": "string", "nullable": true },
+          "source": { "type": "string", "maxLength": 80, "default": "web", "example": "ios-shortcut" },
+          "metadata": {
+            "nullable": true,
+            "description": "A JSON object, or a JSON-encoded string when using multipart/form-data.",
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": true,
+                "example": { "device": "iPhone", "shortcut_version": "1.0" }
+              },
+              {
+                "type": "string",
+                "example": "{\"device\":\"iPhone\",\"shortcut_version\":\"1.0\"}"
+              }
+            ]
+          }
+        },
+        "description": "At least one of `text`, `url`, or a multipart attachment must contain data."
+      },
+      "CaptureType": {
+        "type": "string",
+        "enum": ["text", "url", "image", "audio", "file", "mixed"]
+      },
+      "CaptureStatus": {
+        "type": "string",
+        "enum": ["inbox", "archived", "deleted"],
+        "default": "inbox"
+      },
+      "CreateCaptureResponse": {
+        "type": "object",
+        "required": ["id", "status", "created_at", "matched_rules"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["created", "existing"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "matched_rules": { "type": "integer", "example": 0 }
+        }
+      },
+      "Capture": {
+        "type": "object",
+        "required": ["id", "client_capture_id", "type", "source", "status", "created_at", "updated_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "client_capture_id": { "type": "string" },
+          "type": { "$ref": "#/components/schemas/CaptureType" },
+          "title": { "type": "string", "nullable": true },
+          "text": { "type": "string", "nullable": true },
+          "url": { "type": "string", "nullable": true },
+          "extracted_text": { "type": "string", "nullable": true },
+          "source": { "type": "string" },
+          "metadata_json": { "type": "object", "nullable": true, "additionalProperties": true },
+          "status": { "$ref": "#/components/schemas/CaptureStatus" },
+          "attachment_count": { "type": "integer", "minimum": 0 },
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Attachment" }
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "archived_at": { "type": "string", "format": "date-time", "nullable": true },
+          "deleted_at": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "Attachment": {
+        "type": "object",
+        "required": ["id", "original_name", "mime_type", "size_bytes", "created_at"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "original_name": { "type": "string" },
+          "mime_type": { "type": "string" },
+          "size_bytes": { "type": "integer", "format": "int64" },
+          "width": { "type": "integer", "nullable": true },
+          "height": { "type": "integer", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "$ref": "#/components/schemas/CaptureStatus" }
+        }
+      },
+      "ApiError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiError" },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Health": {
+        "type": "object",
+        "required": ["status", "database", "time"],
+        "properties": {
+          "status": { "type": "string", "enum": ["ok"] },
+          "database": { "type": "string", "enum": ["connected", "unavailable"] },
+          "time": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

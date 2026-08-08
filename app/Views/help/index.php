@@ -8,11 +8,13 @@
 
   <section id="pairing"><h2>Pairing endpoint</h2><p>The pairing code belongs to the device you created and is valid only during its current setup. It is deleted after a successful exchange. The returned token remains valid until the device is removed.</p><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/pair</code></div><pre><code>{
   "pairing_code": "ABCD-EFGH-JKLM-NPQR"
-}</code></pre><p>Response:</p><pre><code>{
-  "device_token": "catch_device_...",
-  "token_type": "Bearer",
-  "capture_endpoint": "<?=htmlspecialchars($appUrl)?>/api/shortcut/captures"
-}</code></pre><p>Catch Setup stores <code>device_token</code> locally, for example at <code>Shortcuts/Catch/device.json</code>. Other shortcuts on the same device read this file. Catch never displays the token value in the web interface.</p></section>
+}</code></pre><p>Success response:</p><pre><code>{
+  "error": "",
+  "result": "catch_device_..."
+}</code></pre><p>Catch Setup stores <code>result</code> as the device token locally, for example at <code>Shortcuts/Catch/device.json</code>. Other shortcuts on the same device read this file. Catch never displays the token value in the web interface.</p><p>Every Shortcut API response contains both string fields. If <code>error</code> is not empty, show it and stop the shortcut; otherwise process <code>result</code>.</p><pre><code>{
+  "error": "The pairing code is invalid.",
+  "result": ""
+}</code></pre></section>
 
   <section id="capture"><h2>Capture endpoint</h2><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/captures</code></div><pre><code>Authorization: Bearer catch_device_...
 Content-Type: application/json</code></pre><pre><code>{
@@ -27,6 +29,9 @@ Content-Type: application/json</code></pre><pre><code>{
     "device": "iPhone",
     "shortcut_version": "1.0"
   }
+}</code></pre><p>Success response (the result is the capture ID):</p><pre><code>{
+  "error": "",
+  "result": "018f...uuid..."
 }</code></pre><p>For images and files, the shortcut uses <code>multipart/form-data</code>. Files are sent as <code>attachments[]</code>. Repeated requests with the same <code>client_capture_id</code> do not create duplicate captures.</p></section>
 
   <section id="inputs"><h2>Supported inputs</h2><div class="input-matrix"><div><strong>Text</strong><code>type=text</code><span>Notes, dictation, and selected text</span></div><div><strong>URL</strong><code>type=url</code><span>Link, page title, and optional context</span></div><div><strong>Image</strong><code>type=image</code><span>Original image with optional OCR text</span></div><div><strong>File</strong><code>type=file</code><span>Documents and other permitted file types</span></div><div><strong>Mixed</strong><code>type=mixed</code><span>Multiple types of content in one capture</span></div></div></section>

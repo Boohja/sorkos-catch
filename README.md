@@ -33,4 +33,10 @@ composer test
 
 `GET /health` reports application and database availability without exposing credentials.
 
+## Public API reference
+
+The interactive Swagger reference is served at `/docs/api/`; its raw OpenAPI document is available at `/docs/api/openapi.json`. The reference inventories every implemented public machine endpoint, including reserved routes that cannot currently be used with pairing-issued tokens.
+
+Swagger UI 5.32.11 is committed under `public/vendor/swagger-ui/` with its Apache 2.0 license. The page does not load scripts, styles, or validators from a CDN, and Swagger introduces no Composer or production runtime dependency.
+
 Composer is an optional local-development convenience for running tests. Production does not use Composer for application autoloading, migrations, or runtime dependencies.

@@ -26,4 +26,10 @@ final class Request
     {
         return str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') || str_starts_with($_SERVER['REQUEST_URI'] ?? '', '/api/');
     }
+
+    public static function isShortcutApi(): bool
+    {
+        $path = (string) (parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+        return $path === '/api/shortcut' || str_starts_with($path, '/api/shortcut/');
+    }
 }

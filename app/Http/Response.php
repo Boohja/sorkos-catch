@@ -15,6 +15,17 @@ final class Response
         exit;
     }
 
+    public static function shortcut(string $error = '', string $result = '', int $status = 200): never
+    {
+        self::json(self::shortcutPayload($error, $result), $status);
+    }
+
+    /** @return array{error: string, result: string} */
+    public static function shortcutPayload(string $error = '', string $result = ''): array
+    {
+        return ['error' => $error, 'result' => $result];
+    }
+
     public static function redirect(string $url): never
     {
         header('Location: ' . $url, true, 303);
