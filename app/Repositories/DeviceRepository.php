@@ -9,6 +9,9 @@ use PDO;
 
 final class DeviceRepository
 {
+    public const PAIRING_CODE_DIGITS = 10;
+    public const PAIRING_CODE_TTL_MINUTES = 15;
+
     public function __construct(private readonly PDO $db,private readonly SecretBox $secrets){}
 
     public function all(string $userId): array
@@ -19,9 +22,15 @@ final class DeviceRepository
 
     public function find(string $deviceId,string $userId): ?array
     {
-        $query=$this->db->prepare('SELECT d.*,p.code_encrypted,t.last_used_at FROM catch_devices d LEFT JOIN catch_device_pairing_codes p ON p.device_id=d.id LEFT JOIN catch_device_tokens t ON t.device_id=d.id WHERE d.id=:id AND d.user_id=:user LIMIT 1');
+        $this->deleteExpiredPairingCode($deviceId,$userId);
+        $sql='SELECT d.*,p.code_encrypted,CASE WHEN p.created_at >= UTC_TIMESTAMP(6) - INTERVAL '.self::PAIRING_CODE_TTL_MINUTES.' MINUTE THEN DATE_FORMAT(DATE_ADD(p.created_at,INTERVAL '.self::PAIRING_CODE_TTL_MINUTES.' MINUTE),\'%Y-%m-%dT%H:%i:%sZ\') ELSE NULL END pairing_code_expires_at,t.last_used_at FROM catch_devices d LEFT JOIN catch_device_pairing_codes p ON p.device_id=d.id LEFT JOIN catch_device_tokens t ON t.device_id=d.id WHERE d.id=:id AND d.user_id=:user LIMIT 1';
+        $query=$this->db->prepare($sql);
         $query->execute(['id'=>$deviceId,'user'=>$userId]);$device=$query->fetch()?:null;
-        if($device&&$device['code_encrypted'])$device['pairing_code']=$this->secrets->decrypt($device['code_encrypted']);
+        if($device&&$device['code_encrypted']&&$device['pairing_code_expires_at']){
+            $code=$this->secrets->decrypt($device['code_encrypted']);
+            if(preg_match('/^\d{5} \d{5}$/',$code))$device['pairing_code']=$code;
+            else $device['pairing_code_expires_at']=null;
+        }
         if($device)unset($device['code_encrypted']);
         return $device;
     }
@@ -54,18 +63,22 @@ final class DeviceRepository
 
     public function status(string $deviceId,string $userId): ?array
     {
-        $query=$this->db->prepare('SELECT status,connected_at,last_seen_at FROM catch_devices WHERE id=:id AND user_id=:user LIMIT 1');
+        $this->deleteExpiredPairingCode($deviceId,$userId);
+        $query=$this->db->prepare('SELECT d.status,d.connected_at,d.last_seen_at,EXISTS(SELECT 1 FROM catch_device_pairing_codes p WHERE p.device_id=d.id) pairing_code_active FROM catch_devices d WHERE d.id=:id AND d.user_id=:user LIMIT 1');
         $query->execute(['id'=>$deviceId,'user'=>$userId]);return $query->fetch()?:null;
     }
 
     public function pair(string $code): ?array
     {
-        $normalized=strtoupper(preg_replace('/[^A-Z0-9]/','',$code)??'');if(strlen($normalized)!==16)return null;
+        $normalized=$this->normalizeCode($code);if($normalized===null)return null;
         $this->db->beginTransaction();
         try{
-            $query=$this->db->prepare('SELECT d.id,d.user_id FROM catch_device_pairing_codes p JOIN catch_devices d ON d.id=p.device_id WHERE p.code_hash=:hash AND d.status=\'setup\' LIMIT 1 FOR UPDATE');
+            $query=$this->db->prepare('SELECT d.id,d.user_id FROM catch_device_pairing_codes p JOIN catch_devices d ON d.id=p.device_id WHERE p.code_hash=:hash AND p.created_at >= UTC_TIMESTAMP(6) - INTERVAL '.self::PAIRING_CODE_TTL_MINUTES.' MINUTE AND d.status=\'setup\' LIMIT 1 FOR UPDATE');
             $query->execute(['hash'=>hash('sha256',$normalized)]);$device=$query->fetch()?:null;
-            if(!$device){$this->db->rollBack();return null;}
+            if(!$device){
+                $this->db->prepare('DELETE FROM catch_device_pairing_codes WHERE code_hash=:hash AND created_at < UTC_TIMESTAMP(6) - INTERVAL '.self::PAIRING_CODE_TTL_MINUTES.' MINUTE')->execute(['hash'=>hash('sha256',$normalized)]);
+                $this->db->commit();return null;
+            }
             $token='catch_device_'.rtrim(strtr(base64_encode(random_bytes(32)),'+/','-_'),'=');$tokenId=Id::uuid();
             $this->db->prepare('INSERT INTO catch_device_tokens (id,device_id,token_hash,token_scope,created_at) VALUES (:id,:device,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id'=>$tokenId,'device'=>$device['id'],'hash'=>hash('sha256',$token)]);
             $this->db->prepare('DELETE FROM catch_device_pairing_codes WHERE device_id=:device')->execute(['device'=>$device['id']]);
@@ -86,8 +99,21 @@ final class DeviceRepository
 
     private function newCode(): array
     {
-        $alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';$plain='';
-        for($i=0;$i<16;$i++)$plain.=$alphabet[random_int(0,strlen($alphabet)-1)];
-        return [$plain,implode('-',str_split($plain,4))];
+        $plain=(string)random_int(1,9);
+        for($i=1;$i<self::PAIRING_CODE_DIGITS;$i++)$plain.=(string)random_int(0,9);
+        return [$plain,substr($plain,0,5).' '.substr($plain,5)];
+    }
+
+    private function normalizeCode(string $code): ?string
+    {
+        if(preg_match('/[^\d\s-]/',$code))return null;
+        $normalized=preg_replace('/\D/','',$code)??'';
+        return strlen($normalized)===self::PAIRING_CODE_DIGITS&&$normalized[0]!=='0'?$normalized:null;
+    }
+
+    private function deleteExpiredPairingCode(string $deviceId,string $userId): void
+    {
+        $query=$this->db->prepare('DELETE p FROM catch_device_pairing_codes p JOIN catch_devices d ON d.id=p.device_id WHERE p.device_id=:device AND d.user_id=:user AND p.created_at < UTC_TIMESTAMP(6) - INTERVAL '.self::PAIRING_CODE_TTL_MINUTES.' MINUTE');
+        $query->execute(['device'=>$deviceId,'user'=>$userId]);
     }
 }

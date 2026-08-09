@@ -13,8 +13,10 @@
   <link rel="icon" href="/assets/favicon/favicon-16x16.png" type="image/png" sizes="16x16">
   <link rel="apple-touch-icon" href="/assets/favicon/apple-touch-icon.png" sizes="180x180">
   <link rel="stylesheet" href="/assets/css/app.css?v=2">
+  <link rel="stylesheet" href="/assets/css/components.css?v=1">
   <link rel="stylesheet" href="/assets/css/auth.css?v=2">
   <link rel="stylesheet" href="/assets/css/devices.css?v=3">
+  <link rel="stylesheet" href="/assets/css/device-detail.css?v=1">
   <link rel="stylesheet" href="/assets/css/coming-soon.css?v=2">
   <link rel="stylesheet" href="/assets/css/shell.css?v=2">
   <script>try{const t=localStorage.getItem('catch-theme');if(t&&t!=='system')document.documentElement.dataset.theme=t}catch(e){}</script>
@@ -47,6 +49,6 @@
     <?php if($isComingSoon&&$isAuthenticated): ?><a class="footer-login" href="/inbox">Open Catch</a><?php endif; ?>
   </footer>
   <div class="sync-toast" data-sync-status role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/assets/js/app.js?v=5"></script>
+  <script type="module" src="/assets/js/app.js?v=6"></script>
 </body>
 </html>

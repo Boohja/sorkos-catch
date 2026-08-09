@@ -6,8 +6,8 @@
 
   <section id="setup"><h2>Set up the shortcut</h2><ol class="instruction-list"><li><strong>Create a device</strong><span>Sign in to Catch, open “Devices,” and add your iPhone or iPad.</span></li><li><strong>Download Catch Setup</strong><span>Download the <a href="<?=htmlspecialchars($appUrl)?>/assets/shortcuts/Catch%20Setup.shortcut" download>shortcut file</a> from the device page or scan its QR code.</span></li><li><strong>Create a pairing code</strong><span>Create the code when Catch Setup asks for it, then enter it in the shortcut.</span></li><li><strong>Complete the connection</strong><span>Catch Setup exchanges the code for a device token and stores it centrally for other Catch shortcuts.</span></li></ol></section>
 
-  <section id="pairing"><h2>Pairing endpoint</h2><p>The pairing code belongs to the device you created and is valid only during its current setup. It is deleted after a successful exchange. The returned token remains valid until the device is removed.</p><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/pair</code></div><pre><code>{
-  "pairing_code": "ABCD-EFGH-JKLM-NPQR"
+  <section id="pairing"><h2>Pairing endpoint</h2><p>The 10-digit pairing code belongs to the device you created and expires after 15 minutes. It is deleted after a successful exchange. The returned token remains valid until the device is removed.</p><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/pair</code></div><pre><code>{
+  "pairing_code": "12345 67890"
 }</code></pre><p>Success response:</p><pre><code>{
   "error": "",
   "result": "catch_device_..."

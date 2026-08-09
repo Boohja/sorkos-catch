@@ -37,7 +37,7 @@ final class DeviceController
     {
         $user=$this->user();$device=$this->devices->find($this->id((string)$params['device']),$user['id']);if(!$device)Response::redirect('/devices');
         $appUrl=rtrim((string)$this->config->get('app.url'),'/');
-        $this->view->render('devices/show',['title'=>$device['name'],'user'=>$user,'device'=>$device,'csrf'=>$this->csrf->token(),'deviceUrl'=>$this->url($device),'shortcutUrl'=>$appUrl.'/assets/shortcuts/Catch%20Setup.shortcut']);
+        $this->view->render('devices/show',['title'=>$device['name'],'user'=>$user,'device'=>$device,'csrf'=>$this->csrf->token(),'deviceUrl'=>$this->url($device),'shortcutUrl'=>$appUrl.'/assets/shortcuts/Catch%20Setup.shortcut','pairingCodeTtlMinutes'=>DeviceRepository::PAIRING_CODE_TTL_MINUTES]);
     }
 
     public function createPairingCode(\Base $f3,array $params): never

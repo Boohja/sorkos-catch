@@ -66,7 +66,7 @@
         "tags": ["Pairing"],
         "summary": "Pair any supported client",
         "operationId": "pairDevice",
-        "description": "Channel-neutral pairing endpoint intended for clients such as future Android apps or browser extensions. It does **not** list or manage devices. Device creation and listing remain signed-in frontend routes under `/devices`. A successful request consumes the pairing code and returns the only plaintext copy of the new device token.",
+        "description": "Channel-neutral pairing endpoint intended for clients such as future Android apps or browser extensions. It does **not** list or manage devices. Device creation and listing remain signed-in frontend routes under `/devices`. A pairing code contains 10 numeric digits, expires after 15 minutes, and is consumed by a successful request. The response contains the only plaintext copy of the new device token.",
         "requestBody": { "$ref": "#/components/requestBodies/PairingRequest" },
         "responses": {
           "201": {
@@ -101,7 +101,7 @@
             }
           },
           "401": {
-            "description": "Pairing code is invalid or has already been consumed.",
+            "description": "Pairing code is invalid, expired, or has already been consumed.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
@@ -355,7 +355,7 @@
     },
     "responses": {
       "InvalidPairingCode": {
-        "description": "Pairing code is invalid or has already been consumed.",
+        "description": "Pairing code is invalid, expired, or has already been consumed.",
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/ApiError" },
@@ -460,8 +460,11 @@
         "properties": {
           "pairing_code": {
             "type": "string",
-            "description": "16-character code created for a setup-state device. Separators and letter case are ignored.",
-            "example": "ABCD-EFGH-JKLM-NPQR"
+            "minLength": 10,
+            "maxLength": 11,
+            "pattern": "^[1-9][0-9]{4}[ -]?[0-9]{5}$",
+            "description": "10-digit code created for a setup-state device. It expires after 15 minutes. The optional displayed space or a hyphen is ignored.",
+            "example": "12345 67890"
           }
         }
       },
