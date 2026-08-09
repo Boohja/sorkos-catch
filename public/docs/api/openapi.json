@@ -22,7 +22,7 @@
     },
     {
       "name": "Shortcut",
-      "description": "iOS Shortcut convenience endpoints. Every response has exactly two string fields: `error` and `result`."
+      "description": "iOS Shortcut convenience endpoints. Every response contains exactly one flat string field: `result` on success or `error` on failure."
     },
     {
       "name": "Captures",
@@ -96,7 +96,7 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-                "example": { "error": "", "result": "catch_device_example-token" }
+                "example": { "result": "catch_device_example-token" }
               }
             }
           },
@@ -105,7 +105,7 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-                "example": { "error": "The pairing code is invalid.", "result": "" }
+                "example": { "error": "The pairing code is invalid." }
               }
             }
           },
@@ -128,7 +128,7 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-                "example": { "error": "", "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
+                "example": { "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
               }
             }
           },
@@ -137,7 +137,7 @@
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-                "example": { "error": "", "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
+                "example": { "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
               }
             }
           },
@@ -387,7 +387,7 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-            "example": { "error": "A token with the required permission is needed.", "result": "" }
+            "example": { "error": "A token with the required permission is needed." }
           }
         }
       },
@@ -404,7 +404,7 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-            "example": { "error": "A stable client_capture_id is required. Provide text, a URL, or an attachment.", "result": "" }
+            "example": { "error": "A stable client_capture_id is required. Provide text, a URL, or an attachment." }
           }
         }
       },
@@ -430,7 +430,7 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-            "example": { "error": "The request could not be completed.", "result": "" }
+            "example": { "error": "The request could not be completed." }
           }
         }
       },
@@ -448,7 +448,7 @@
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-            "example": { "error": "Database is not configured or unavailable.", "result": "" }
+            "example": { "error": "Database is not configured or unavailable." }
           }
         }
       }
@@ -478,12 +478,26 @@
         }
       },
       "ShortcutResponse": {
+        "description": "Mutually exclusive flat response for iOS Shortcuts.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/ShortcutSuccess" },
+          { "$ref": "#/components/schemas/ShortcutError" }
+        ]
+      },
+      "ShortcutSuccess": {
         "type": "object",
-        "required": ["error", "result"],
+        "required": ["result"],
         "additionalProperties": false,
         "properties": {
-          "error": { "type": "string", "description": "Empty on success; otherwise the human-readable error." },
-          "result": { "type": "string", "description": "Empty on failure; otherwise the operation's scalar result." }
+          "result": { "type": "string", "minLength": 1, "description": "The operation's scalar result." }
+        }
+      },
+      "ShortcutError": {
+        "type": "object",
+        "required": ["error"],
+        "additionalProperties": false,
+        "properties": {
+          "error": { "type": "string", "minLength": 1, "description": "A human-readable error message." }
         }
       },
       "CaptureInput": {

@@ -9,11 +9,9 @@
   <section id="pairing"><h2>Pairing endpoint</h2><p>The 10-digit pairing code belongs to the device you created and expires after 15 minutes. It is deleted after a successful exchange. The returned token remains valid until the device is removed.</p><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/pair</code></div><pre><code>{
   "pairing_code": "12345 67890"
 }</code></pre><p>Success response:</p><pre><code>{
-  "error": "",
   "result": "catch_device_..."
-}</code></pre><p>Catch Setup stores <code>result</code> as the device token locally, for example at <code>Shortcuts/Catch/device.json</code>. Other shortcuts on the same device read this file. Catch never displays the token value in the web interface.</p><p>Every Shortcut API response contains both string fields. If <code>error</code> is not empty, show it and stop the shortcut; otherwise process <code>result</code>.</p><pre><code>{
-  "error": "The pairing code is invalid.",
-  "result": ""
+}</code></pre><p>Catch Setup stores <code>result</code> as the device token locally, for example at <code>Shortcuts/Catch/device.json</code>. Other shortcuts on the same device read this file. Catch never displays the token value in the web interface.</p><p>Every Shortcut API response contains exactly one string field. If <code>error</code> exists, show it and stop the shortcut; otherwise read <code>result</code>.</p><pre><code>{
+  "error": "The pairing code is invalid."
 }</code></pre></section>
 
   <section id="capture"><h2>Capture endpoint</h2><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/captures</code></div><pre><code>Authorization: Bearer catch_device_...
@@ -30,7 +28,6 @@ Content-Type: application/json</code></pre><pre><code>{
     "shortcut_version": "1.0"
   }
 }</code></pre><p>Success response (the result is the capture ID):</p><pre><code>{
-  "error": "",
   "result": "018f...uuid..."
 }</code></pre><p>For images and files, the shortcut uses <code>multipart/form-data</code>. Files are sent as <code>attachments[]</code>. Repeated requests with the same <code>client_capture_id</code> do not create duplicate captures.</p></section>
 

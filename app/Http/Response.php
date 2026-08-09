@@ -20,10 +20,13 @@ final class Response
         self::json(self::shortcutPayload($error, $result), $status);
     }
 
-    /** @return array{error: string, result: string} */
+    /** @return array{error: string}|array{result: string} */
     public static function shortcutPayload(string $error = '', string $result = ''): array
     {
-        return ['error' => $error, 'result' => $result];
+        if (($error === '') === ($result === '')) {
+            throw new \LogicException('A Shortcut response must contain either an error or a result.');
+        }
+        return $error !== '' ? ['error' => $error] : ['result' => $result];
     }
 
     public static function redirect(string $url): never
