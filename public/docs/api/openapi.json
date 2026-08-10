@@ -18,7 +18,7 @@
   "tags": [
     {
       "name": "Pairing",
-      "description": "Exchange a pairing code created in the signed-in Catch frontend for a device token. There is no public device-listing API."
+      "description": "Pair supported clients to a scoped device token. Browser extensions use a nonce and verifier handshake; iOS Shortcuts use a setup code. There is no public device-listing API."
     },
     {
       "name": "Shortcut",
@@ -111,6 +111,60 @@
           },
           "500": { "$ref": "#/components/responses/ShortcutFailure" },
           "503": { "$ref": "#/components/responses/ShortcutDatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/extension/pairing-requests": {
+      "post": {
+        "tags": ["Pairing"],
+        "summary": "Start browser extension pairing",
+        "operationId": "startExtensionPairing",
+        "description": "Creates a short-lived browser pairing request. The client keeps the random verifier locally and sends only its SHA-256 base64url challenge here. Open `pair_url` in a normal browser tab so the signed-in user can approve the device. No device token is placed in that URL.",
+        "requestBody": { "$ref": "#/components/requestBodies/ExtensionPairingStartRequest" },
+        "responses": {
+          "201": {
+            "description": "Pairing request created.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ExtensionPairingStartResponse" } } }
+          },
+          "422": { "$ref": "#/components/responses/ValidationFailed" },
+          "500": { "$ref": "#/components/responses/ApiFailure" },
+          "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/extension/pairing-requests/{request}/exchange": {
+      "post": {
+        "tags": ["Pairing"],
+        "summary": "Poll or complete browser extension pairing",
+        "operationId": "exchangeExtensionPairing",
+        "description": "Proves possession of the verifier used to create the challenge. Returns HTTP 202 while user approval is pending. After approval, the response contains the only plaintext copy of the long-lived device token and consumes the pairing request.",
+        "parameters": [{ "name": "request", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{48}$" } }],
+        "requestBody": { "$ref": "#/components/requestBodies/ExtensionPairingExchangeRequest" },
+        "responses": {
+          "200": {
+            "description": "Browser connected. Store the returned token in extension storage.",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ExtensionPairingResponse" } } }
+          },
+          "202": { "description": "The request is still waiting for user approval." },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Pairing request not found." },
+          "410": { "description": "Pairing request expired." },
+          "500": { "$ref": "#/components/responses/ApiFailure" },
+          "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/extension/disconnect": {
+      "post": {
+        "tags": ["Pairing"],
+        "summary": "Disconnect a browser extension",
+        "operationId": "disconnectExtension",
+        "description": "Revokes the supplied device token by deleting its browser device. This endpoint accepts the extension's `capture:write` token.",
+        "security": [{ "deviceToken": [] }],
+        "responses": {
+          "200": { "description": "Browser disconnected.", "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["disconnected"] } } }, "example": { "status": "disconnected" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
         }
       }
     },
@@ -327,6 +381,14 @@
           }
         }
       },
+      "ExtensionPairingStartRequest": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ExtensionPairingStartRequest" } } }
+      },
+      "ExtensionPairingExchangeRequest": {
+        "required": true,
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ExtensionPairingExchangeRequest" } } }
+      },
       "CaptureRequest": {
         "required": true,
         "description": "Shared request body for `POST /api/shortcut/captures` and `POST /api/v1/captures`. Choose `type` for the content being stored, not for the process that produced it. For example, dictated speech that has already been converted to a transcript is a `text` capture whose transcript belongs in `text`.",
@@ -476,6 +538,44 @@
           "device_token": { "type": "string", "example": "catch_device_example-token" },
           "token_type": { "type": "string", "enum": ["Bearer"] },
           "capture_endpoint": { "type": "string", "format": "uri", "example": "https://catch.sorkos.net/api/shortcut/captures" }
+        }
+      },
+      "ExtensionPairingStartRequest": {
+        "type": "object",
+        "required": ["device_name", "platform", "code_challenge"],
+        "properties": {
+          "device_name": { "type": "string", "maxLength": 120, "example": "Firefox extension" },
+          "platform": { "type": "string", "enum": ["chrome", "firefox", "chromium"] },
+          "code_challenge": { "type": "string", "minLength": 43, "maxLength": 43, "pattern": "^[A-Za-z0-9_-]{43}$", "description": "Base64url-encoded SHA-256 digest of the random verifier retained by the extension." }
+        }
+      },
+      "ExtensionPairingExchangeRequest": {
+        "type": "object",
+        "required": ["code_verifier"],
+        "properties": {
+          "code_verifier": { "type": "string", "minLength": 43, "description": "Random verifier retained locally by the extension. It is never included in the approval URL." }
+        }
+      },
+      "ExtensionPairingStartResponse": {
+        "type": "object",
+        "required": ["request_id", "device_name", "platform", "expires_at", "pair_url"],
+        "properties": {
+          "request_id": { "type": "string", "pattern": "^[0-9a-f]{48}$" },
+          "device_name": { "type": "string" },
+          "platform": { "type": "string" },
+          "expires_at": { "type": "string", "format": "date-time" },
+          "pair_url": { "type": "string", "format": "uri", "description": "User-facing approval URL. It contains only the short-lived request ID." }
+        }
+      },
+      "ExtensionPairingResponse": {
+        "type": "object",
+        "required": ["status", "device_token", "token_type", "device", "capture_endpoint"],
+        "properties": {
+          "status": { "type": "string", "enum": ["connected"] },
+          "device_token": { "type": "string", "example": "catch_device_example-token" },
+          "token_type": { "type": "string", "enum": ["Bearer"] },
+          "device": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" } } },
+          "capture_endpoint": { "type": "string", "format": "uri", "example": "https://catch.sorkos.net/api/v1/captures" }
         }
       },
       "ShortcutResponse": {

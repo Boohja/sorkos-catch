@@ -13,3 +13,4 @@
 !/storage/uploads/.gitkeep
 /.phpunit.cache/
 /docs
+/extension/build/

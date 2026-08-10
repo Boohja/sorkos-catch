@@ -11,6 +11,7 @@ final class DeviceRepository
 {
     public const PAIRING_CODE_DIGITS = 10;
     public const PAIRING_CODE_TTL_MINUTES = 15;
+    public const EXTENSION_PAIRING_TTL_MINUTES = 10;
 
     public function __construct(private readonly PDO $db,private readonly SecretBox $secrets){}
 
@@ -87,6 +88,72 @@ final class DeviceRepository
         }catch(\Throwable $error){if($this->db->inTransaction())$this->db->rollBack();throw $error;}
     }
 
+    public function createExtensionPairingRequest(string $name,string $platform,string $challenge): array
+    {
+        $this->deleteExpiredExtensionPairingRequests();
+        $requestId=bin2hex(random_bytes(24));
+        $name=mb_substr(trim($name),0,120);
+        $platform=mb_substr(trim($platform),0,32);
+        $query=$this->db->prepare('INSERT INTO catch_extension_pairing_requests (request_id,code_challenge,device_name,platform,status,expires_at,created_at) VALUES (:request,:challenge,:name,:platform,\'pending\',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL '.self::EXTENSION_PAIRING_TTL_MINUTES.' MINUTE),UTC_TIMESTAMP(6))');
+        $query->execute(['request'=>$requestId,'challenge'=>$challenge,'name'=>$name,'platform'=>$platform]);
+        return ['request_id'=>$requestId,'device_name'=>$name,'platform'=>$platform,'expires_at'=>gmdate(DATE_ATOM,time()+self::EXTENSION_PAIRING_TTL_MINUTES*60)];
+    }
+
+    public function extensionPairingRequest(string $requestId): ?array
+    {
+        $this->deleteExpiredExtensionPairingRequests();
+        if(!preg_match('/^[0-9a-f]{48}$/',$requestId))return null;
+        $query=$this->db->prepare('SELECT request_id,device_name,platform,status,DATE_FORMAT(expires_at,\'%Y-%m-%dT%H:%i:%sZ\') expires_at FROM catch_extension_pairing_requests WHERE request_id=:request LIMIT 1');
+        $query->execute(['request'=>$requestId]);return $query->fetch()?:null;
+    }
+
+    public function approveExtensionPairingRequest(string $requestId,string $userId): ?array
+    {
+        if(!preg_match('/^[0-9a-f]{48}$/',$requestId))return null;
+        $this->db->beginTransaction();
+        try{
+            $query=$this->db->prepare('SELECT * FROM catch_extension_pairing_requests WHERE request_id=:request AND expires_at>=UTC_TIMESTAMP(6) LIMIT 1 FOR UPDATE');
+            $query->execute(['request'=>$requestId]);$pairing=$query->fetch()?:null;
+            if(!$pairing||$pairing['status']!=='pending'){$this->db->commit();return null;}
+            $deviceId=Id::uuid();$tokenId=Id::uuid();
+            $token='catch_device_'.rtrim(strtr(base64_encode(random_bytes(32)),'+/','-_'),'=');
+            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,platform,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',:platform,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute(['id'=>$deviceId,'user'=>$userId,'name'=>$pairing['device_name'],'platform'=>$pairing['platform']]);
+            $this->db->prepare('INSERT INTO catch_device_tokens (id,device_id,token_hash,token_scope,created_at) VALUES (:id,:device,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id'=>$tokenId,'device'=>$deviceId,'hash'=>hash('sha256',$token)]);
+            $this->db->prepare('UPDATE catch_extension_pairing_requests SET status=\'approved\',user_id=:user,device_id=:device,token_encrypted=:token,approved_at=UTC_TIMESTAMP(6) WHERE request_id=:request')->execute(['user'=>$userId,'device'=>$deviceId,'token'=>$this->secrets->encrypt($token),'request'=>$requestId]);
+            $this->db->commit();return ['device_id'=>$deviceId,'device_name'=>$pairing['device_name'],'status'=>'approved'];
+        }catch(\Throwable $error){if($this->db->inTransaction())$this->db->rollBack();throw $error;}
+    }
+
+    public function exchangeExtensionPairingRequest(string $requestId,string $verifier): array
+    {
+        if(!preg_match('/^[0-9a-f]{48}$/',$requestId)||!preg_match('/^[A-Za-z0-9_-]{43}$/',$verifier))return ['status'=>'invalid'];
+        $this->db->beginTransaction();
+        try{
+            $query=$this->db->prepare('SELECT *,expires_at<UTC_TIMESTAMP(6) expired FROM catch_extension_pairing_requests WHERE request_id=:request LIMIT 1 FOR UPDATE');
+            $query->execute(['request'=>$requestId]);$pairing=$query->fetch()?:null;
+            if(!$pairing){$this->db->commit();return ['status'=>'invalid'];}
+            if((int)$pairing['expired']===1){
+                if($pairing['device_id'])$this->db->prepare('DELETE FROM catch_devices WHERE id=:device')->execute(['device'=>$pairing['device_id']]);
+                else $this->db->prepare('DELETE FROM catch_extension_pairing_requests WHERE request_id=:request')->execute(['request'=>$requestId]);
+                $this->db->commit();return ['status'=>'expired'];
+            }
+            $challenge=rtrim(strtr(base64_encode(hash('sha256',$verifier,true)),'+/','-_'),'=');
+            if(!hash_equals((string)$pairing['code_challenge'],$challenge)){$this->db->commit();return ['status'=>'invalid_verifier'];}
+            if($pairing['status']==='pending'){$this->db->commit();return ['status'=>'pending'];}
+            if(!$pairing['token_encrypted']||!$pairing['device_id']){$this->db->commit();return ['status'=>'invalid'];}
+            $token=$this->secrets->decrypt((string)$pairing['token_encrypted']);
+            $this->db->prepare('DELETE FROM catch_extension_pairing_requests WHERE request_id=:request')->execute(['request'=>$requestId]);
+            $this->db->commit();return ['status'=>'connected','device_token'=>$token,'device_id'=>$pairing['device_id'],'device_name'=>$pairing['device_name']];
+        }catch(\Throwable $error){if($this->db->inTransaction())$this->db->rollBack();throw $error;}
+    }
+
+    public function revokeForToken(string $token): bool
+    {
+        if(!str_starts_with($token,'catch_device_'))return false;
+        $query=$this->db->prepare('DELETE d FROM catch_devices d JOIN catch_device_tokens t ON t.device_id=d.id WHERE t.token_hash=:hash');
+        $query->execute(['hash'=>hash('sha256',$token)]);return $query->rowCount()===1;
+    }
+
     public function userForToken(string $token,string $requiredScope='capture:write'): ?array
     {
         if(!str_starts_with($token,'catch_device_'))return null;
@@ -115,5 +182,11 @@ final class DeviceRepository
     {
         $query=$this->db->prepare('DELETE p FROM catch_device_pairing_codes p JOIN catch_devices d ON d.id=p.device_id WHERE p.device_id=:device AND d.user_id=:user AND p.created_at < UTC_TIMESTAMP(6) - INTERVAL '.self::PAIRING_CODE_TTL_MINUTES.' MINUTE');
         $query->execute(['device'=>$deviceId,'user'=>$userId]);
+    }
+
+    private function deleteExpiredExtensionPairingRequests(): void
+    {
+        $this->db->exec('DELETE d FROM catch_devices d JOIN catch_extension_pairing_requests p ON p.device_id=d.id WHERE p.expires_at<UTC_TIMESTAMP(6)');
+        $this->db->exec('DELETE FROM catch_extension_pairing_requests WHERE expires_at<UTC_TIMESTAMP(6)');
     }
 }

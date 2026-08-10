@@ -17,6 +17,7 @@
   <link rel="stylesheet" href="/assets/css/auth.css?v=2">
   <link rel="stylesheet" href="/assets/css/devices.css?v=3">
   <link rel="stylesheet" href="/assets/css/device-detail.css?v=1">
+  <link rel="stylesheet" href="/assets/css/pair.css?v=1">
   <link rel="stylesheet" href="/assets/css/coming-soon.css?v=2">
   <link rel="stylesheet" href="/assets/css/shell.css?v=2">
   <script>try{const t=localStorage.getItem('catch-theme');if(t&&t!=='system')document.documentElement.dataset.theme=t}catch(e){}</script>

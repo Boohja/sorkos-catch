@@ -22,7 +22,7 @@ final class AuthController
     public function callback(): never
     {
         if(($_GET['error']??'')==='access_denied'){$_SESSION['auth_error']='Login was cancelled.';Response::redirect('/login');}
-        try{$user=$this->auth->complete((string)($_GET['code']??''),(string)($_GET['state']??''));if(!$this->access->allowsSorkosUserId((string)($user['sorkos_user_id']??''))){$this->auth->logout();Response::redirect('/coming-soon?access=denied');}$this->auth->establishSession($user['id']);Response::redirect('/inbox');}catch(\Throwable $error){$this->logFailure('authorization callback',$error);$_SESSION['auth_error']='Login could not be completed.';Response::redirect('/login');}
+        try{$user=$this->auth->complete((string)($_GET['code']??''),(string)($_GET['state']??''));if(!$this->access->allowsSorkosUserId((string)($user['sorkos_user_id']??''))){$this->auth->logout();Response::redirect('/coming-soon?access=denied');}$return=$this->returnPath();$this->auth->establishSession($user['id']);Response::redirect($return);}catch(\Throwable $error){$this->logFailure('authorization callback',$error);$_SESSION['auth_error']='Login could not be completed.';Response::redirect('/login');}
     }
     public function logout(): never
     {
@@ -32,5 +32,11 @@ final class AuthController
     private function logFailure(string $stage,\Throwable $error): void
     {
         @error_log(sprintf("[%s] Sorkos %s failed: %s\n",gmdate(DATE_ATOM),$stage,$error->getMessage()),3,dirname(__DIR__,3).'/storage/logs/auth.log');
+    }
+
+    private function returnPath(): string
+    {
+        $path=(string)($_SESSION['after_login_path']??'/inbox');unset($_SESSION['after_login_path']);
+        return str_starts_with($path,'/')&&!str_starts_with($path,'//')?$path:'/inbox';
     }
 }

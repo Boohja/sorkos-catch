@@ -1,0 +1,10 @@
+{
+  "name": "catch-browser-extension",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "npm run build && node scripts/validate.mjs"
+  }
+}

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Connect Catch</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <main class="setup-shell">
+    <header class="brand-panel">
+      <img src="../assets/logo-landscape-dark.png" alt="Catch" width="356" height="120">
+      <p>Capture from your browser in a few seconds.</p>
+    </header>
+
+    <section class="setup-panel">
+      <div class="setup-content" data-disconnected>
+        <h1>Connect Catch</h1>
+        <p class="intro">Approve this browser once. Catch opens in a normal tab and returns here automatically when it is ready.</p>
+
+        <ol class="connection-steps" aria-label="Connection steps">
+          <li><span>1</span><div><strong>Open Catch</strong><p>We create a private, short-lived connection request.</p></div></li>
+          <li><span>2</span><div><strong>Sign in and approve</strong><p>If you are already signed in, you go straight to approval.</p></div></li>
+          <li><span>3</span><div><strong>Start capturing</strong><p>This page detects the connection and finishes setup.</p></div></li>
+        </ol>
+
+        <div class="error-state" role="alert" data-error hidden>
+          <strong data-error-title>Catch could not start pairing</strong>
+          <p data-error-message></p>
+          <details data-error-details hidden><summary>Administrator details</summary><p data-error-technical></p></details>
+        </div>
+
+        <p class="status" role="status" aria-live="polite" data-status></p>
+        <button class="primary-button" type="button" data-connect>Continue to Catch</button>
+        <p class="privacy-note">No pairing code to copy. Your device token never appears in the browser address bar.</p>
+      </div>
+
+      <div class="setup-content" data-pending hidden>
+        <div class="waiting-mark" aria-hidden="true"></div>
+        <h1>Finish in the Catch tab</h1>
+        <p class="intro">Sign in if Catch asks, then approve this browser. You can close that tab after confirmation.</p>
+        <p class="status" role="status" aria-live="polite" data-pending-status>Waiting for approval...</p>
+        <button class="secondary-button" type="button" data-reopen>Open Catch again</button>
+      </div>
+
+      <div class="setup-content" data-connected hidden>
+        <div class="success-mark" aria-hidden="true">✓</div>
+        <h1>Catch is connected</h1>
+        <p class="intro">Pages, selections, links, and visible screenshots can now go straight to your inbox.</p>
+        <dl><div><dt>Device</dt><dd data-device-name>Browser extension</dd></div><div><dt>Access</dt><dd>Capture only</dd></div></dl>
+        <p class="pin-note">Pinning Catch is optional. You can always open it from the browser's extensions menu.</p>
+        <button class="secondary-button" type="button" data-disconnect>Disconnect this browser</button>
+      </div>
+    </section>
+  </main>
+  <script src="../shared/browser.js"></script>
+  <script src="setup.js"></script>
+</body>
+</html>
