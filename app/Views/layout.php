@@ -19,7 +19,8 @@
   <link rel="stylesheet" href="/assets/css/devices.css?v=3">
   <link rel="stylesheet" href="/assets/css/device-detail.css?v=1">
   <link rel="stylesheet" href="/assets/css/device-provenance.css?v=1">
-  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=1">
+  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=2">
+  <link rel="stylesheet" href="/assets/css/tags.css?v=1">
   <link rel="stylesheet" href="/assets/css/pair.css?v=1">
   <link rel="stylesheet" href="/assets/css/coming-soon.css?v=2">
   <link rel="stylesheet" href="/assets/css/shell.css?v=2">
@@ -35,6 +36,7 @@
       <a class="brand brand-nav" href="/inbox" aria-label="Catch Inbox"><img src="/assets/logo/landscape_dark_small.png" alt="Catch" width="104" height="37"></a>
       <nav aria-label="Main navigation">
         <a href="/inbox" <?=$currentPath==='/inbox'?'aria-current="page"':''?>>Inbox</a>
+        <a href="/tags" <?=str_starts_with($currentPath,'/tags')?'aria-current="page"':''?>>Tags</a>
         <a href="/devices" <?=str_starts_with($currentPath,'/devices')?'aria-current="page"':''?>>Devices</a>
         <a href="/help" <?=$currentPath==='/help'?'aria-current="page"':''?>>Help</a>
       </nav>
@@ -54,6 +56,6 @@
     <?php if($isComingSoon&&$isAuthenticated): ?><a class="footer-login" href="/inbox">Open Catch</a><?php endif; ?>
   </footer>
   <div class="sync-toast" data-sync-status role="status" aria-live="polite" hidden></div>
-  <script type="module" src="/assets/js/app.js?v=7"></script>
+  <script type="module" src="/assets/js/app.js?v=8"></script>
 </body>
 </html>

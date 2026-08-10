@@ -405,7 +405,7 @@
       },
       "CaptureRequest": {
         "required": true,
-        "description": "Shared request body for `POST /api/shortcut/captures` and `POST /api/v1/captures`. Choose `type` for the content being stored, not for the process that produced it. For example, dictated speech that has already been converted to a transcript is a `text` capture whose transcript belongs in `text`.",
+        "description": "Shared request body for `POST /api/shortcut/captures` and `POST /api/v1/captures`. Choose `type` for known content, or use `unknown` when an iOS Share Sheet may provide any supported representation. Unknown captures are normalized before storage: a lone web URL is moved from `text` to `url` and enriched with the page title when safely retrievable; OCR-only input becomes text; attachments are classified from their actual MIME type; and the stored type becomes `text`, `url`, `image`, `file`, or `mixed`.",
         "content": {
           "multipart/form-data": {
             "schema": {
@@ -417,7 +417,7 @@
                     "attachments[]": {
                       "type": "array",
                       "items": { "type": "string", "format": "binary" },
-                      "description": "Optional files. Repeat this field to send multiple files. Each file is limited to 15 MiB by the example configuration; allowed MIME types depend on the installation."
+                      "description": "Optional files. Repeat this field to send multiple files. For `type=unknown`, only configured image MIME types and PDF are accepted; audio, video, text-file, empty, and disguised attachments are rejected. Both each file and the combined unknown-capture attachments are limited to 15 MiB by the example configuration."
                     }
                   }
                 }
@@ -653,7 +653,7 @@
           "extracted_text": {
             "type": "string",
             "nullable": true,
-            "description": "Optional machine-derived text that supplements the primary content, such as OCR from an image or a transcript retained alongside an audio attachment. Do not use it for a voice-to-text-only capture: put that transcript in `text`. This field alone does not satisfy the content requirement.",
+            "description": "Optional machine-derived text that supplements the primary content, such as OCR from an image. It may intentionally duplicate `text`. For known capture types this field alone does not satisfy the content requirement. For `type=unknown`, OCR-only input is copied to `text` so the original result remains available in both fields.",
             "example": "Recognized text from the attached image or audio."
           },
           "source": {
@@ -679,13 +679,18 @@
             ]
           }
         },
-        "description": "At least one of `text`, `url`, or a multipart attachment must contain data. A title, `extracted_text`, or metadata alone is not accepted. Voice-to-text example: `type=text`, `text=<dictated transcript>`, and `source=ios-shortcut`. Supplying a stable `client_capture_id` remains useful only for clients that can retry with the same value."
+        "description": "At least one of `text`, `url`, or a multipart attachment must normally contain data. For `type=unknown`, `extracted_text` may be the only textual value and is promoted to `text`. A title or metadata alone is not accepted. Voice-to-text example: `type=text`, `text=<dictated transcript>`, and `source=ios-shortcut`. Supplying a stable `client_capture_id` remains useful only for clients that can retry with the same value."
       },
       "CaptureType": {
         "type": "string",
-        "enum": ["text", "url", "image", "audio", "file", "mixed"],
-        "description": "Required classification of the primary stored content: `text` for typed or dictated text (including a voice-to-text transcript); `url` for a link; `image` for image attachment(s); `audio` for an actual audio attachment; `file` for other attachment(s); or `mixed` when multiple primary kinds are intentionally combined. The type describes what is stored, not how it was obtained.",
+        "enum": ["text", "url", "image", "audio", "file", "mixed", "unknown"],
+        "description": "Required input classification: `text` for typed or dictated text (including a voice-to-text transcript); `url` for a link; `image` for image attachment(s); `audio` for an actual audio attachment; `file` for other attachment(s); `mixed` when multiple known primary kinds are intentionally combined; or `unknown` when the iOS Share Sheet input must be inspected by Catch. `unknown` is input-only and is replaced with a detected stored type. Unknown attachments deliberately accept images and PDFs only.",
         "example": "text"
+      },
+      "StoredCaptureType": {
+        "type": "string",
+        "enum": ["text", "url", "image", "audio", "file", "mixed"],
+        "description": "Resolved type stored by Catch. `unknown` is never persisted."
       },
       "CaptureStatus": {
         "type": "string",
@@ -710,7 +715,7 @@
           "id": { "type": "string", "format": "uuid" },
           "catch_number": { "$ref": "#/components/schemas/CatchNumber" },
           "client_capture_id": { "type": "string" },
-          "type": { "$ref": "#/components/schemas/CaptureType" },
+          "type": { "$ref": "#/components/schemas/StoredCaptureType" },
           "title": { "type": "string", "nullable": true },
           "text": { "type": "string", "nullable": true },
           "url": { "type": "string", "nullable": true },

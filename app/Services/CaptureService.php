@@ -12,6 +12,7 @@ final class CaptureService
     public function __construct(private readonly Database $database,private readonly CaptureValidator $validator,private readonly UploadService $uploads,private readonly ?RemoteContentService $remote=null) {}
     public function create(string $userId,array $input,array $files=[],?string $deviceId=null): array
     {
+        if(($input['type']??'')==='unknown')$input=$this->normalizeUnknownInput($input,$files);
         $metadata=is_array($input['metadata']??null)?$input['metadata']:[];
         $source=(string)($input['source']??'web');
         $url=trim((string)($input['url']??''));
@@ -48,5 +49,50 @@ final class CaptureService
         if (!is_array($field['name'])) return [$field]; $result=[];
         foreach ($field['name'] as $i=>$name) if (($field['error'][$i]??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_NO_FILE) $result[]=['name'=>$name,'type'=>$field['type'][$i]??'','tmp_name'=>$field['tmp_name'][$i],'error'=>$field['error'][$i],'size'=>$field['size'][$i]];
         return $result;
+    }
+
+    private function normalizeUnknownInput(array $input,array $files): array
+    {
+        $nonFileAttachment=$input['attachments']??$input['attachment']??null;
+        if($this->hasValue($nonFileAttachment))throw new InvalidArgumentException(json_encode(['attachment'=>'Unknown captures accept attachments only as image or PDF file uploads.']));
+
+        $attachments=$this->normalizeFiles($files);$hasImage=false;$hasPdf=false;$totalSize=0;
+        foreach($attachments as $file){
+            try{$info=$this->uploads->inspectUnknownAttachment($file);}catch(\RuntimeException $error){throw new InvalidArgumentException(json_encode(['attachment'=>$error->getMessage()]));}
+            $totalSize+=$info['size'];if($totalSize>$this->uploads->maxBytes())throw new InvalidArgumentException(json_encode(['attachment'=>'The combined attachments exceed the upload limit.']));
+            if($info['mime']==='application/pdf')$hasPdf=true;else $hasImage=true;
+        }
+
+        $text=trim((string)($input['text']??''));$url=trim((string)($input['url']??''));$extracted=trim((string)($input['extracted_text']??''));
+        if($url===''&&$this->isHttpUrl($text)){$url=$text;$text='';$input['url']=$url;$input['text']=null;}
+        if($text===''&&$url===''&&!$attachments&&$extracted!==''){$text=$extracted;$input['text']=$text;}
+
+        $kinds=[];if($text!=='')$kinds[]='text';if($url!=='')$kinds[]='url';if($hasImage)$kinds[]='image';if($hasPdf)$kinds[]='file';
+        $input['type']=count($kinds)>1?'mixed':($kinds[0]??'text');
+
+        if(empty(trim((string)($input['title']??'')))){
+            if($url!=='')$input['title']=$this->remote?->pageTitle($url);
+            if(empty(trim((string)($input['title']??'')))&&$text!=='')$input['title']=$this->textTitle($text);
+            if(empty(trim((string)($input['title']??'')))&&count($attachments)===1)$input['title']=mb_substr(basename((string)($attachments[0]['name']??'')),0,500);
+        }
+        return $input;
+    }
+
+    private function isHttpUrl(string $value): bool
+    {
+        if(filter_var($value,FILTER_VALIDATE_URL)===false)return false;
+        return in_array(strtolower((string)(parse_url($value,PHP_URL_SCHEME)??'')),['http','https'],true);
+    }
+
+    private function textTitle(string $text): string
+    {
+        $line=trim((string)(preg_split('/\R/u',$text,2)[0]??$text));
+        return mb_strimwidth($line,0,120,'…');
+    }
+
+    private function hasValue(mixed $value): bool
+    {
+        if(is_array($value))return array_filter($value,fn(mixed $item):bool=>$this->hasValue($item))!==[];
+        return trim((string)$value)!=='';
     }
 }

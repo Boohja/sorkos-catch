@@ -23,13 +23,13 @@ if($capture['type']==='image')foreach($capture['attachments'] as $attachment){if
 $textMatchesTitle=$capture['text']&&trim((string)$capture['text'])===trim((string)$capture['title']);
 $urlIsPrimary=!$primaryImage&&!empty($capture['url'])&&($capture['type']==='url'||empty($capture['text'])||$textMatchesTitle);
 $deviceLabel=trim((string)($capture['device_name']??''))?:match((string)$capture['source']){'web'=>'Catch Web','browser-extension'=>'Browser Extension','ios-shortcut'=>'iOS Shortcut',default=>ucwords(str_replace(['-','_'],' ',(string)$capture['source']))};
-$heading='#'.(int)$capture['catch_number'].(!empty($capture['title'])?' - '.$capture['title']:'');
+$assignedIds=array_column($capture['tags']??[],'id');
 $remainingAttachments=array_values(array_filter($capture['attachments'],static fn(array $attachment): bool=>!$primaryImage||$attachment['id']!==$primaryImage['id']));
 ?>
 <a class="back-link" href="/inbox">&larr; Back to inbox</a>
 <article class="detail">
   <header>
-    <h1><?=htmlspecialchars($heading)?></h1>
+    <h1><span class="capture-heading-number">#<?=(int)$capture['catch_number']?><?=!empty($capture['title'])?' -':''?></span><?php if(!empty($capture['title'])): ?> <span><?=htmlspecialchars($capture['title'])?></span><?php endif; ?></h1>
     <p><time datetime="<?=htmlspecialchars($utc($capture['created_at']))?>" data-local-time data-date-style="medium" data-time-style="short">UTC <?=htmlspecialchars($capture['created_at'])?></time></p>
   </header>
   <section class="capture-primary"><h2>Content</h2>
@@ -47,6 +47,7 @@ $remainingAttachments=array_values(array_filter($capture['attachments'],static f
     <?php elseif(str_starts_with($attachment['mime_type'],'image/')): ?><div class="missing-attachment" role="status"><strong><?=htmlspecialchars($attachment['original_name'])?></strong><span>The stored image file is unavailable.</span></div>
     <?php else: ?><a class="file-attachment" href="<?=htmlspecialchars($attachmentUrl)?>"><strong><?=htmlspecialchars($attachment['original_name'])?></strong><span><?=htmlspecialchars($attachment['mime_type'])?> &middot; <?=number_format($attachment['size_bytes']/1024,1,'.',',')?> KB</span></a><?php endif; ?>
   <?php endforeach;?></div></section><?php endif; ?>
+  <section class="capture-tags-panel" data-capture-tags data-capture-id="<?=htmlspecialchars($capture['id'])?>"><h2>Tags</h2><div class="assigned-tags" data-assigned-tags><?php foreach($capture['tags']??[] as $tag): ?><span class="assigned-tag" data-tag-id="<?=htmlspecialchars($tag['id'])?>"><a href="<?=htmlspecialchars($tag['url'])?>"><?=htmlspecialchars($tag['name'])?></a><button type="button" data-remove-tag aria-label="Remove <?=htmlspecialchars($tag['name'])?>">×</button></span><?php endforeach; ?></div><?php $unassigned=array_filter($availableTags,static fn(array $tag):bool=>!in_array($tag['id'],$assignedIds,true)); ?><?php if($availableTags): ?><form class="tag-assign-form" data-tag-assign method="post" action="/captures/<?=urlencode($capture['id'])?>/tags"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><label class="sr-only" for="capture-tag">Tag</label><select id="capture-tag" name="tag_id" <?=!$unassigned?'disabled':''?>><?php foreach($unassigned as $tag): ?><option value="<?=htmlspecialchars($tag['id'])?>"><?=htmlspecialchars($tag['name'])?></option><?php endforeach; ?></select><button class="button button-secondary" <?=!$unassigned?'disabled':''?>>Add tag</button></form><?php else: ?><p class="muted">No tags yet. <a href="/tags">Create one</a>.</p><?php endif; ?><p class="tag-status" data-tag-status role="status" aria-live="polite"></p></section>
   <section class="capture-metadata"><h2>Captured from</h2><dl>
     <div><dt>Device</dt><dd><?php if(!empty($capture['device_id'])): ?><a href="/devices/<?=urlencode($capture['device_id'])?>"><?=htmlspecialchars($deviceLabel)?></a><?php else: ?><?=htmlspecialchars($deviceLabel)?><?php endif; ?></dd></div>
     <?php if($sourceUrl): ?><div><dt>Web</dt><dd><a href="<?=htmlspecialchars($sourceUrl)?>" target="_blank" rel="noopener noreferrer"><?=htmlspecialchars($sourceTitle?:$sourceDomain?:$sourceUrl)?></a><?php if($linkedUrl): ?><small>Wrapping link: <a href="<?=htmlspecialchars($linkedUrl)?>" target="_blank" rel="noopener noreferrer"><?=htmlspecialchars($linkedUrl)?></a></small><?php endif; ?></dd></div><?php endif; ?>

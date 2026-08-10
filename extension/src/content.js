@@ -5,6 +5,10 @@
   function compactText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
   }
+  function linkText(link) {
+    return compactText(link?.innerText || link?.textContent || link?.getAttribute('aria-label') || link?.title || link?.querySelector('img')?.alt);
+  }
+  function normalizedUrl(value) { try { return new URL(value, location.href).href; } catch { return String(value || ''); } }
 
   document.addEventListener('contextmenu', (event) => {
     const element = event.target instanceof Element ? event.target : null;
@@ -12,7 +16,7 @@
     const image = element?.closest('img');
     contextMenuTarget = {
       linkUrl: link?.href || '',
-      linkText: compactText(link?.innerText || link?.getAttribute('aria-label') || link?.title),
+      linkText: linkText(link),
       imageUrl: image?.currentSrc || image?.src || '',
       imageAlt: compactText(image?.alt || image?.getAttribute('aria-label') || image?.title),
     };
@@ -40,6 +44,11 @@
       return true;
     }
     if (message?.type === 'page.context-menu') {
+      if (message.linkUrl && (!contextMenuTarget.linkText || normalizedUrl(contextMenuTarget.linkUrl) !== normalizedUrl(message.linkUrl))) {
+        const requested = normalizedUrl(message.linkUrl);
+        const matching = Array.from(document.querySelectorAll('a[href]')).find(candidate => normalizedUrl(candidate.href) === requested);
+        if (matching) contextMenuTarget = { ...contextMenuTarget, linkUrl: matching.href, linkText: linkText(matching) };
+      }
       sendResponse(contextMenuTarget);
       return true;
     }

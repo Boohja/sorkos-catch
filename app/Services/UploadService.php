@@ -27,6 +27,25 @@ final class UploadService
         return ['id'=>Id::uuid(),'capture_id'=>$captureId,'original_name'=>basename((string)$file['name']),'storage_name'=>gmdate('Y/m').'/'.$storageName,'mime_type'=>$mime,'size_bytes'=>$size,'width'=>$width,'height'=>$height,'checksum'=>hash_file('sha256',$target)];
     }
 
+    /** @return array{mime:string,size:int} */
+    public function inspectUnknownAttachment(array $file): array
+    {
+        if (($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK) throw new RuntimeException('The attachment could not be uploaded.');
+        $path=(string)($file['tmp_name']??'');$actualSize=$path!==''&&is_file($path)?filesize($path):false;
+        $size=$actualSize===false?(int)($file['size']??0):(int)$actualSize;
+        if($size<=0)throw new RuntimeException('Empty attachments are not accepted.');
+        if($size>$this->maxBytes())throw new RuntimeException('The attachment exceeds the upload limit.');
+        $mime=$path!==''?(new \finfo(FILEINFO_MIME_TYPE))->file($path):false;$mime=$mime?:'application/octet-stream';
+        $safeKind=str_starts_with($mime,'image/')||$mime==='application/pdf';
+        if(!$safeKind||!in_array($mime,$this->allowed,true))throw new RuntimeException('Unknown captures accept only configured image formats and PDF files.');
+        return ['mime'=>$mime,'size'=>$size];
+    }
+
+    public function maxBytes(): int
+    {
+        return (int)$this->config->get('uploads.max_bytes',15728640);
+    }
+
     public function storeContents(string $contents,string $name,string $mime,string $captureId): array
     {
         $size=strlen($contents);if($size===0||$size>(int)$this->config->get('uploads.max_bytes',15728640))throw new RuntimeException('The remote attachment exceeds the upload limit.');

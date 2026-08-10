@@ -5,6 +5,37 @@ $test=function(string $name,callable $case)use(&$failures):void{try{$case();echo
 $test('UUID format',function(){if(!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',Catch\Core\Id::uuid()))throw new RuntimeException('Invalid UUID');});
 $test('Capture validation requires content',function(){$errors=(new Catch\Validation\CaptureValidator())->validate(['client_capture_id'=>'test','type'=>'text']);if(!isset($errors['content']))throw new RuntimeException('Content accepted');});
 $test('Capture validation accepts text',function(){$errors=(new Catch\Validation\CaptureValidator())->validate(['client_capture_id'=>'test','type'=>'text','text'=>'Hello']);if($errors)throw new RuntimeException(json_encode($errors));});
+$test('Unknown captures resolve content and reject unsafe attachments',function()use($root){
+    $config=Catch\Core\Config::load($root);$uploads=new Catch\Services\UploadService($config,sys_get_temp_dir());
+    $service=new Catch\Services\CaptureService(new Catch\Core\Database($config),new Catch\Validation\CaptureValidator(),$uploads);
+    $normalize=(new ReflectionClass($service))->getMethod('normalizeUnknownInput');
+    $url=$normalize->invoke($service,['type'=>'unknown','text'=>'https://example.com/article','extracted_text'=>'https://example.com/article'],[]);
+    if($url['type']!=='url'||$url['url']!=='https://example.com/article'||$url['text']!==null)throw new RuntimeException('A lone URL was not promoted');
+    $text=$normalize->invoke($service,['type'=>'unknown','text'=>'First line'.PHP_EOL.'Second line','extracted_text'=>'First line Second line'],[]);
+    if($text['type']!=='text'||$text['title']!=='First line'||$text['extracted_text']!=='First line Second line')throw new RuntimeException('Text was not classified without destroying OCR output');
+    $ocr=$normalize->invoke($service,['type'=>'unknown','extracted_text'=>'Recognized date: tomorrow'],[]);
+    if($ocr['type']!=='text'||$ocr['text']!=='Recognized date: tomorrow')throw new RuntimeException('OCR-only input was not preserved as text');
+    $png=tempnam(sys_get_temp_dir(),'catch-unknown-png-');$pdf=tempnam(sys_get_temp_dir(),'catch-unknown-pdf-');$plain=tempnam(sys_get_temp_dir(),'catch-unknown-txt-');
+    try{
+        file_put_contents($png,base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
+        file_put_contents($pdf,"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF");
+        file_put_contents($plain,'not an image');
+        $imageFile=['attachment'=>['name'=>'pixel.png','tmp_name'=>$png,'error'=>UPLOAD_ERR_OK,'size'=>filesize($png)]];
+        $image=$normalize->invoke($service,['type'=>'unknown','extracted_text'=>'pixel'],$imageFile);
+        if($image['type']!=='image'||$image['title']!=='pixel.png')throw new RuntimeException('Image input was not classified');
+        $mixed=$normalize->invoke($service,['type'=>'unknown','text'=>'Context'],$imageFile);
+        if($mixed['type']!=='mixed')throw new RuntimeException('Text plus image was not classified as mixed');
+        $pdfFile=['attachment'=>['name'=>'paper.pdf','tmp_name'=>$pdf,'error'=>UPLOAD_ERR_OK,'size'=>filesize($pdf)]];
+        $document=$normalize->invoke($service,['type'=>'unknown','extracted_text'=>'Thesis OCR'],$pdfFile);
+        if($document['type']!=='file'||$document['title']!=='paper.pdf')throw new RuntimeException('PDF input was not classified');
+        $unsafe=['attachment'=>['name'=>'notes.txt','tmp_name'=>$plain,'error'=>UPLOAD_ERR_OK,'size'=>filesize($plain)]];
+        try{$normalize->invoke($service,['type'=>'unknown','text'=>'Context'],$unsafe);throw new RuntimeException('Unsafe attachment was accepted');}catch(InvalidArgumentException $error){if(!str_contains($error->getMessage(),'image formats and PDF'))throw $error;}
+        $tinyRoot=sys_get_temp_dir().'/catch-unknown-config-'.bin2hex(random_bytes(4));mkdir($tinyRoot.'/config',0777,true);file_put_contents($tinyRoot.'/config/config.ini',"[uploads]\nmax_bytes=10\nallowed_mime=\"image/png,application/pdf\"\n");
+        try{$tinyUploads=new Catch\Services\UploadService(Catch\Core\Config::load($tinyRoot),sys_get_temp_dir());try{$tinyUploads->inspectUnknownAttachment($imageFile['attachment']);throw new RuntimeException('Oversized attachment was accepted');}catch(RuntimeException $error){if(!str_contains($error->getMessage(),'upload limit'))throw $error;}}finally{@unlink($tinyRoot.'/config/config.ini');@rmdir($tinyRoot.'/config');@rmdir($tinyRoot);}
+    }finally{@unlink($png);@unlink($pdf);@unlink($plain);}
+    $spec=json_decode((string)file_get_contents($root.'/public/docs/api/openapi.json'),true,512,JSON_THROW_ON_ERROR);
+    if(!in_array('unknown',$spec['components']['schemas']['CaptureType']['enum']??[],true)||in_array('unknown',$spec['components']['schemas']['StoredCaptureType']['enum']??[],true))throw new RuntimeException('OpenAPI does not distinguish unknown input from stored types');
+});
 $test('Prerelease access permits only the configured Sorkos user',function()use($root){$directory=sys_get_temp_dir().'/catch-access-'.bin2hex(random_bytes(6));mkdir($directory.'/config',0777,true);file_put_contents($directory.'/config/config.ini',"[access]\nprerelease=true\nallowed_sorkos_user_id=usr_allowed\n");$policy=new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));if(!$policy->allowsSorkosUserId('usr_allowed')||$policy->allowsSorkosUserId('usr_other')||$policy->allowsSorkosUserId(''))throw new RuntimeException('Prerelease allowlist failed');unlink($directory.'/config/config.ini');rmdir($directory.'/config');rmdir($directory);});
 $test('Released access does not require an allowlist',function()use($root){$directory=sys_get_temp_dir().'/catch-access-'.bin2hex(random_bytes(6));mkdir($directory.'/config',0777,true);file_put_contents($directory.'/config/config.ini',"[access]\nprerelease=false\n");$policy=new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));if(!$policy->allowsSorkosUserId('usr_any'))throw new RuntimeException('Released access was denied');unlink($directory.'/config/config.ini');rmdir($directory.'/config');rmdir($directory);});
 $test('Auth exchange is compatible with PHP 8.5',function()use($root){$source=(string)file_get_contents($root.'/app/Services/AuthService.php');if(str_contains($source,'curl_'.'close('))throw new RuntimeException('Deprecated cURL close call found');});

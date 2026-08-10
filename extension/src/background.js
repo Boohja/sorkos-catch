@@ -256,7 +256,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
   async function handleContextMenu(info, tab) {
     let capture;
     let target = {};
-    try { target = await ext.tabs.sendMessage(tab?.id, { type: 'page.context-menu' }) || {}; } catch {}
+    try { target = await ext.tabs.sendMessage(tab?.id, { type: 'page.context-menu', linkUrl: info.linkUrl || '' }) || {}; } catch {}
     if (info.srcUrl && ['catch-image', 'catch-link'].includes(info.menuItemId)) {
       capture = capturePayload({
         text: '',
@@ -291,7 +291,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
         context: 'link-context-menu',
         sourceUrl: info.pageUrl || tab?.url,
         sourceTitle: tab?.title || '',
-        metadata: { link_text: target.linkUrl === info.linkUrl ? target.linkText || '' : '' },
+        metadata: { link_text: target.linkText || '' },
       });
     } else if (info.menuItemId === 'catch-page') {
       capture = capturePayload({

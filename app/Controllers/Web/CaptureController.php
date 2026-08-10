@@ -5,13 +5,14 @@ use Catch\Core\Id;
 use Catch\Core\View;
 use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
+use Catch\Repositories\TagRepository;
 use Catch\Services\AuthService;
 use Catch\Services\CaptureService;
 use Catch\Services\Csrf;
 
 final class CaptureController
 {
-    public function __construct(private readonly View $view,private readonly AuthService $auth,private readonly CaptureRepository $captures,private readonly CaptureService $service,private readonly Csrf $csrf,private readonly string $uploadsPath,private readonly ?string $webDeviceId=null) {}
+    public function __construct(private readonly View $view,private readonly AuthService $auth,private readonly CaptureRepository $captures,private readonly TagRepository $tags,private readonly CaptureService $service,private readonly Csrf $csrf,private readonly string $uploadsPath,private readonly ?string $webDeviceId=null) {}
     private function user(): array { $user=$this->auth->user(); if(!$user) Response::redirect('/login'); return $user; }
     public function index(): void
     {
@@ -31,7 +32,7 @@ final class CaptureController
         $user=$this->user(); $capture=$this->captures->find((string)$params['id'],$user['id']);
         if(!$capture){$this->view->render('errors/404',['title'=>'Not found','user'=>$user],404);return;}
         foreach($capture['attachments'] as &$attachment){$stored=$this->captures->findAttachment($attachment['id'],$user['id']);$attachment['available']=$stored&&is_file($this->uploadsPath.'/'.$stored['storage_name']);}unset($attachment);
-        $this->view->render('captures/show',['title'=>$capture['title']?:'Capture','user'=>$user,'capture'=>$capture,'csrf'=>$this->csrf->token()]);
+        $this->view->render('captures/show',['title'=>$capture['title']?:'Capture','user'=>$user,'capture'=>$capture,'availableTags'=>$this->tags->list($user['id']),'csrf'=>$this->csrf->token()]);
     }
     public function attachment(\Base $f3,array $params): never
     {

@@ -10,7 +10,12 @@ final class CaptureRepository
     {
         $query=$this->db->prepare('SELECT c.*,d.name device_name,d.client_type device_client_type,(SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id) attachment_count FROM catch_captures c LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.user_id=:user AND c.status=:status ORDER BY c.created_at DESC LIMIT '.max(1,min($limit,200)));
         $query->execute(['user'=>$userId,'status'=>$status]);
-        return array_map([$this,'hydrate'],$query->fetchAll());
+        return $this->withTags(array_map([$this,'hydrate'],$query->fetchAll()),$userId);
+    }
+    public function listByTag(string $userId,string $tagId,string $status='inbox',int $limit=100): array
+    {
+        $q=$this->db->prepare('SELECT c.*,d.name device_name,d.client_type device_client_type,(SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id) attachment_count FROM catch_captures c JOIN catch_capture_tags ct ON ct.capture_id=c.id LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.user_id=:user AND c.status=:status AND ct.tag_id=:tag ORDER BY c.created_at DESC LIMIT '.max(1,min($limit,200)));
+        $q->execute(['user'=>$userId,'status'=>$status,'tag'=>$tagId]);return $this->withTags(array_map([$this,'hydrate'],$q->fetchAll()),$userId);
     }
     public function find(string $id,string $userId): ?array
     {
@@ -21,6 +26,7 @@ final class CaptureRepository
             $capture=$this->hydrate($capture);
             $a=$this->db->prepare('SELECT id,original_name,mime_type,size_bytes,width,height,created_at FROM catch_attachments WHERE capture_id=:id ORDER BY created_at');
             $a->execute(['id'=>$id]); $capture['attachments']=$a->fetchAll();
+            $capture['tags']=$this->tagsForCapture($id,$userId);
         }
         return $capture;
     }
@@ -65,5 +71,11 @@ final class CaptureRepository
         $metadata=json_decode((string)($capture['metadata_json']??''),true);
         $capture['metadata']=is_array($metadata)?$metadata:[];
         return $capture;
+    }
+    private function withTags(array $captures,string $userId): array {foreach($captures as &$capture)$capture['tags']=$this->tagsForCapture((string)$capture['id'],$userId);unset($capture);return $captures;}
+    private function tagsForCapture(string $id,string $userId): array
+    {
+        $q=$this->db->prepare('SELECT t.id,t.name FROM catch_tags t JOIN catch_capture_tags ct ON ct.tag_id=t.id JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.capture_id=:capture AND c.user_id=:user ORDER BY t.name');$q->execute(['capture'=>$id,'user'=>$userId]);
+        return array_map(static function(array $tag):array{$ascii=iconv('UTF-8','ASCII//TRANSLIT//IGNORE',(string)$tag['name'])?:$tag['name'];$tag['slug']=trim((string)preg_replace('/[^a-z0-9]+/','-',mb_strtolower((string)$ascii)),'-')?:'tag';$tag['url']='/tags/'.rawurlencode((string)$tag['id']).'-'.$tag['slug'].'/captures';return $tag;},$q->fetchAll());
     }
 }
