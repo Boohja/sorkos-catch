@@ -12,12 +12,12 @@ final class CaptureService
     public function __construct(private readonly Database $database,private readonly CaptureValidator $validator,private readonly UploadService $uploads,private readonly ?RemoteContentService $remote=null) {}
     public function create(string $userId,array $input,array $files=[],?string $deviceId=null): array
     {
-        if(empty(trim((string)($input['title']??'')))&&!empty($input['url'])&&($input['type']??'')==='url'){
-            $input['title']=$this->remote?->pageTitle((string)$input['url']);
-        }
         $metadata=is_array($input['metadata']??null)?$input['metadata']:[];
         $source=(string)($input['source']??'web');
         $url=trim((string)($input['url']??''));
+        if(empty(trim((string)($input['title']??'')))&&$url!==''&&($input['type']??'')==='url'){
+            $input['title']=$this->remote?->pageTitle($url)?:$this->nullable($metadata['link_text']??null);
+        }
         if($url!==''&&empty($metadata['source_url']))$metadata['source_url']=$url;
         if(!empty($metadata['source_url'])&&empty($metadata['source_domain']))$metadata['source_domain']=(string)(parse_url((string)$metadata['source_url'],PHP_URL_HOST)??'');
         if(!empty($metadata['source_url'])&&$metadata['source_url']===$url&&empty($metadata['source_title'])&&!empty($input['title']))$metadata['source_title']=(string)$input['title'];
@@ -28,7 +28,7 @@ final class CaptureService
         $repo=new CaptureRepository($this->database->connection());
         if ($existing=$repo->findByClientId((string)$input['client_capture_id'],$userId)) return ['capture'=>$existing,'created'=>false];
         $remoteImage=!empty($input['remote_attachment_url'])&&$this->remote?$this->remote->image((string)$input['remote_attachment_url']):null;
-        if(!empty($input['remote_attachment_url'])&&!$remoteImage)throw new InvalidArgumentException(json_encode(['attachment'=>'The image could not be retrieved from the source page.']));
+        if(!empty($input['remote_attachment_url'])&&!$remoteImage)throw new InvalidArgumentException(json_encode(['attachment'=>$this->remote?->lastError()?:'The image could not be retrieved from the source page.']));
         if($remoteImage&&empty(trim((string)($input['title']??''))))$input['title']=$remoteImage['name'];
         $id=Id::uuid();
         $data=['id'=>$id,'user_id'=>$userId,'device_id'=>$deviceId,'client_capture_id'=>(string)$input['client_capture_id'],'type'=>(string)$input['type'],'title'=>$this->nullable($input['title']??null),'text'=>$this->nullable($input['text']??null),'url'=>$this->nullable($input['url']??null),'extracted_text'=>$this->nullable($input['extracted_text']??null),'source'=>$source,'metadata_json'=>json_encode($input['metadata'],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)];

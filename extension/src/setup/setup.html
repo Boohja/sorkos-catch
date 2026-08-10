@@ -51,6 +51,12 @@
         <p class="pin-note">Pinning Catch is optional. You can always open it from the browser's extensions menu.</p>
         <button class="secondary-button" type="button" data-disconnect>Disconnect this browser</button>
       </div>
+
+      <section class="activity-panel" id="activity" aria-labelledby="activity-title">
+        <div class="activity-heading"><div><h2 id="activity-title">Recent activity</h2><p>The latest 20 attempts stored only in this extension.</p></div><button class="quiet-button" type="button" data-clear-history hidden>Clear</button></div>
+        <p class="activity-empty" data-history-empty>No capture attempts yet.</p>
+        <ol class="activity-list" data-history-list></ol>
+      </section>
     </section>
   </main>
   <script src="../shared/browser.js"></script>

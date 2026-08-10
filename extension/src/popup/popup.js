@@ -7,6 +7,7 @@
   const submit = document.querySelector('[data-submit]');
   const status = document.querySelector('[data-status]');
   const setup = document.querySelector('[data-setup]');
+  const activity = document.querySelector('[data-activity]');
   let tab = null;
   let context = { title: '', url: '', domain: '' };
 
@@ -34,6 +35,7 @@
   }
 
   setup.addEventListener('click', () => CatchExt.browser.runtime.openOptionsPage());
+  activity.addEventListener('click', () => CatchExt.browser.tabs.create({ url: CatchExt.browser.runtime.getURL('setup/setup.html#activity') }));
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

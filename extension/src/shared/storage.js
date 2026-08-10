@@ -52,6 +52,23 @@
     await storage.set({ pendingCaptures: queue.filter((item) => item.id !== id) });
   }
 
+  async function recordCaptureEvent(event) {
+    const { captureHistory = [] } = await storage.get('captureHistory');
+    const history = Array.isArray(captureHistory) ? captureHistory : [];
+    const next = [{ ...event, updatedAt: new Date().toISOString() }, ...history.filter((item) => item.captureId !== event.captureId)].slice(0, 20);
+    await storage.set({ captureHistory: next });
+    return next;
+  }
+
+  async function getCaptureHistory() {
+    const { captureHistory = [] } = await storage.get('captureHistory');
+    return Array.isArray(captureHistory) ? captureHistory.slice(0, 20) : [];
+  }
+
+  async function clearCaptureHistory() {
+    await storage.remove('captureHistory');
+  }
+
   CatchExt.store = {
     getDeviceToken,
     getConnection,
@@ -63,5 +80,8 @@
     addPendingCapture,
     getPendingCaptures,
     removePendingCapture,
+    recordCaptureEvent,
+    getCaptureHistory,
+    clearCaptureHistory,
   };
 })(globalThis);

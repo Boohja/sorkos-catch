@@ -1,5 +1,22 @@
 (function () {
   const runtime = (globalThis.browser || globalThis.chrome).runtime;
+  let contextMenuTarget = {};
+
+  function compactText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+  }
+
+  document.addEventListener('contextmenu', (event) => {
+    const element = event.target instanceof Element ? event.target : null;
+    const link = element?.closest('a[href]');
+    const image = element?.closest('img');
+    contextMenuTarget = {
+      linkUrl: link?.href || '',
+      linkText: compactText(link?.innerText || link?.getAttribute('aria-label') || link?.title),
+      imageUrl: image?.currentSrc || image?.src || '',
+      imageAlt: compactText(image?.alt || image?.getAttribute('aria-label') || image?.title),
+    };
+  }, true);
 
   function showToast(message, tone) {
     document.querySelector('[data-catch-extension-toast]')?.remove();
@@ -20,6 +37,10 @@
     if (message?.type === 'feedback.toast') {
       showToast(String(message.message || 'Catch saved'), message.tone);
       sendResponse({ ok: true });
+      return true;
+    }
+    if (message?.type === 'page.context-menu') {
+      sendResponse(contextMenuTarget);
       return true;
     }
     if (message?.type !== 'page.context') return undefined;

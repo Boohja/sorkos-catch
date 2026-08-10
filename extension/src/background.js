@@ -62,6 +62,22 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
     };
   }
 
+  function captureEvent(capture, status, details = {}) {
+    const title = capture.title || capture.metadata?.source_title || domainFromUrl(capture.url || capture.metadata?.source_url);
+    return {
+      captureId: capture.id,
+      status,
+      title: normalizedText(title).slice(0, 500),
+      url: capture.remoteAttachmentUrl || capture.url || capture.metadata?.source_url || '',
+      context: capture.metadata?.browser_context || '',
+      ...details,
+    };
+  }
+
+  async function recordCaptureEvent(capture, status, details = {}) {
+    try { await CatchExt.store.recordCaptureEvent(captureEvent(capture, status, details)); } catch {}
+  }
+
   async function showBadge(text, color, title) {
     await Promise.allSettled([
       ext.action.setBadgeText({ text }),
@@ -98,14 +114,17 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
     const token = await CatchExt.store.getDeviceToken();
     if (!token) {
       await CatchExt.store.addPendingCapture(capture);
+      await recordCaptureEvent(capture, 'queued', { message: 'Waiting for Catch to be connected.' });
       await openSetup();
       await showBadge('SET', '#f59e0b', 'Connect Catch to send the saved capture');
       return { status: 'queued', setupRequired: true };
     }
 
     try {
+      await recordCaptureEvent(capture, 'sending');
       const screenshot = await captureViewport(capture, Boolean(options.queued));
       const result = await CatchExt.api.createCapture(token, capture, screenshot);
+      await recordCaptureEvent(capture, 'saved', { catchNumber: result.catch_number });
       await showBadge('OK', '#d97706', `Saved Catch #${result.catch_number}`);
       await showPageFeedback(capture.tabId, `Catch #${result.catch_number} saved`);
       return { status: result.status, catchNumber: result.catch_number };
@@ -113,9 +132,11 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
       if (error.status === 401) {
         await CatchExt.store.clearConnection();
         await CatchExt.store.addPendingCapture(capture);
+        await recordCaptureEvent(capture, 'queued', { message: 'The connection was revoked. Reconnect Catch to retry.' });
         await openSetup();
         return { status: 'queued', setupRequired: true };
       }
+      await recordCaptureEvent(capture, 'failed', { message: error.message || 'Catch could not save this capture.', code: error.code || 'failed', httpStatus: error.status || 0 });
       await showBadge('!', '#dc2626', error.message || 'Catch failed');
       await showPageFeedback(capture.tabId, 'Catch could not be saved', 'error');
       throw error;
@@ -234,6 +255,8 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
 
   async function handleContextMenu(info, tab) {
     let capture;
+    let target = {};
+    try { target = await ext.tabs.sendMessage(tab?.id, { type: 'page.context-menu' }) || {}; } catch {}
     if (info.srcUrl && ['catch-image', 'catch-link'].includes(info.menuItemId)) {
       capture = capturePayload({
         text: '',
@@ -247,6 +270,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
         sourceTitle: tab?.title || '',
         metadata: {
           linked_url: info.linkUrl || '',
+          image_alt: target.imageAlt || '',
         },
       });
     } else if (info.menuItemId === 'catch-selection') {
@@ -267,6 +291,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
         context: 'link-context-menu',
         sourceUrl: info.pageUrl || tab?.url,
         sourceTitle: tab?.title || '',
+        metadata: { link_text: target.linkUrl === info.linkUrl ? target.linkText || '' : '' },
       });
     } else if (info.menuItemId === 'catch-page') {
       capture = capturePayload({
@@ -295,6 +320,8 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
     if (message?.type === 'pair.start') return respondWith(sendResponse, startPairing());
     if (message?.type === 'pair.status') return respondWith(sendResponse, pollPairing());
     if (message?.type === 'connection.disconnect') return respondWith(sendResponse, disconnect());
+    if (message?.type === 'history.get') return respondWith(sendResponse, CatchExt.store.getCaptureHistory().then((history) => ({ history })));
+    if (message?.type === 'history.clear') return respondWith(sendResponse, CatchExt.store.clearCaptureHistory().then(() => ({ history: [] })));
     return false;
   });
 

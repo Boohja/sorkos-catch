@@ -10,9 +10,12 @@
     let data = null;
     try { data = await response.json(); } catch {}
     if (!response.ok && response.status !== 202) {
-      const error = new Error(data?.error?.message || `Catch returned HTTP ${response.status}.`);
+      const fields = data?.error?.fields && typeof data.error.fields === 'object' ? data.error.fields : {};
+      const fieldMessage = Object.values(fields).filter((value) => typeof value === 'string' && value.trim()).join(' ');
+      const error = new Error(fieldMessage || data?.error?.message || `Catch returned HTTP ${response.status}.`);
       error.status = response.status;
       error.code = data?.error?.code || 'request_failed';
+      error.fields = fields;
       throw error;
     }
     return { response, data };

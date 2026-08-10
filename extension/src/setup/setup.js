@@ -13,7 +13,58 @@
   const errorMessage = document.querySelector('[data-error-message]');
   const errorDetails = document.querySelector('[data-error-details]');
   const errorTechnical = document.querySelector('[data-error-technical]');
+  const historyList = document.querySelector('[data-history-list]');
+  const historyEmpty = document.querySelector('[data-history-empty]');
+  const clearHistory = document.querySelector('[data-clear-history]');
   let timer = null;
+
+  function eventLabel(event) {
+    if (event.status === 'saved') return `Saved as #${event.catchNumber}`;
+    if (event.status === 'failed') return event.httpStatus ? `Failed · HTTP ${event.httpStatus}` : 'Failed';
+    if (event.status === 'queued') return 'Waiting for setup';
+    return 'Sending';
+  }
+
+  function renderHistory(history) {
+    historyList.replaceChildren();
+    historyEmpty.hidden = history.length > 0;
+    clearHistory.hidden = history.length === 0;
+    history.forEach((event) => {
+      const item = document.createElement('li');
+      item.dataset.state = event.status;
+      const top = document.createElement('div');
+      const state = document.createElement('strong');
+      state.textContent = eventLabel(event);
+      const time = document.createElement('time');
+      const date = new Date(event.updatedAt);
+      time.dateTime = event.updatedAt;
+      time.textContent = Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(date);
+      top.append(state, time);
+      const title = document.createElement(event.url ? 'a' : 'p');
+      title.textContent = event.title || event.url || 'Untitled capture';
+      if (event.url) {
+        title.href = event.url;
+        title.target = '_blank';
+        title.rel = 'noopener noreferrer';
+        title.title = event.url;
+      }
+      item.append(top, title);
+      if (event.message) {
+        const message = document.createElement('p');
+        message.className = 'activity-message';
+        message.textContent = event.message;
+        item.append(message);
+      }
+      historyList.append(item);
+    });
+  }
+
+  async function refreshHistory() {
+    try {
+      const result = await CatchExt.browser.runtime.sendMessage({ type: 'history.get' });
+      if (result?.ok) renderHistory(result.history || []);
+    } catch {}
+  }
 
   function showOnly(element) {
     disconnected.hidden = element !== disconnected;
@@ -119,6 +170,18 @@
       showOnly(connected);
     }
   });
+
+  clearHistory.addEventListener('click', async () => {
+    clearHistory.disabled = true;
+    try {
+      const result = await CatchExt.browser.runtime.sendMessage({ type: 'history.clear' });
+      if (result?.ok) renderHistory([]);
+    } finally { clearHistory.disabled = false; }
+  });
+
+  window.addEventListener('focus', refreshHistory);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshHistory(); });
+  refreshHistory();
 
   CatchExt.browser.runtime.sendMessage({ type: 'connection.get' }).then((result) => {
     if (result?.connection) showConnection(result.connection);
