@@ -53,7 +53,10 @@ final class CaptureController
         $user = $this->user('capture:write', $shortcut);
         $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
         $input = str_contains($contentType, 'application/json') ? Request::json() : $_POST;
-        $input['client_capture_id'] = $input['client_capture_id'] ?? ($_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? null);
+        $input['client_capture_id'] = $this->clientCaptureId(
+            $input['client_capture_id'] ?? null,
+            $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? null,
+        );
         if (isset($input['metadata']) && is_string($input['metadata'])) {
             $input['metadata'] = json_decode($input['metadata'], true) ?: [];
         }
@@ -121,5 +124,19 @@ final class CaptureController
         }
         $messages = array_values(array_filter($fields, static fn (mixed $message): bool => is_string($message) && $message !== ''));
         return $messages ? implode(' ', $messages) : 'The request is invalid.';
+    }
+
+    private function clientCaptureId(mixed $bodyValue, mixed $idempotencyKey): string
+    {
+        foreach ([$bodyValue, $idempotencyKey] as $candidate) {
+            if (!is_string($candidate)) {
+                continue;
+            }
+            $candidate = trim($candidate);
+            if ($candidate !== '' && !str_starts_with($candidate, 'catch_device_')) {
+                return $candidate;
+            }
+        }
+        return 'client_capture_' . bin2hex(random_bytes(16));
     }
 }

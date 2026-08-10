@@ -15,21 +15,12 @@
 }</code></pre></section>
 
   <section id="capture"><h2>Capture endpoint</h2><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/captures</code></div><pre><code>Authorization: Bearer catch_device_...
-Content-Type: application/json</code></pre><pre><code>{
-  "client_capture_id": "a-stable-uuid",
-  "type": "text",
-  "text": "Review proposal",
-  "source": "ios-shortcut",
-  "title": null,
-  "url": null,
-  "extracted_text": null,
-  "metadata": {
-    "device": "iPhone",
-    "shortcut_version": "1.0"
-  }
-}</code></pre><p>Success response (the result is the capture ID):</p><pre><code>{
-  "result": "018f...uuid..."
-}</code></pre><p>For images and files, the shortcut uses <code>multipart/form-data</code>. Files are sent as <code>attachments[]</code>. Repeated requests with the same <code>client_capture_id</code> do not create duplicate captures.</p></section>
+Content-Type: multipart/form-data</code></pre><pre><code>type: text
+text: Review proposal
+source: ios-shortcut
+client_capture_id: optional-stable-id</code></pre><p>The device token belongs only in the <code>Authorization</code> header. <code>client_capture_id</code> is optional: a supplied value is preserved for idempotent retries; otherwise Catch generates a random value. Success returns the per-user catch number:</p><pre><code>{
+  "result": "334"
+}</code></pre><p>For images and files, files are sent as <code>attachments[]</code>. Repeated requests with the same explicit <code>client_capture_id</code> do not create duplicate captures.</p></section>
 
   <section id="inputs"><h2>Supported inputs</h2><div class="input-matrix"><div><strong>Text</strong><code>type=text</code><span>Notes, dictation, and selected text</span></div><div><strong>URL</strong><code>type=url</code><span>Link, page title, and optional context</span></div><div><strong>Image</strong><code>type=image</code><span>Original image with optional OCR text</span></div><div><strong>File</strong><code>type=file</code><span>Documents and other permitted file types</span></div><div><strong>Mixed</strong><code>type=mixed</code><span>Multiple types of content in one capture</span></div></div></section>
 
