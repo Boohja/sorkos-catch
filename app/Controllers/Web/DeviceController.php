@@ -47,6 +47,12 @@ final class DeviceController
         $this->devices->createPairingCode($id,$user['id']);Response::redirect($this->url($device));
     }
 
+    public function rename(\Base $f3,array $params): never
+    {
+        $user=$this->user();$id=$this->id((string)$params['device']);if(!$this->csrf->valid($_POST['_csrf']??null))Response::redirect('/devices');
+        $name=trim((string)($_POST['name']??''));$this->devices->rename($id,$user['id'],$name);$device=$this->devices->find($id,$user['id']);Response::redirect($device?$this->url($device):'/devices');
+    }
+
     public function status(\Base $f3,array $params): never
     {
         $user=$this->user();$status=$this->devices->status($this->id((string)$params['device']),$user['id']);if(!$status)Response::json(['error'=>['code'=>'not_found','message'=>'Device not found.']],404);Response::json($status);
@@ -54,6 +60,6 @@ final class DeviceController
 
     public function delete(\Base $f3,array $params): never
     {
-        $user=$this->user();if(!$this->csrf->valid($_POST['_csrf']??null))Response::redirect('/devices');$this->devices->delete($this->id((string)$params['device']),$user['id']);Response::redirect('/devices');
+        $user=$this->user();if(!$this->csrf->valid($_POST['_csrf']??null))Response::redirect('/devices');$id=$this->id((string)$params['device']);$this->devices->delete($id,$user['id']);if(($_SESSION['catch_web_device_id']??null)===$id){$this->auth->logout();Response::redirect('/login');}Response::redirect('/devices');
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Catch\Repositories;
 
 use Catch\Core\Id;
+use Catch\Services\BrowserInfo;
 use Catch\Services\SecretBox;
 use PDO;
 
@@ -17,7 +18,7 @@ final class DeviceRepository
 
     public function all(string $userId): array
     {
-        $query=$this->db->prepare('SELECT d.*,t.last_used_at FROM catch_devices d LEFT JOIN catch_device_tokens t ON t.device_id=d.id WHERE d.user_id=:user ORDER BY d.created_at DESC');
+        $query=$this->db->prepare('SELECT d.*,t.last_used_at FROM catch_devices d LEFT JOIN catch_device_tokens t ON t.device_id=d.id WHERE d.user_id=:user AND d.status<>\'revoked\' ORDER BY d.created_at DESC');
         $query->execute(['user'=>$userId]);return $query->fetchAll();
     }
 
@@ -36,12 +37,12 @@ final class DeviceRepository
         return $device;
     }
 
-    public function create(string $userId,string $name,string $kind,string $platform): array
+    public function create(string $userId,string $name,string $kind,string $platform,string $clientType='shortcut',?string $userAgent=null): array
     {
         $id=Id::uuid();$name=mb_substr(trim($name),0,120);
-        $query=$this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,platform,status,created_at) VALUES (:id,:user,:name,:kind,:platform,\'setup\',UTC_TIMESTAMP(6))');
-        $query->execute(['id'=>$id,'user'=>$userId,'name'=>$name,'kind'=>$kind,'platform'=>$platform]);
-        return ['id'=>$id,'name'=>$name,'kind'=>$kind,'platform'=>$platform,'status'=>'setup'];
+        $query=$this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,client_type,platform,user_agent,status,created_at) VALUES (:id,:user,:name,:kind,:client_type,:platform,:user_agent,\'setup\',UTC_TIMESTAMP(6))');
+        $query->execute(['id'=>$id,'user'=>$userId,'name'=>$name,'kind'=>$kind,'client_type'=>$clientType,'platform'=>$platform,'user_agent'=>$userAgent]);
+        return ['id'=>$id,'name'=>$name,'kind'=>$kind,'client_type'=>$clientType,'platform'=>$platform,'user_agent'=>$userAgent,'status'=>'setup'];
     }
 
     public function createPairingCode(string $deviceId,string $userId): ?string
@@ -58,8 +59,16 @@ final class DeviceRepository
 
     public function delete(string $deviceId,string $userId): bool
     {
-        $query=$this->db->prepare('DELETE FROM catch_devices WHERE id=:id AND user_id=:user');
-        $query->execute(['id'=>$deviceId,'user'=>$userId]);return $query->rowCount()===1;
+        $this->db->beginTransaction();
+        try {
+            $owned=$this->db->prepare('SELECT id FROM catch_devices WHERE id=:id AND user_id=:user AND status<>\'revoked\' FOR UPDATE');
+            $owned->execute(['id'=>$deviceId,'user'=>$userId]);
+            if(!$owned->fetchColumn()){$this->db->commit();return false;}
+            $this->db->prepare('DELETE FROM catch_device_tokens WHERE device_id=:device')->execute(['device'=>$deviceId]);
+            $this->db->prepare('DELETE FROM catch_device_pairing_codes WHERE device_id=:device')->execute(['device'=>$deviceId]);
+            $this->db->prepare('UPDATE catch_devices SET status=\'revoked\' WHERE id=:device')->execute(['device'=>$deviceId]);
+            $this->db->commit();return true;
+        } catch(\Throwable $error){if($this->db->inTransaction())$this->db->rollBack();throw $error;}
     }
 
     public function status(string $deviceId,string $userId): ?array
@@ -88,14 +97,14 @@ final class DeviceRepository
         }catch(\Throwable $error){if($this->db->inTransaction())$this->db->rollBack();throw $error;}
     }
 
-    public function createExtensionPairingRequest(string $name,string $platform,string $challenge): array
+    public function createExtensionPairingRequest(string $name,string $platform,string $challenge,?string $userAgent=null): array
     {
         $this->deleteExpiredExtensionPairingRequests();
         $requestId=bin2hex(random_bytes(24));
         $name=mb_substr(trim($name),0,120);
         $platform=mb_substr(trim($platform),0,32);
-        $query=$this->db->prepare('INSERT INTO catch_extension_pairing_requests (request_id,code_challenge,device_name,platform,status,expires_at,created_at) VALUES (:request,:challenge,:name,:platform,\'pending\',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL '.self::EXTENSION_PAIRING_TTL_MINUTES.' MINUTE),UTC_TIMESTAMP(6))');
-        $query->execute(['request'=>$requestId,'challenge'=>$challenge,'name'=>$name,'platform'=>$platform]);
+        $query=$this->db->prepare('INSERT INTO catch_extension_pairing_requests (request_id,code_challenge,device_name,platform,user_agent,status,expires_at,created_at) VALUES (:request,:challenge,:name,:platform,:user_agent,\'pending\',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL '.self::EXTENSION_PAIRING_TTL_MINUTES.' MINUTE),UTC_TIMESTAMP(6))');
+        $query->execute(['request'=>$requestId,'challenge'=>$challenge,'name'=>$name,'platform'=>$platform,'user_agent'=>$userAgent]);
         return ['request_id'=>$requestId,'device_name'=>$name,'platform'=>$platform,'expires_at'=>gmdate(DATE_ATOM,time()+self::EXTENSION_PAIRING_TTL_MINUTES*60)];
     }
 
@@ -107,7 +116,7 @@ final class DeviceRepository
         $query->execute(['request'=>$requestId]);return $query->fetch()?:null;
     }
 
-    public function approveExtensionPairingRequest(string $requestId,string $userId): ?array
+    public function approveExtensionPairingRequest(string $requestId,string $userId,?string $userAgent=null): ?array
     {
         if(!preg_match('/^[0-9a-f]{48}$/',$requestId))return null;
         $this->db->beginTransaction();
@@ -117,7 +126,7 @@ final class DeviceRepository
             if(!$pairing||$pairing['status']!=='pending'){$this->db->commit();return null;}
             $deviceId=Id::uuid();$tokenId=Id::uuid();
             $token='catch_device_'.rtrim(strtr(base64_encode(random_bytes(32)),'+/','-_'),'=');
-            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,platform,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',:platform,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute(['id'=>$deviceId,'user'=>$userId,'name'=>$pairing['device_name'],'platform'=>$pairing['platform']]);
+            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,client_type,platform,user_agent,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',\'extension\',:platform,:user_agent,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute(['id'=>$deviceId,'user'=>$userId,'name'=>$pairing['device_name'],'platform'=>$pairing['platform'],'user_agent'=>$userAgent?:$pairing['user_agent']]);
             $this->db->prepare('INSERT INTO catch_device_tokens (id,device_id,token_hash,token_scope,created_at) VALUES (:id,:device,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id'=>$tokenId,'device'=>$deviceId,'hash'=>hash('sha256',$token)]);
             $this->db->prepare('UPDATE catch_extension_pairing_requests SET status=\'approved\',user_id=:user,device_id=:device,token_encrypted=:token,approved_at=UTC_TIMESTAMP(6) WHERE request_id=:request')->execute(['user'=>$userId,'device'=>$deviceId,'token'=>$this->secrets->encrypt($token),'request'=>$requestId]);
             $this->db->commit();return ['device_id'=>$deviceId,'device_name'=>$pairing['device_name'],'status'=>'approved'];
@@ -150,18 +159,44 @@ final class DeviceRepository
     public function revokeForToken(string $token): bool
     {
         if(!str_starts_with($token,'catch_device_'))return false;
-        $query=$this->db->prepare('DELETE d FROM catch_devices d JOIN catch_device_tokens t ON t.device_id=d.id WHERE t.token_hash=:hash');
-        $query->execute(['hash'=>hash('sha256',$token)]);return $query->rowCount()===1;
+        $query=$this->db->prepare('SELECT device_id FROM catch_device_tokens WHERE token_hash=:hash LIMIT 1');
+        $query->execute(['hash'=>hash('sha256',$token)]);$deviceId=$query->fetchColumn();
+        if(!$deviceId)return false;
+        $this->db->prepare('DELETE FROM catch_device_tokens WHERE device_id=:device')->execute(['device'=>$deviceId]);
+        $this->db->prepare('UPDATE catch_devices SET status=\'revoked\' WHERE id=:device')->execute(['device'=>$deviceId]);
+        return true;
     }
 
     public function userForToken(string $token,string $requiredScope='capture:write'): ?array
     {
         if(!str_starts_with($token,'catch_device_'))return null;
-        $query=$this->db->prepare('SELECT u.id,u.email,u.display_name,d.id device_id,t.id token_id,t.token_scope FROM catch_device_tokens t JOIN catch_devices d ON d.id=t.device_id JOIN catch_users u ON u.id=d.user_id WHERE t.token_hash=:hash LIMIT 1');
+        $query=$this->db->prepare('SELECT u.id,u.email,u.display_name,d.id device_id,d.name device_name,d.platform,d.client_type,t.id token_id,t.token_scope FROM catch_device_tokens t JOIN catch_devices d ON d.id=t.device_id AND d.status=\'connected\' JOIN catch_users u ON u.id=d.user_id WHERE t.token_hash=:hash LIMIT 1');
         $query->execute(['hash'=>hash('sha256',$token)]);$user=$query->fetch()?:null;
         if($user&&$requiredScope==='full'&&$user['token_scope']!=='full')return null;
         if($user){$this->db->prepare('UPDATE catch_device_tokens SET last_used_at=UTC_TIMESTAMP(6) WHERE id=:token')->execute(['token'=>$user['token_id']]);$this->db->prepare('UPDATE catch_devices SET last_seen_at=UTC_TIMESTAMP(6) WHERE id=:device')->execute(['device'=>$user['device_id']]);}
         return $user;
+    }
+
+    public function ensureWebDevice(string $userId,?string $deviceId,string $userAgent): array
+    {
+        if($deviceId){$device=$this->find($deviceId,$userId);if($device&&$device['status']==='connected'&&$device['client_type']==='web')return $device;}
+        $info=BrowserInfo::fromUserAgent($userAgent);$id=Id::uuid();
+        $query=$this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,client_type,platform,user_agent,status,created_at,connected_at,last_seen_at) VALUES (:id,:user,:name,\'desktop\',\'web\',:platform,:user_agent,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))');
+        $query->execute(['id'=>$id,'user'=>$userId,'name'=>$info['label'],'platform'=>strtolower(str_replace(' ','-',$info['browser'])),'user_agent'=>mb_substr($userAgent,0,500)]);
+        return $this->find($id,$userId)??throw new \RuntimeException('The web device could not be registered.');
+    }
+
+    public function rename(string $deviceId,string $userId,string $name): bool
+    {
+        $name=mb_substr(trim($name),0,120);if($name==='')return false;
+        $query=$this->db->prepare('UPDATE catch_devices SET name=:name WHERE id=:id AND user_id=:user AND status<>\'revoked\'');
+        $query->execute(['name'=>$name,'id'=>$deviceId,'user'=>$userId]);return $query->rowCount()===1;
+    }
+
+    public function refreshExtensionInfo(string $deviceId,string $name,string $userAgent): void
+    {
+        $query=$this->db->prepare("UPDATE catch_devices SET user_agent=:user_agent,name=CASE WHEN name IN ('Firefox extension','Chrome extension','Chromium browser extension','Browser extension') THEN :name ELSE name END WHERE id=:id AND client_type='extension'");
+        $query->execute(['user_agent'=>mb_substr($userAgent,0,500),'name'=>mb_substr(trim($name),0,120),'id'=>$deviceId]);
     }
 
     private function newCode(): array

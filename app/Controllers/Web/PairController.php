@@ -27,7 +27,7 @@ final class PairController
         $request=(string)($_POST['request']??'');$user=$this->auth->user();
         if(!$user){$_SESSION['after_login_path']=$this->returnPath($request);Response::redirect('/auth/start');}
         if(!$this->csrf->valid($_POST['_csrf']??null)){Response::redirect($this->returnPath($request));}
-        try{$connected=$this->devices->approveExtensionPairingRequest($request,$user['id']);}catch(\Throwable){$connected=null;}
+        try{$connected=$this->devices->approveExtensionPairingRequest($request,$user['id'],(string)($_SERVER['HTTP_USER_AGENT']??''));}catch(\Throwable){$connected=null;}
         $this->view->render('pair/index',['title'=>$connected?'Browser connected':'Connection failed','user'=>$user,'pairing'=>null,'request'=>$request,'connected'=>$connected,'csrf'=>$this->csrf->token()],$connected?200:410);
     }
 

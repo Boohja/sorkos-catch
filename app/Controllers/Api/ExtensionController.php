@@ -8,6 +8,7 @@ use Catch\Core\Config;
 use Catch\Http\Request;
 use Catch\Http\Response;
 use Catch\Repositories\DeviceRepository;
+use Catch\Services\BrowserInfo;
 
 final class ExtensionController
 {
@@ -15,13 +16,11 @@ final class ExtensionController
 
     public function startPairing(): never
     {
-        $input=Request::json();$name=trim((string)($input['device_name']??''));$platform=trim((string)($input['platform']??''));$challenge=(string)($input['code_challenge']??'');
+        $input=Request::json();$challenge=(string)($input['code_challenge']??'');$userAgent=trim((string)($_SERVER['HTTP_USER_AGENT']??''));$info=BrowserInfo::fromUserAgent($userAgent);$name=$info['label'];$platform=match($info['browser']){'Firefox'=>'firefox','Chrome'=>'chrome',default=>'chromium'};
         $errors=[];
-        if($name===''||mb_strlen($name)>120)$errors['device_name']='Enter a device name of at most 120 characters.';
-        if(!in_array($platform,['chrome','firefox','chromium'],true))$errors['platform']='Platform must be chrome, firefox, or chromium.';
         if(!preg_match('/^[A-Za-z0-9_-]{43}$/',$challenge))$errors['code_challenge']='A valid SHA-256 code challenge is required.';
         if($errors)Response::json(['error'=>['code'=>'validation_failed','message'=>'The request is invalid.','fields'=>$errors]],422);
-        try{$pairing=$this->devices->createExtensionPairingRequest($name,$platform,$challenge);}catch(\PDOException $error){$this->databaseFailure('start',$error);}catch(\Throwable $error){$this->serverFailure('start',$error);}
+        try{$pairing=$this->devices->createExtensionPairingRequest($name,$platform,$challenge,$userAgent?:null);}catch(\PDOException $error){$this->databaseFailure('start',$error);}catch(\Throwable $error){$this->serverFailure('start',$error);}
         $pairing['pair_url']=rtrim((string)$this->config->get('app.url'),'/').'/pair?'.http_build_query(['request'=>$pairing['request_id']],arg_separator:'&',encoding_type:PHP_QUERY_RFC3986);
         Response::json($pairing,201);
     }
@@ -42,6 +41,15 @@ final class ExtensionController
         $token=Request::bearerToken();
         if(!$token||!$this->devices->revokeForToken($token))Response::json(['error'=>['code'=>'unauthorized','message'=>'A valid device token is required.']],401);
         Response::json(['status'=>'disconnected']);
+    }
+
+    public function connection(): never
+    {
+        $token=Request::bearerToken();$user=$token?$this->devices->userForToken($token):null;
+        if(!$user)Response::json(['error'=>['code'=>'unauthorized','message'=>'A valid device token is required.']],401);
+        $userAgent=trim((string)($_SERVER['HTTP_USER_AGENT']??''));$info=BrowserInfo::fromUserAgent($userAgent);
+        if($userAgent!==''){$this->devices->refreshExtensionInfo($user['device_id'],$info['label'],$userAgent);$device=$this->devices->find($user['device_id'],$user['id']);if($device)$user['device_name']=$device['name'];}
+        Response::json(['status'=>'connected','device'=>['id'=>$user['device_id'],'name'=>$user['device_name'],'platform'=>$user['platform'],'client_type'=>$user['client_type']]]);
     }
 
     private function databaseFailure(string $stage,\PDOException $error): never

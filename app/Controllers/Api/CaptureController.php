@@ -62,7 +62,7 @@ final class CaptureController
         }
 
         try {
-            $result = $this->service->create($user['id'], $input, $_FILES);
+            $result = $this->service->create($user['id'], $input, $_FILES, $user['device_id']);
             $capture = $result['capture'];
             $status = $result['created'] ? 201 : 200;
             if ($shortcut) {

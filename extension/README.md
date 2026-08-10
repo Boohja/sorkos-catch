@@ -18,7 +18,9 @@ Load `build/chrome` with **Load unpacked** on `chrome://extensions`. Load `build
 
 Run `npm run check` to rebuild, validate both manifests, and syntax-check every JavaScript file.
 
-Firefox declares the data needed for the user-triggered capture flow through its built-in consent system: Catch authentication information, the chosen page URL, and the chosen page content or screenshot. The extension does not send browsing data in the background.
+Firefox declares the data needed for the user-triggered capture flow through its built-in consent system. “Authentication information” refers only to the random Catch device token stored by the extension, never website passwords, cookies, or login fields. Website activity/content is transmitted only when the user explicitly catches a page, selection, link, image, or screenshot; the extension does not send browsing history or page content in the background.
+
+The Firefox action defaults to the navigation toolbar. Zen also exposes it through its Settings Hub; right-click Catch there and choose **Pin to Toolbar** if an existing installation retained Firefox's previous placement.
 
 ## Pairing
 

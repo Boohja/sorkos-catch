@@ -6,6 +6,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
   const ext = CatchExt.browser;
   const raw = ext.raw;
   const PAIRING_ALARM = 'catch-pairing-poll';
+  const EXTENSION_VERSION = raw.runtime.getManifest().version;
 
   function randomId(prefix) {
     if (crypto.randomUUID) return `${prefix}${crypto.randomUUID()}`;
@@ -24,16 +25,6 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
     return base64Url(new Uint8Array(digest));
   }
 
-  function platformName() {
-    if (typeof browser !== 'undefined') return 'firefox';
-    return /Edg|OPR|Brave/i.test(navigator.userAgent) ? 'chromium' : 'chrome';
-  }
-
-  function deviceName(platform) {
-    const label = platform === 'firefox' ? 'Firefox' : platform === 'chrome' ? 'Chrome' : 'Chromium browser';
-    return `${label} extension`;
-  }
-
   function domainFromUrl(value) {
     try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return ''; }
   }
@@ -44,19 +35,28 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
 
   function capturePayload(values) {
     const url = values.url || '';
+    const context = values.context || 'popup';
+    const sourceUrl = values.sourceUrl ?? url;
+    const sourceTitle = normalizedText(values.sourceTitle ?? values.pageTitle ?? values.title);
+    let title = normalizedText(values.title || values.pageTitle).slice(0, 500);
+    if (!title && !['link-context-menu', 'image-context-menu'].includes(context)) title = domainFromUrl(url);
     return {
       id: values.id || randomId('browser_capture_'),
-      title: normalizedText(values.title).slice(0, 500),
+      title,
       text: normalizedText(values.text),
       url,
+      remoteAttachmentUrl: values.remoteAttachmentUrl || '',
       screenshotRequested: Boolean(values.screenshotRequested),
       tabId: values.tabId,
       windowId: values.windowId,
       metadata: {
         captured_at: values.capturedAt || new Date().toISOString(),
-        page_title: normalizedText(values.pageTitle || values.title),
-        source_domain: domainFromUrl(url),
-        browser_context: values.context || 'popup',
+        source_url: sourceUrl,
+        source_title: sourceTitle,
+        source_domain: domainFromUrl(sourceUrl),
+        browser_context: context,
+        capture_method: context.includes('context-menu') ? 'browser-extension-context-menu' : 'browser-extension',
+        extension_version: EXTENSION_VERSION,
         ...(values.metadata || {}),
       },
     };
@@ -72,6 +72,11 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
       ext.action.setBadgeText({ text: '' }).catch(() => {});
       ext.action.setTitle({ title: 'Catch this page' }).catch(() => {});
     }, 2800);
+  }
+
+  async function showPageFeedback(tabId, message, tone = 'success') {
+    if (!Number.isInteger(tabId)) return;
+    try { await ext.tabs.sendMessage(tabId, { type: 'feedback.toast', message, tone }); } catch {}
   }
 
   async function openSetup() {
@@ -102,6 +107,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
       const screenshot = await captureViewport(capture, Boolean(options.queued));
       const result = await CatchExt.api.createCapture(token, capture, screenshot);
       await showBadge('OK', '#d97706', `Saved Catch #${result.catch_number}`);
+      await showPageFeedback(capture.tabId, `Catch #${result.catch_number} saved`);
       return { status: result.status, catchNumber: result.catch_number };
     } catch (error) {
       if (error.status === 401) {
@@ -111,6 +117,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
         return { status: 'queued', setupRequired: true };
       }
       await showBadge('!', '#dc2626', error.message || 'Catch failed');
+      await showPageFeedback(capture.tabId, 'Catch could not be saved', 'error');
       throw error;
     }
   }
@@ -141,10 +148,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
     }
     await CatchExt.store.clearPairingSession();
     const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-    const platform = platformName();
     const pairing = await CatchExt.api.startPairing({
-      deviceName: deviceName(platform),
-      platform,
       codeChallenge: await challengeFor(verifier),
     });
     await CatchExt.store.savePairingSession({
@@ -203,16 +207,49 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
     return { status: 'disconnected' };
   }
 
+  async function connection() {
+    const local = await CatchExt.store.getConnection();
+    if (!local?.deviceToken) return { connection: null };
+    try {
+      const result = await CatchExt.api.validateConnection(local.deviceToken);
+      const value = { ...local, deviceId: result.device.id, deviceName: result.device.name };
+      await CatchExt.store.saveConnection(value);
+      return { connection: value };
+    } catch (error) {
+      if (error.status === 401) {
+        await CatchExt.store.clearConnection();
+        return { connection: null, revoked: true };
+      }
+      throw error;
+    }
+  }
+
   async function registerContextMenus() {
     await ext.contextMenus.removeAll();
     await ext.contextMenus.create({ id: 'catch-page', title: 'Catch this page', contexts: ['page'] });
     await ext.contextMenus.create({ id: 'catch-selection', title: 'Catch selection', contexts: ['selection'] });
     await ext.contextMenus.create({ id: 'catch-link', title: 'Catch link', contexts: ['link'] });
+    await ext.contextMenus.create({ id: 'catch-image', title: 'Catch image', contexts: ['image'] });
   }
 
   async function handleContextMenu(info, tab) {
     let capture;
-    if (info.menuItemId === 'catch-selection') {
+    if (info.srcUrl && ['catch-image', 'catch-link'].includes(info.menuItemId)) {
+      capture = capturePayload({
+        text: '',
+        title: '',
+        url: info.srcUrl,
+        remoteAttachmentUrl: info.srcUrl,
+        tabId: tab?.id,
+        windowId: tab?.windowId,
+        context: 'image-context-menu',
+        sourceUrl: info.pageUrl || tab?.url,
+        sourceTitle: tab?.title || '',
+        metadata: {
+          linked_url: info.linkUrl || '',
+        },
+      });
+    } else if (info.menuItemId === 'catch-selection') {
       capture = capturePayload({
         text: info.selectionText,
         url: info.pageUrl || tab?.url,
@@ -228,7 +265,8 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
         tabId: tab?.id,
         windowId: tab?.windowId,
         context: 'link-context-menu',
-        metadata: { referring_page_url: info.pageUrl || tab?.url, referring_page_title: tab?.title || '' },
+        sourceUrl: info.pageUrl || tab?.url,
+        sourceTitle: tab?.title || '',
       });
     } else if (info.menuItemId === 'catch-page') {
       capture = capturePayload({
@@ -253,7 +291,7 @@ if (typeof CatchExt === 'undefined' && typeof importScripts === 'function') {
 
   raw.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'capture.submit') return respondWith(sendResponse, submitCapture(capturePayload(message.capture || {})));
-    if (message?.type === 'connection.get') return respondWith(sendResponse, CatchExt.store.getConnection().then((connection) => ({ connection })));
+    if (message?.type === 'connection.get') return respondWith(sendResponse, connection());
     if (message?.type === 'pair.start') return respondWith(sendResponse, startPairing());
     if (message?.type === 'pair.status') return respondWith(sendResponse, pollPairing());
     if (message?.type === 'connection.disconnect') return respondWith(sendResponse, disconnect());

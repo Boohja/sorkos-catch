@@ -15,8 +15,9 @@
   <?php foreach($captures as $capture): ?>
   <article class="capture-row">
     <a class="capture-content" href="/captures/<?=urlencode($capture['id'])?>">
-      <span class="type-icon" aria-hidden="true"><?=match($capture['type']){'url'=>'↗','image'=>'▣','file'=>'□','audio'=>'♪',default=>'T'}?></span>
-      <span class="capture-copy"><strong>Catch #<?=(int)$capture['catch_number']?> &middot; <?=htmlspecialchars($capture['title']?:mb_strimwidth($capture['text']?:$capture['url']?:'Attachment',0,90,'…'))?></strong><span><?=htmlspecialchars($capture['source'])?> · <?=htmlspecialchars((new DateTime($capture['created_at']))->format('M j, Y, H:i'))?><?=(int)$capture['attachment_count']>0?' · '.(int)$capture['attachment_count'].' '.((int)$capture['attachment_count']===1?'file':'files'):''?></span></span>
+      <?php $captureIcon=match($capture['type']){'url'=>'link','image'=>'image','audio'=>'voice',default=>'text'}; ?>
+      <span class="type-icon" aria-hidden="true"><i class="glyph glyph-<?=htmlspecialchars($captureIcon)?>"></i></span>
+      <span class="capture-copy"><strong>Catch #<?=(int)$capture['catch_number']?> &middot; <?=htmlspecialchars($capture['title']?:mb_strimwidth($capture['text']?:$capture['url']?:'Attachment',0,90,'…'))?></strong><span><?=htmlspecialchars($capture['device_name']?:$capture['source'])?> &middot; <time datetime="<?=htmlspecialchars(str_replace(' ','T',substr($capture['created_at'],0,19)).'Z')?>" data-local-time data-date-style="medium" data-time-style="short">UTC <?=htmlspecialchars($capture['created_at'])?></time><?=(int)$capture['attachment_count']>0?' · '.(int)$capture['attachment_count'].' '.((int)$capture['attachment_count']===1?'file':'files'):''?></span></span>
     </a>
     <form method="post" action="/captures/<?=urlencode($capture['id'])?>/<?=$status==='archived'?'delete':'archive'?>"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="icon-button" type="submit" aria-label="<?=$status==='archived'?'Delete':'Archive'?>"><?=$status==='archived'?'×':'✓'?></button></form>
   </article>

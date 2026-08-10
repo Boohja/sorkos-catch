@@ -8,16 +8,17 @@ final class CaptureRepository
     public function __construct(private readonly PDO $db) {}
     public function list(string $userId, string $status='inbox', int $limit=100): array
     {
-        $query=$this->db->prepare('SELECT c.*, (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id) attachment_count FROM catch_captures c WHERE user_id=:user AND status=:status ORDER BY created_at DESC LIMIT '.max(1,min($limit,200)));
+        $query=$this->db->prepare('SELECT c.*,d.name device_name,d.client_type device_client_type,(SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id) attachment_count FROM catch_captures c LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.user_id=:user AND c.status=:status ORDER BY c.created_at DESC LIMIT '.max(1,min($limit,200)));
         $query->execute(['user'=>$userId,'status'=>$status]);
-        return $query->fetchAll();
+        return array_map([$this,'hydrate'],$query->fetchAll());
     }
     public function find(string $id,string $userId): ?array
     {
-        $query=$this->db->prepare('SELECT * FROM catch_captures WHERE id=:id AND user_id=:user LIMIT 1');
+        $query=$this->db->prepare('SELECT c.*,d.name device_name,d.client_type device_client_type,d.platform device_platform,d.status device_status FROM catch_captures c LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.id=:id AND c.user_id=:user LIMIT 1');
         $query->execute(['id'=>$id,'user'=>$userId]);
         $capture=$query->fetch() ?: null;
         if ($capture) {
+            $capture=$this->hydrate($capture);
             $a=$this->db->prepare('SELECT id,original_name,mime_type,size_bytes,width,height,created_at FROM catch_attachments WHERE capture_id=:id ORDER BY created_at');
             $a->execute(['id'=>$id]); $capture['attachments']=$a->fetchAll();
         }
@@ -39,7 +40,7 @@ final class CaptureRepository
     }
     public function insert(array $data): void
     {
-        $sql='INSERT INTO catch_captures (id,user_id,catch_number,client_capture_id,type,title,text,url,extracted_text,source,metadata_json,status,created_at,updated_at) VALUES (:id,:user_id,:catch_number,:client_capture_id,:type,:title,:text,:url,:extracted_text,:source,:metadata_json,\'inbox\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))';
+        $sql='INSERT INTO catch_captures (id,user_id,device_id,catch_number,client_capture_id,type,title,text,url,extracted_text,source,metadata_json,status,created_at,updated_at) VALUES (:id,:user_id,:device_id,:catch_number,:client_capture_id,:type,:title,:text,:url,:extracted_text,:source,:metadata_json,\'inbox\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))';
         $this->db->prepare($sql)->execute($data);
     }
     public function addAttachment(array $data): void
@@ -51,5 +52,18 @@ final class CaptureRepository
         $field=$status==='archived'?'archived_at':'deleted_at';
         $query=$this->db->prepare("UPDATE catch_captures SET status=:status,$field=UTC_TIMESTAMP(6),updated_at=UTC_TIMESTAMP(6) WHERE id=:id AND user_id=:user");
         $query->execute(['status'=>$status,'id'=>$id,'user'=>$userId]); return $query->rowCount()>0;
+    }
+
+    public function findAttachment(string $id,string $userId): ?array
+    {
+        $query=$this->db->prepare('SELECT a.* FROM catch_attachments a JOIN catch_captures c ON c.id=a.capture_id WHERE a.id=:id AND c.user_id=:user LIMIT 1');
+        $query->execute(['id'=>$id,'user'=>$userId]);return $query->fetch()?:null;
+    }
+
+    private function hydrate(array $capture): array
+    {
+        $metadata=json_decode((string)($capture['metadata_json']??''),true);
+        $capture['metadata']=is_array($metadata)?$metadata:[];
+        return $capture;
     }
 }

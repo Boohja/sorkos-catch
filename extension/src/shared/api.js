@@ -18,11 +18,11 @@
     return { response, data };
   }
 
-  async function startPairing({ deviceName, platform, codeChallenge }) {
+  async function startPairing({ codeChallenge }) {
     const { data } = await jsonRequest('/api/extension/pairing-requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_name: deviceName, platform, code_challenge: codeChallenge }),
+      body: JSON.stringify({ code_challenge: codeChallenge }),
     });
     return data;
   }
@@ -47,6 +47,7 @@
 
   function captureType(capture, hasScreenshot) {
     if (hasScreenshot) return 'mixed';
+    if (capture.remoteAttachmentUrl) return 'image';
     if (capture.text && capture.url) return 'mixed';
     if (capture.url) return 'url';
     return 'text';
@@ -59,6 +60,7 @@
     if (capture.title) body.append('title', capture.title);
     if (capture.text) body.append('text', capture.text);
     if (capture.url) body.append('url', capture.url);
+    if (capture.remoteAttachmentUrl) body.append('remote_attachment_url', capture.remoteAttachmentUrl);
     body.append('source', CatchExt.config.source);
     body.append('metadata', JSON.stringify(capture.metadata || {}));
     if (screenshotDataUrl) body.append('attachments[]', dataUrlToBlob(screenshotDataUrl), 'catch-viewport.png');
@@ -78,5 +80,13 @@
     return data;
   }
 
-  CatchExt.api = { startPairing, exchangePairing, createCapture, disconnect };
+  async function validateConnection(token) {
+    const { data } = await jsonRequest('/api/extension/connection', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return data;
+  }
+
+  CatchExt.api = { startPairing, exchangePairing, createCapture, disconnect, validateConnection };
 })(globalThis);

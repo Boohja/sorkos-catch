@@ -7,6 +7,7 @@
     "ext-pdo": "*",
     "ext-json": "*",
     "ext-fileinfo": "*",
+    "ext-curl": "*",
     "ext-sodium": "*"
   },
   "scripts": {

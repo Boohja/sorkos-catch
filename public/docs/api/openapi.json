@@ -119,7 +119,7 @@
         "tags": ["Pairing"],
         "summary": "Start browser extension pairing",
         "operationId": "startExtensionPairing",
-        "description": "Creates a short-lived browser pairing request. The client keeps the random verifier locally and sends only its SHA-256 base64url challenge here. Open `pair_url` in a normal browser tab so the signed-in user can approve the device. No device token is placed in that URL.",
+        "description": "Creates a short-lived browser pairing request. The client keeps the random verifier locally and sends only its SHA-256 base64url challenge here. Catch derives the user-facing browser/OS label from the request's ordinary User-Agent header. Open `pair_url` in a normal browser tab so the signed-in user can approve the device. No device token is placed in that URL.",
         "requestBody": { "$ref": "#/components/requestBodies/ExtensionPairingStartRequest" },
         "responses": {
           "201": {
@@ -163,6 +163,20 @@
         "security": [{ "deviceToken": [] }],
         "responses": {
           "200": { "description": "Browser disconnected.", "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["disconnected"] } } }, "example": { "status": "disconnected" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
+        }
+      }
+    },
+    "/api/extension/connection": {
+      "get": {
+        "tags": ["Pairing"],
+        "summary": "Validate a browser extension connection",
+        "operationId": "validateExtensionConnection",
+        "description": "Checks whether a device token still belongs to a connected browser device. Invalid and revoked tokens receive the same generic 401 response; the endpoint does not reveal token prefixes or partial matches.",
+        "security": [{ "deviceToken": [] }],
+        "responses": {
+          "200": { "description": "The browser is still connected.", "content": { "application/json": { "schema": { "type": "object", "required": ["status", "device"], "properties": { "status": { "type": "string", "enum": ["connected"] }, "device": { "type": "object", "required": ["id", "name", "platform", "client_type"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "platform": { "type": "string" }, "client_type": { "type": "string", "enum": ["extension"] } } } } } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
         }
@@ -542,10 +556,8 @@
       },
       "ExtensionPairingStartRequest": {
         "type": "object",
-        "required": ["device_name", "platform", "code_challenge"],
+        "required": ["code_challenge"],
         "properties": {
-          "device_name": { "type": "string", "maxLength": 120, "example": "Firefox extension" },
-          "platform": { "type": "string", "enum": ["chrome", "firefox", "chromium"] },
           "code_challenge": { "type": "string", "minLength": 43, "maxLength": 43, "pattern": "^[A-Za-z0-9_-]{43}$", "description": "Base64url-encoded SHA-256 digest of the random verifier retained by the extension." }
         }
       },
@@ -631,6 +643,12 @@
             "nullable": true,
             "description": "Primary URL being captured. Use with `type=url`, or with `type=mixed` when the capture also has another primary content kind.",
             "example": "https://example.com/proposal"
+          },
+          "remote_attachment_url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "description": "Public image URL to retrieve as an attachment. Catch rejects private or reserved network targets and enforces the configured attachment size and MIME allowlist. Intended for browser image context-menu captures."
           },
           "extracted_text": {
             "type": "string",

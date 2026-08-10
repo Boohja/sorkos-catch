@@ -1,0 +1,7 @@
+.app-main{width:min(calc(100% - 40px),980px)}
+.auth-form{width:min(calc(100% - 48px),420px)}
+.setup-shell{width:min(calc(100% - 48px),1100px)}
+.public-header{width:min(calc(100% - 40px),980px)}
+.help-doc{width:min(calc(100% - 40px),820px)}
+.browser-pair{width:min(calc(100% - 40px),520px)}
+@media(max-width:560px){.app-main{width:min(calc(100% - 28px),980px)}.help-doc{width:min(calc(100% - 28px),820px)}.public-header{width:min(calc(100% - 28px),980px)}}

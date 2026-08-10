@@ -122,6 +122,14 @@
 
   CatchExt.browser.runtime.sendMessage({ type: 'connection.get' }).then((result) => {
     if (result?.connection) showConnection(result.connection);
-    else { showDisconnected(); checkPairing(); }
+    else {
+      showDisconnected();
+      if (result?.revoked) {
+        errorState.hidden = false;
+        errorTitle.textContent = 'This browser was disconnected';
+        errorMessage.textContent = 'Its access was removed in Catch. Connect again to resume capturing.';
+        connect.textContent = 'Connect again';
+      } else checkPairing();
+    }
   }).catch((error) => showError({ error: error.message }));
 })();
