@@ -119,25 +119,26 @@
         "tags": ["Shortcut"],
         "summary": "Submit a capture from iOS Shortcuts",
         "operationId": "createShortcutCapture",
-        "description": "iOS-friendly alias of `POST /api/v1/captures`. It accepts the same JSON or multipart fields and returns the flat Shortcut envelope. On success, `result` is the capture ID. Reusing `client_capture_id` for the same account returns the existing capture instead of creating a duplicate.",
+        "description": "iOS-friendly alias of `POST /api/v1/captures`. Both routes use the shared capture request documented below; multipart form data is shown first because it maps cleanly to iOS Shortcuts. For a voice-to-text Shortcut, use `type=text` and place the transcript in `text` (not `extracted_text`). On success, `result` is the user's human-facing catch number, suitable for a message such as `Stored Catch #334`. Reusing `client_capture_id` for the same account returns the existing capture instead of creating a duplicate.",
         "security": [{ "deviceToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
         "requestBody": { "$ref": "#/components/requestBodies/CaptureRequest" },
         "responses": {
           "200": {
-            "description": "An idempotent retry found the existing capture. `result` contains its ID.",
+            "description": "An idempotent retry found the existing capture. `result` contains its catch number.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-                "example": { "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
+                "example": { "result": "334" }
               }
             }
           },
           "201": {
-            "description": "Capture created. `result` contains its ID.",
+            "description": "Capture created. `result` contains its per-user catch number.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/ShortcutResponse" },
-                "example": { "result": "3b7bde5c-6cd0-45a9-a1aa-f488375842a7" }
+                "example": { "result": "334" }
               }
             }
           },
@@ -188,17 +189,9 @@
         "tags": ["Captures"],
         "summary": "Submit a capture",
         "operationId": "createCapture",
-        "description": "Client-neutral capture endpoint. A paired `capture:write` device token is sufficient. Reusing `client_capture_id` for the same account makes the request idempotent.",
+        "description": "Client-neutral alias of `POST /api/shortcut/captures`. Both routes use the shared capture request documented below; only their response envelopes differ. A paired `capture:write` device token is sufficient. Reusing `client_capture_id` for the same account makes the request idempotent.",
         "security": [{ "deviceToken": [] }],
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "required": false,
-            "description": "Used as `client_capture_id` when that body field is absent.",
-            "schema": { "type": "string", "maxLength": 128 }
-          }
-        ],
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
         "requestBody": { "$ref": "#/components/requestBodies/CaptureRequest" },
         "responses": {
           "200": {
@@ -313,6 +306,13 @@
         "required": true,
         "description": "Server-generated capture UUID.",
         "schema": { "type": "string", "format": "uuid" }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "description": "Supported by both capture aliases and used as `client_capture_id` when that body field is absent. For an iOS Shortcut form, supplying `client_capture_id` in the body is usually simpler.",
+        "schema": { "type": "string", "maxLength": 128 }
       }
     },
     "requestBodies": {
@@ -329,10 +329,8 @@
       },
       "CaptureRequest": {
         "required": true,
+        "description": "Shared request body for `POST /api/shortcut/captures` and `POST /api/v1/captures`. Choose `type` for the content being stored, not for the process that produced it. For example, dictated speech that has already been converted to a transcript is a `text` capture whose transcript belongs in `text`.",
         "content": {
-          "application/json": {
-            "schema": { "$ref": "#/components/schemas/CaptureInput" }
-          },
           "multipart/form-data": {
             "schema": {
               "allOf": [
@@ -343,12 +341,15 @@
                     "attachments[]": {
                       "type": "array",
                       "items": { "type": "string", "format": "binary" },
-                      "description": "Zero or more attachments. Each file is limited to 15 MiB by the example configuration."
+                      "description": "Optional files. Repeat this field to send multiple files. Each file is limited to 15 MiB by the example configuration; allowed MIME types depend on the installation."
                     }
                   }
                 }
               ]
             }
+          },
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/CaptureInput" }
           }
         }
       }
@@ -507,18 +508,46 @@
           "client_capture_id": {
             "type": "string",
             "maxLength": 128,
-            "description": "Stable client-generated ID used for per-account idempotency.",
+            "description": "Required stable ID generated by the client, unique for this logical capture. Save and reuse it when retrying the same capture so a network retry does not create a duplicate; generate a new value for a new capture. On either route, this may instead be supplied in the `Idempotency-Key` header.",
             "example": "64e2943d-66e3-49f9-82b1-71612cc52f80"
           },
           "type": { "$ref": "#/components/schemas/CaptureType" },
-          "title": { "type": "string", "nullable": true, "maxLength": 500 },
-          "text": { "type": "string", "nullable": true, "example": "Review proposal" },
-          "url": { "type": "string", "format": "uri", "nullable": true },
-          "extracted_text": { "type": "string", "nullable": true },
-          "source": { "type": "string", "maxLength": 80, "default": "web", "example": "ios-shortcut" },
+          "title": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "description": "Optional human-readable heading. It does not replace the required content in `text`, `url`, or an attachment.",
+            "example": "Project reminder"
+          },
+          "text": {
+            "type": "string",
+            "nullable": true,
+            "description": "Primary textual content. Put typed text and voice-to-text transcripts here. A non-blank value satisfies the content requirement.",
+            "example": "Review the proposal tomorrow morning."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true,
+            "description": "Primary URL being captured. Use with `type=url`, or with `type=mixed` when the capture also has another primary content kind.",
+            "example": "https://example.com/proposal"
+          },
+          "extracted_text": {
+            "type": "string",
+            "nullable": true,
+            "description": "Optional machine-derived text that supplements the primary content, such as OCR from an image or a transcript retained alongside an audio attachment. Do not use it for a voice-to-text-only capture: put that transcript in `text`. This field alone does not satisfy the content requirement.",
+            "example": "Recognized text from the attached image or audio."
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 80,
+            "default": "web",
+            "description": "Optional client/channel label for provenance. It is not an enum; use a stable value such as `ios-shortcut`. If omitted, the server stores `web`.",
+            "example": "ios-shortcut"
+          },
           "metadata": {
             "nullable": true,
-            "description": "A JSON object, or a JSON-encoded string when using multipart/form-data.",
+            "description": "Optional client-defined structured details. Send a JSON object with an application/json request, or a JSON-encoded object string with multipart/form-data. Metadata is stored but does not satisfy the content requirement.",
             "oneOf": [
               {
                 "type": "object",
@@ -532,11 +561,13 @@
             ]
           }
         },
-        "description": "At least one of `text`, `url`, or a multipart attachment must contain data."
+        "description": "At least one of `text`, `url`, or a multipart attachment must contain data. A title, `extracted_text`, or metadata alone is not accepted. Voice-to-text example: `client_capture_id=<new UUID>`, `type=text`, `text=<dictated transcript>`, and `source=ios-shortcut`."
       },
       "CaptureType": {
         "type": "string",
-        "enum": ["text", "url", "image", "audio", "file", "mixed"]
+        "enum": ["text", "url", "image", "audio", "file", "mixed"],
+        "description": "Required classification of the primary stored content: `text` for typed or dictated text (including a voice-to-text transcript); `url` for a link; `image` for image attachment(s); `audio` for an actual audio attachment; `file` for other attachment(s); or `mixed` when multiple primary kinds are intentionally combined. The type describes what is stored, not how it was obtained.",
+        "example": "text"
       },
       "CaptureStatus": {
         "type": "string",
@@ -545,9 +576,10 @@
       },
       "CreateCaptureResponse": {
         "type": "object",
-        "required": ["id", "status", "created_at", "matched_rules"],
+        "required": ["id", "catch_number", "status", "created_at", "matched_rules"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
+          "catch_number": { "$ref": "#/components/schemas/CatchNumber" },
           "status": { "type": "string", "enum": ["created", "existing"] },
           "created_at": { "type": "string", "format": "date-time" },
           "matched_rules": { "type": "integer", "example": 0 }
@@ -555,9 +587,10 @@
       },
       "Capture": {
         "type": "object",
-        "required": ["id", "client_capture_id", "type", "source", "status", "created_at", "updated_at"],
+        "required": ["id", "catch_number", "client_capture_id", "type", "source", "status", "created_at", "updated_at"],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
+          "catch_number": { "$ref": "#/components/schemas/CatchNumber" },
           "client_capture_id": { "type": "string" },
           "type": { "$ref": "#/components/schemas/CaptureType" },
           "title": { "type": "string", "nullable": true },
@@ -577,6 +610,14 @@
           "archived_at": { "type": "string", "format": "date-time", "nullable": true },
           "deleted_at": { "type": "string", "format": "date-time", "nullable": true }
         }
+      },
+      "CatchNumber": {
+        "type": "integer",
+        "format": "int64",
+        "minimum": 1,
+        "readOnly": true,
+        "description": "Immutable, monotonically increasing number scoped to the owning user. It is intended for human references such as `Catch #334`; the UUID remains the globally unique technical identifier.",
+        "example": 334
       },
       "Attachment": {
         "type": "object",

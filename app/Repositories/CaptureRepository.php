@@ -28,9 +28,18 @@ final class CaptureRepository
         $query=$this->db->prepare('SELECT * FROM catch_captures WHERE client_capture_id=:client AND user_id=:user LIMIT 1');
         $query->execute(['client'=>$clientId,'user'=>$userId]); return $query->fetch() ?: null;
     }
+    public function nextCatchNumber(string $userId): int
+    {
+        $query=$this->db->prepare('SELECT next_catch_number FROM catch_users WHERE id=:user FOR UPDATE');
+        $query->execute(['user'=>$userId]);
+        $number=$query->fetchColumn();
+        if ($number===false) throw new \RuntimeException('The capture owner could not be found.');
+        $this->db->prepare('UPDATE catch_users SET next_catch_number=next_catch_number+1 WHERE id=:user')->execute(['user'=>$userId]);
+        return (int)$number;
+    }
     public function insert(array $data): void
     {
-        $sql='INSERT INTO catch_captures (id,user_id,client_capture_id,type,title,text,url,extracted_text,source,metadata_json,status,created_at,updated_at) VALUES (:id,:user_id,:client_capture_id,:type,:title,:text,:url,:extracted_text,:source,:metadata_json,\'inbox\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))';
+        $sql='INSERT INTO catch_captures (id,user_id,catch_number,client_capture_id,type,title,text,url,extracted_text,source,metadata_json,status,created_at,updated_at) VALUES (:id,:user_id,:catch_number,:client_capture_id,:type,:title,:text,:url,:extracted_text,:source,:metadata_json,\'inbox\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))';
         $this->db->prepare($sql)->execute($data);
     }
     public function addAttachment(array $data): void

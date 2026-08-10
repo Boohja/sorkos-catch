@@ -19,7 +19,8 @@ final class CaptureService
         $id=Id::uuid();
         $data=['id'=>$id,'user_id'=>$userId,'client_capture_id'=>(string)$input['client_capture_id'],'type'=>(string)$input['type'],'title'=>$this->nullable($input['title']??null),'text'=>$this->nullable($input['text']??null),'url'=>$this->nullable($input['url']??null),'extracted_text'=>$this->nullable($input['extracted_text']??null),'source'=>(string)($input['source']??'web'),'metadata_json'=>json_encode($input['metadata']??[],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)];
         $stored=[];
-        $this->database->transaction(function() use($repo,$data,$files,$id,&$stored) {
+        $this->database->transaction(function() use($repo,&$data,$files,$id,&$stored) {
+            $data['catch_number']=$repo->nextCatchNumber($data['user_id']);
             $repo->insert($data);
             foreach ($this->normalizeFiles($files) as $file) { $attachment=$this->uploads->store($file,$id); $repo->addAttachment($attachment); $stored[]=$attachment['storage_name']; }
         });

@@ -63,10 +63,11 @@ final class CaptureController
             $capture = $result['capture'];
             $status = $result['created'] ? 201 : 200;
             if ($shortcut) {
-                Response::shortcut('', (string) $capture['id'], $status);
+                Response::shortcut('', (string) $capture['catch_number'], $status);
             }
             Response::json([
                 'id' => $capture['id'],
+                'catch_number' => (int) $capture['catch_number'],
                 'status' => $result['created'] ? 'created' : 'existing',
                 'created_at' => $capture['created_at'],
                 'matched_rules' => 0,

@@ -1,6 +1,6 @@
 <a class="back-link" href="/inbox">← Back to inbox</a>
 <article class="detail">
-  <header><span class="type-label"><?=htmlspecialchars($capture['type'])?></span><h1><?=htmlspecialchars($capture['title']?:'Capture')?></h1><p><?=htmlspecialchars((new DateTime($capture['created_at']))->format('M j, Y, H:i'))?> · <?=htmlspecialchars($capture['source'])?></p></header>
+  <header><span class="type-label">Catch #<?=(int)$capture['catch_number']?> &middot; <?=htmlspecialchars($capture['type'])?></span><h1><?=htmlspecialchars($capture['title']?:'Capture')?></h1><p><?=htmlspecialchars((new DateTime($capture['created_at']))->format('M j, Y, H:i'))?> · <?=htmlspecialchars($capture['source'])?></p></header>
   <?php if($capture['text']): ?><section><h2>Content</h2><div class="prose"><?=nl2br(htmlspecialchars($capture['text']))?></div></section><?php endif; ?>
   <?php if($capture['url']): ?><section><h2>Link</h2><a class="url-card" href="<?=htmlspecialchars($capture['url'])?>" target="_blank" rel="noopener noreferrer"><?=htmlspecialchars($capture['url'])?><span>↗</span></a></section><?php endif; ?>
   <?php if($capture['extracted_text']): ?><details><summary>Extracted text</summary><div class="prose"><?=nl2br(htmlspecialchars($capture['extracted_text']))?></div></details><?php endif; ?>
