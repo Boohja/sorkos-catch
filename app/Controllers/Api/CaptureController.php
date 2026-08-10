@@ -62,6 +62,9 @@ final class CaptureController
         }
 
         try {
+            if ($shortcut && $this->uploadedFileCount($_FILES) > 1) {
+                throw new InvalidArgumentException(json_encode(['attachment' => 'iOS Shortcut captures accept only one attachment.']));
+            }
             $result = $this->service->create($user['id'], $input, $_FILES, $user['device_id']);
             $capture = $result['capture'];
             $status = $result['created'] ? 201 : 200;
@@ -138,5 +141,23 @@ final class CaptureController
             }
         }
         return 'client_capture_' . bin2hex(random_bytes(16));
+    }
+
+    private function uploadedFileCount(array $files): int
+    {
+        $count = 0;
+        foreach (['attachment', 'attachments'] as $name) {
+            $field = $files[$name] ?? null;
+            if (!is_array($field) || !array_key_exists('error', $field)) {
+                continue;
+            }
+            $errors = is_array($field['error']) ? $field['error'] : [$field['error']];
+            foreach ($errors as $error) {
+                if ((int) $error !== UPLOAD_ERR_NO_FILE) {
+                    $count++;
+                }
+            }
+        }
+        return $count;
     }
 }

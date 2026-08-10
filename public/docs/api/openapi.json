@@ -187,10 +187,10 @@
         "tags": ["Shortcut"],
         "summary": "Submit a capture from iOS Shortcuts",
         "operationId": "createShortcutCapture",
-        "description": "iOS-friendly alias of `POST /api/v1/captures`. Both routes use the shared capture request documented below; multipart form data is shown first because it maps cleanly to iOS Shortcuts. For a voice-to-text Shortcut, use `type=text` and place the transcript in `text` (not `extracted_text`). On success, `result` is the user's human-facing catch number, suitable for a message such as `Stored Catch #334`. Reusing `client_capture_id` for the same account returns the existing capture instead of creating a duplicate.",
+        "description": "iOS-friendly alias of `POST /api/v1/captures`. It uses the shared capture fields, but accepts at most one file in the singular multipart field `attachment`, matching the iOS Shortcuts `File` (`Datei`) value type. For a voice-to-text Shortcut, use `type=text` and place the transcript in `text` (not `extracted_text`). On success, `result` is the user's human-facing catch number, suitable for a message such as `Stored Catch #334`. Reusing `client_capture_id` for the same account returns the existing capture instead of creating a duplicate.",
         "security": [{ "deviceToken": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
-        "requestBody": { "$ref": "#/components/requestBodies/CaptureRequest" },
+        "requestBody": { "$ref": "#/components/requestBodies/ShortcutCaptureRequest" },
         "responses": {
           "200": {
             "description": "An idempotent retry found the existing capture. `result` contains its catch number.",
@@ -405,7 +405,7 @@
       },
       "CaptureRequest": {
         "required": true,
-        "description": "Shared request body for `POST /api/shortcut/captures` and `POST /api/v1/captures`. Choose `type` for known content, or use `unknown` when an iOS Share Sheet may provide any supported representation. Unknown captures are normalized before storage: a lone web URL is moved from `text` to `url` and enriched with the page title when safely retrievable; OCR-only input becomes text; attachments are classified from their actual MIME type; and the stored type becomes `text`, `url`, `image`, `file`, or `mixed`.",
+        "description": "Versioned capture request. Choose `type` for known content, or use `unknown` when the client cannot classify it. This request supports multiple multipart attachments.",
         "content": {
           "multipart/form-data": {
             "schema": {
@@ -418,6 +418,32 @@
                       "type": "array",
                       "items": { "type": "string", "format": "binary" },
                       "description": "Optional files. Repeat this field to send multiple files. For `type=unknown`, only configured image MIME types and PDF are accepted; audio, video, text-file, empty, and disguised attachments are rejected. Both each file and the combined unknown-capture attachments are limited to 15 MiB by the example configuration."
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/CaptureInput" }
+          }
+        }
+      },
+      "ShortcutCaptureRequest": {
+        "required": true,
+        "description": "iOS Shortcut request using the shared capture fields. Multipart requests accept one optional file in `attachment`. In Shortcuts, pass a `File` (`Datei`) value; OpenAPI represents that value as binary data. For `type=unknown`, Catch inspects the file and resolves the final stored type.",
+        "content": {
+          "multipart/form-data": {
+            "schema": {
+              "allOf": [
+                { "$ref": "#/components/schemas/CaptureInput" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "attachment": {
+                      "type": "string",
+                      "format": "binary",
+                      "description": "Optional single image or PDF supplied as an iOS Shortcuts `File` (`Datei`) value. The Shortcut endpoint rejects requests containing more than one uploaded file."
                     }
                   }
                 }
