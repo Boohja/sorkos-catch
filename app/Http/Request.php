@@ -13,6 +13,30 @@ final class Request
         return is_array($decoded) ? $decoded : [];
     }
 
+    /**
+     * Returns the usable JSON input and a diagnostic representation of what arrived.
+     * Malformed JSON is kept as a bounded raw-body snapshot by the debug service.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>}
+     */
+    public static function captureJson(): array
+    {
+        $content = file_get_contents('php://input') ?: '';
+        $decoded = json_decode($content, true);
+
+        if (is_array($decoded)) {
+            return [$decoded, $decoded];
+        }
+
+        return [
+            [],
+            [
+                '_raw_body' => $content,
+                '_json_error' => json_last_error_msg(),
+            ],
+        ];
+    }
+
     public static function bearerToken(): ?string
     {
         $header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';

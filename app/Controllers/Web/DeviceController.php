@@ -10,6 +10,7 @@ use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\DeviceRepository;
 use Catch\Services\AuthService;
+use Catch\Services\CaptureDebugService;
 use Catch\Services\Csrf;
 
 final class DeviceController
@@ -21,6 +22,7 @@ final class DeviceController
         private readonly CaptureRepository $captures,
         private readonly Csrf $csrf,
         private readonly Config $config,
+        private readonly CaptureDebugService $debug,
     ) {
     }
 
@@ -106,6 +108,7 @@ final class DeviceController
         }
 
         $appUrl = rtrim((string) $this->config->get('app.url'), '/');
+        $debugEnabled = $this->debug->enabled();
 
         $this->view->render('devices/show', [
             'title' => $device['name'],
@@ -116,6 +119,10 @@ final class DeviceController
             'deviceUrl' => $this->url($device),
             'shortcutUrl' => $appUrl . '/assets/shortcuts/Catch%20Setup.shortcut',
             'pairingCodeTtlMinutes' => DeviceRepository::PAIRING_CODE_TTL_MINUTES,
+            'debugEnabled' => $debugEnabled,
+            'debugRequests' => $debugEnabled
+                ? $this->debug->forDevice($user['id'], $device['id'])
+                : [],
         ]);
     }
 

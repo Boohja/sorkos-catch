@@ -19,7 +19,7 @@ $isComingSoon = $currentPath === '/coming-soon'; ?>
   <link rel="stylesheet" href="/assets/css/components.css?v=2">
   <link rel="stylesheet" href="/assets/css/auth.css?v=2">
   <link rel="stylesheet" href="/assets/css/devices.css?v=5">
-  <link rel="stylesheet" href="/assets/css/device-detail.css?v=2">
+  <link rel="stylesheet" href="/assets/css/device-detail.css?v=3">
   <link rel="stylesheet" href="/assets/css/device-provenance.css?v=1">
   <link rel="stylesheet" href="/assets/css/capture-detail.css?v=6">
   <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=1">

@@ -27,4 +27,8 @@ $deviceType = array_key_exists($device['device_type'] ?? '', $deviceTypes) ? $de
 
 <section class="device-captures"><header><h2>Captures from this device</h2><p><?=count($captures)?> <?=count($captures) === 1 ? 'capture' : 'captures'?></p></header><?php if (!$captures): ?><p class="muted">No captures have been created by this device.</p><?php else: ?><div class="device-capture-list"><?php foreach ($captures as $capture): ?><a href="/captures/<?=urlencode($capture['id'])?>"><span><strong><?=htmlspecialchars($capture['title'] ?: mb_strimwidth($capture['text'] ?: $capture['url'] ?: 'Attachment', 0, 90, '…'))?></strong><small>#<?=(int)$capture['catch_number']?> · <time datetime="<?=htmlspecialchars($utc($capture['created_at']))?>" data-local-time data-date-style="medium" data-time-style="short">UTC <?=htmlspecialchars($capture['created_at'])?></time></small></span><em><?=!empty($capture['deleted_at']) ? 'Trash' : htmlspecialchars(ucfirst((string)$capture['status']))?></em></a><?php endforeach; ?></div><?php endif; ?></section>
 
+<?php if ($debugEnabled): ?>
+  <?php require __DIR__ . '/_debug_requests.php'; ?>
+<?php endif; ?>
+
 <?php if ($device['status'] === 'setup'): ?><script src="/assets/vendor/qrcode.js"></script><?php endif; ?>

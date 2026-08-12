@@ -8,6 +8,7 @@ use Catch\Http\Request;
 use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\DeviceRepository;
+use Catch\Services\CaptureDebugService;
 use Catch\Services\CaptureService;
 use InvalidArgumentException;
 
@@ -17,6 +18,7 @@ final class CaptureController
         private readonly DeviceRepository $devices,
         private readonly CaptureRepository $captures,
         private readonly CaptureService $service,
+        private readonly CaptureDebugService $debug,
     ) {
     }
 
@@ -62,22 +64,40 @@ final class CaptureController
     {
         $user = $this->user('capture:write', $shortcut);
         $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-        $input = str_contains($contentType, 'application/json') ? Request::json() : $_POST;
-        $input['client_capture_id'] = $this->clientCaptureId(
-            $input['client_capture_id'] ?? null,
-            $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? null,
-        );
-        if (isset($input['metadata']) && is_string($input['metadata'])) {
-            $input['metadata'] = json_decode($input['metadata'], true) ?: [];
+        if (str_contains($contentType, 'application/json')) {
+            [$input, $debugParameters] = Request::captureJson();
+        } else {
+            $input = $_POST;
+            $debugParameters = $_POST;
         }
+        $debugRequestId = $this->debug->begin(
+            $user,
+            $shortcut ? '/api/shortcut/captures' : '/api/v1/captures',
+            $debugParameters,
+            $_FILES,
+        );
 
         try {
+            $input['client_capture_id'] = $this->clientCaptureId(
+                $input['client_capture_id'] ?? null,
+                $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? null,
+            );
+            if (isset($input['metadata']) && is_string($input['metadata'])) {
+                $input['metadata'] = json_decode($input['metadata'], true) ?: [];
+            }
+
             if ($shortcut && $this->uploadedFileCount($_FILES) > 1) {
                 throw new InvalidArgumentException(json_encode(['attachment' => 'iOS Shortcut captures accept only one attachment.']));
             }
             $result = $this->service->create($user['id'], $input, $_FILES, $user['device_id']);
             $capture = $result['capture'];
             $status = $result['created'] ? 201 : 200;
+            $this->debug->finish(
+                $debugRequestId,
+                $result['created'] ? 'accepted_created' : 'accepted_existing',
+                $status,
+                (string) $capture['id'],
+            );
             if ($shortcut) {
                 Response::shortcut('', (string) $capture['catch_number'], $status);
             }
@@ -90,11 +110,23 @@ final class CaptureController
             ], $status);
         } catch (InvalidArgumentException $error) {
             $fields = json_decode($error->getMessage(), true);
+            $this->debug->finish(
+                $debugRequestId,
+                'rejected_validation',
+                422,
+                errorMessage: $this->validationMessage($fields),
+            );
             if ($shortcut) {
                 Response::shortcut($this->validationMessage($fields), '', 422);
             }
             Response::json(['error' => ['code' => 'validation_failed', 'message' => 'The request is invalid.', 'fields' => $fields]], 422);
-        } catch (\Throwable) {
+        } catch (\Throwable $error) {
+            $this->debug->finish(
+                $debugRequestId,
+                'rejected_server_error',
+                500,
+                errorMessage: $error->getMessage(),
+            );
             if ($shortcut) {
                 Response::shortcut('The capture could not be stored.', '', 500);
             }

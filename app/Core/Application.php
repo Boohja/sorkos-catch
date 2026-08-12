@@ -21,6 +21,7 @@ use Catch\Repositories\ListRepository;
 use Catch\Repositories\TagRepository;
 use Catch\Repositories\UserRepository;
 use Catch\Services\AuthService;
+use Catch\Services\CaptureDebugService;
 use Catch\Services\CaptureService;
 use Catch\Services\Csrf;
 use Catch\Services\RemoteContentService;
@@ -62,6 +63,7 @@ final class Application
         $uploads = new UploadService($config, $this->root . '/storage/uploads');
         $remote = new RemoteContentService((int)$config->get('uploads.max_bytes', 15728640));
         $service = new CaptureService($db, new CaptureValidator(), $uploads, $remote);
+        $captureDebug = new CaptureDebugService($pdo, $config);
         $currentUser = $auth->user();
         if ($currentUser && !$access->allowsUser($currentUser)) {
             $auth->logout();
@@ -82,10 +84,10 @@ final class Application
         $web = new WebCaptures($view, $auth, $captures, $tags, $lists, $service, $csrf, $this->root . '/storage/uploads', $webDeviceId);
         $tagController = new TagController($view, $auth, $tags, $captures, $csrf);
         $listController = new ListController($view, $auth, $lists, $captures, $csrf);
-        $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config);
+        $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config, $captureDebug);
         $pairController = new PairController($view, $auth, $devices, $csrf);
         $help = new HelpController($view, $auth, $config);
-        $api = new ApiCaptures($devices, $captures, $service);
+        $api = new ApiCaptures($devices, $captures, $service, $captureDebug);
         $apiShortcut = new ApiShortcut($devices, $config);
         $apiExtension = new ApiExtension($devices, $config);
         $f3->route('GET /', fn () => \Catch\Http\Response::redirect($auth->user() ? '/inbox' : ($access->isPrerelease() ? '/coming-soon' : '/login')));

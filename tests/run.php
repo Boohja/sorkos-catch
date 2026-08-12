@@ -587,6 +587,41 @@ $test('View data can expose capture status without colliding with the HTTP statu
         throw new RuntimeException('View status data is still shadowed by the response parameter');
     }
 });
+$test('Debug capture logging is bounded, redacted, and device scoped', function () use ($root) {
+    $migration = (string) file_get_contents($root . '/database/migrations/010_capture_debug_requests.sql');
+    $service = (string) file_get_contents($root . '/app/Services/CaptureDebugService.php');
+    $api = (string) file_get_contents($root . '/app/Controllers/Api/CaptureController.php');
+    $device = (string) file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
+    $view = (string) file_get_contents($root . '/app/Views/devices/_debug_requests.php');
+
+    foreach (['user_id', 'device_id', 'token_id', 'parameters_json', 'files_json', 'remote_ip', 'verdict'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Debug request migration is incomplete: ' . $required);
+        }
+    }
+
+    foreach (['app.debug', 'isSensitiveKey', 'MAX_STRING_LENGTH', 'unset($request)'] as $required) {
+        if (!str_contains($service, $required)) {
+            throw new RuntimeException('Debug request storage is not safely bounded: ' . $required);
+        }
+    }
+
+    foreach (['/api/shortcut/captures', '/api/v1/captures', 'rejected_validation', 'rejected_server_error'] as $required) {
+        if (!str_contains($api, $required)) {
+            throw new RuntimeException('Capture request instrumentation is incomplete: ' . $required);
+        }
+    }
+
+    if (!str_contains($device, 'forDevice') || !str_contains($device, 'debugEnabled')) {
+        throw new RuntimeException('Device debug requests are not scoped by the controller');
+    }
+
+    foreach (['<details class="debug-request">', 'Server verdict:', 'Token ID', 'Parameters', 'Uploaded files'] as $required) {
+        if (!str_contains($view, $required)) {
+            throw new RuntimeException('Device debug request UI is incomplete: ' . $required);
+        }
+    }
+});
 $test('Swagger UI is fully local', function () use ($root) {
     $index = (string)file_get_contents($root . '/public/docs/api/index.html');
     foreach (['swagger-ui.css','swagger-ui-bundle.js','swagger-ui-standalone-preset.js','LICENSE'] as $asset) {
