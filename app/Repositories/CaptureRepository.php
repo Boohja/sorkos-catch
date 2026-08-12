@@ -1,81 +1,531 @@
 <?php
+
 declare(strict_types=1);
+
 namespace Catch\Repositories;
+
+use InvalidArgumentException;
 use PDO;
+use RuntimeException;
+use Throwable;
 
 final class CaptureRepository
 {
-    public function __construct(private readonly PDO $db) {}
-    public function list(string $userId, string $status='inbox', int $limit=100): array
+    public function __construct(private readonly PDO $db)
     {
-        $query=$this->db->prepare('SELECT c.*,d.name device_name,d.client_type device_client_type,(SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id) attachment_count FROM catch_captures c LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.user_id=:user AND c.status=:status ORDER BY c.created_at DESC LIMIT '.max(1,min($limit,200)));
-        $query->execute(['user'=>$userId,'status'=>$status]);
-        return $this->withTags(array_map([$this,'hydrate'],$query->fetchAll()),$userId);
-    }
-    public function listByTag(string $userId,string $tagId,string $status='inbox',int $limit=100): array
-    {
-        $q=$this->db->prepare('SELECT c.*,d.name device_name,d.client_type device_client_type,(SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id) attachment_count FROM catch_captures c JOIN catch_capture_tags ct ON ct.capture_id=c.id LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.user_id=:user AND c.status=:status AND ct.tag_id=:tag ORDER BY c.created_at DESC LIMIT '.max(1,min($limit,200)));
-        $q->execute(['user'=>$userId,'status'=>$status,'tag'=>$tagId]);return $this->withTags(array_map([$this,'hydrate'],$q->fetchAll()),$userId);
-    }
-    public function find(string $id,string $userId): ?array
-    {
-        $query=$this->db->prepare('SELECT c.*,d.name device_name,d.client_type device_client_type,d.platform device_platform,d.status device_status FROM catch_captures c LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.id=:id AND c.user_id=:user LIMIT 1');
-        $query->execute(['id'=>$id,'user'=>$userId]);
-        $capture=$query->fetch() ?: null;
-        if ($capture) {
-            $capture=$this->hydrate($capture);
-            $a=$this->db->prepare('SELECT id,original_name,mime_type,size_bytes,width,height,created_at FROM catch_attachments WHERE capture_id=:id ORDER BY created_at');
-            $a->execute(['id'=>$id]); $capture['attachments']=$a->fetchAll();
-            $capture['tags']=$this->tagsForCapture($id,$userId);
-        }
-        return $capture;
-    }
-    public function findByClientId(string $clientId,string $userId): ?array
-    {
-        $query=$this->db->prepare('SELECT * FROM catch_captures WHERE client_capture_id=:client AND user_id=:user LIMIT 1');
-        $query->execute(['client'=>$clientId,'user'=>$userId]); return $query->fetch() ?: null;
-    }
-    public function nextCatchNumber(string $userId): int
-    {
-        $query=$this->db->prepare('SELECT next_catch_number FROM catch_users WHERE id=:user FOR UPDATE');
-        $query->execute(['user'=>$userId]);
-        $number=$query->fetchColumn();
-        if ($number===false) throw new \RuntimeException('The capture owner could not be found.');
-        $this->db->prepare('UPDATE catch_users SET next_catch_number=next_catch_number+1 WHERE id=:user')->execute(['user'=>$userId]);
-        return (int)$number;
-    }
-    public function insert(array $data): void
-    {
-        $sql='INSERT INTO catch_captures (id,user_id,device_id,catch_number,client_capture_id,type,title,text,url,extracted_text,source,metadata_json,status,created_at,updated_at) VALUES (:id,:user_id,:device_id,:catch_number,:client_capture_id,:type,:title,:text,:url,:extracted_text,:source,:metadata_json,\'inbox\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))';
-        $this->db->prepare($sql)->execute($data);
-    }
-    public function addAttachment(array $data): void
-    {
-        $this->db->prepare('INSERT INTO catch_attachments (id,capture_id,original_name,storage_name,mime_type,size_bytes,width,height,checksum,created_at) VALUES (:id,:capture_id,:original_name,:storage_name,:mime_type,:size_bytes,:width,:height,:checksum,UTC_TIMESTAMP(6))')->execute($data);
-    }
-    public function setStatus(string $id,string $userId,string $status): bool
-    {
-        $field=$status==='archived'?'archived_at':'deleted_at';
-        $query=$this->db->prepare("UPDATE catch_captures SET status=:status,$field=UTC_TIMESTAMP(6),updated_at=UTC_TIMESTAMP(6) WHERE id=:id AND user_id=:user");
-        $query->execute(['status'=>$status,'id'=>$id,'user'=>$userId]); return $query->rowCount()>0;
     }
 
-    public function findAttachment(string $id,string $userId): ?array
+    public function list(string $userId, string $status = 'inbox', int $limit = 100): array
     {
-        $query=$this->db->prepare('SELECT a.* FROM catch_attachments a JOIN catch_captures c ON c.id=a.capture_id WHERE a.id=:id AND c.user_id=:user LIMIT 1');
-        $query->execute(['id'=>$id,'user'=>$userId]);return $query->fetch()?:null;
+        $limit = max(1, min($limit, 200));
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+            FROM catch_captures c
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE c.user_id = :user
+                AND c.status = :status
+                AND c.deleted_at IS NULL
+            ORDER BY c.created_at DESC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId, 'status' => $status]);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
+    }
+
+    public function listTrash(string $userId, int $limit = 100): array
+    {
+        $limit = max(1, min($limit, 200));
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+            FROM catch_captures c
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE c.user_id = :user
+                AND c.deleted_at IS NOT NULL
+            ORDER BY c.deleted_at DESC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId]);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
+    }
+
+    public function listByTag(
+        string $userId,
+        string $tagId,
+        string $status = 'inbox',
+        int $limit = 100,
+    ): array {
+        $limit = max(1, min($limit, 200));
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+            FROM catch_captures c
+            JOIN catch_capture_tags ct ON ct.capture_id = c.id
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE c.user_id = :user
+                AND c.status = :status
+                AND c.deleted_at IS NULL
+                AND ct.tag_id = :tag
+            ORDER BY c.created_at DESC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId, 'status' => $status, 'tag' => $tagId]);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
+    }
+
+    public function listByList(string $userId, string $listId, int $limit = 100): array
+    {
+        $limit = max(1, min($limit, 200));
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+            FROM catch_captures c
+            JOIN catch_capture_lists cl ON cl.capture_id = c.id
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE c.user_id = :user
+                AND c.deleted_at IS NULL
+                AND cl.list_id = :list
+            ORDER BY cl.assigned_at DESC, c.created_at DESC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId, 'list' => $listId]);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
+    }
+
+    public function listByDevice(string $userId, string $deviceId, int $limit = 200): array
+    {
+        $limit = max(1, min($limit, 500));
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+            FROM catch_captures c
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE c.user_id = :user
+                AND c.device_id = :device
+            ORDER BY c.created_at DESC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId, 'device' => $deviceId]);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
+    }
+
+    public function find(string $id, string $userId): ?array
+    {
+        $sql = <<<'SQL'
+            SELECT c.*, d.name device_name, d.device_type,
+                d.client_type device_client_type, d.platform device_platform,
+                d.status device_status
+            FROM catch_captures c
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE c.id = :id AND c.user_id = :user
+            LIMIT 1
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['id' => $id, 'user' => $userId]);
+        $capture = $query->fetch() ?: null;
+
+        if (!$capture) {
+            return null;
+        }
+
+        $capture = $this->hydrate($capture);
+        $attachments = $this->db->prepare(
+            'SELECT id, original_name, mime_type, size_bytes, width, height, created_at '
+            . 'FROM catch_attachments WHERE capture_id = :id ORDER BY created_at',
+        );
+        $attachments->execute(['id' => $id]);
+        $capture['attachments'] = $attachments->fetchAll();
+        $capture['tags'] = $this->tagsForCapture($id, $userId);
+        $capture['lists'] = $this->listsForCapture($id, $userId);
+
+        return $capture;
+    }
+
+    public function findByClientId(string $clientId, string $userId): ?array
+    {
+        $query = $this->db->prepare(
+            'SELECT * FROM catch_captures '
+            . 'WHERE client_capture_id = :client AND user_id = :user LIMIT 1',
+        );
+        $query->execute(['client' => $clientId, 'user' => $userId]);
+
+        return $query->fetch() ?: null;
+    }
+
+    public function nextCatchNumber(string $userId): int
+    {
+        $query = $this->db->prepare(
+            'SELECT next_catch_number FROM catch_users WHERE id = :user FOR UPDATE',
+        );
+        $query->execute(['user' => $userId]);
+        $number = $query->fetchColumn();
+
+        if ($number === false) {
+            throw new RuntimeException('The capture owner could not be found.');
+        }
+
+        $this->db->prepare(
+            'UPDATE catch_users SET next_catch_number = next_catch_number + 1 WHERE id = :user',
+        )->execute(['user' => $userId]);
+
+        return (int) $number;
+    }
+
+    public function insert(array $data): void
+    {
+        $sql = <<<'SQL'
+            INSERT INTO catch_captures (
+                id, user_id, device_id, catch_number, client_capture_id, type,
+                title, text, url, extracted_text, source, metadata_json,
+                status, created_at, updated_at
+            ) VALUES (
+                :id, :user_id, :device_id, :catch_number, :client_capture_id, :type,
+                :title, :text, :url, :extracted_text, :source, :metadata_json,
+                'inbox', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+            )
+            SQL;
+        $this->db->prepare($sql)->execute($data);
+    }
+
+    public function addAttachment(array $data): void
+    {
+        $sql = <<<'SQL'
+            INSERT INTO catch_attachments (
+                id, capture_id, original_name, storage_name, mime_type,
+                size_bytes, width, height, checksum, created_at
+            ) VALUES (
+                :id, :capture_id, :original_name, :storage_name, :mime_type,
+                :size_bytes, :width, :height, :checksum, UTC_TIMESTAMP(6)
+            )
+            SQL;
+        $this->db->prepare($sql)->execute($data);
+    }
+
+    public function setStatus(string $id, string $userId, string $status): bool
+    {
+        if (!in_array($status, ['inbox', 'archived'], true)) {
+            throw new InvalidArgumentException('Unknown capture status.');
+        }
+
+        $archivedAt = $status === 'archived' ? 'UTC_TIMESTAMP(6)' : 'NULL';
+        $sql = <<<SQL
+            UPDATE catch_captures
+            SET status = :status,
+                archived_at = {$archivedAt},
+                updated_at = UTC_TIMESTAMP(6)
+            WHERE id = :id
+                AND user_id = :user
+                AND deleted_at IS NULL
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['status' => $status, 'id' => $id, 'user' => $userId]);
+
+        return $query->rowCount() > 0;
+    }
+
+    public function trash(string $id, string $userId): bool
+    {
+        $sql = <<<'SQL'
+            UPDATE catch_captures
+            SET deleted_at = UTC_TIMESTAMP(6), updated_at = UTC_TIMESTAMP(6)
+            WHERE id = :id AND user_id = :user AND deleted_at IS NULL
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['id' => $id, 'user' => $userId]);
+
+        return $query->rowCount() > 0;
+    }
+
+    public function trashMany(string $userId, array $ids): int
+    {
+        [$placeholders, $params] = $this->captureIdParams($userId, $ids);
+        if (!$placeholders) {
+            return 0;
+        }
+
+        $sql = 'UPDATE catch_captures '
+            . 'SET deleted_at = UTC_TIMESTAMP(6), updated_at = UTC_TIMESTAMP(6) '
+            . 'WHERE user_id = :user AND deleted_at IS NULL '
+            . 'AND id IN (' . implode(',', $placeholders) . ')';
+        $query = $this->db->prepare($sql);
+        $query->execute($params);
+
+        return $query->rowCount();
+    }
+
+    public function restore(string $id, string $userId): bool
+    {
+        $sql = <<<'SQL'
+            UPDATE catch_captures c
+            SET deleted_at = NULL,
+                status = IF(
+                    EXISTS(SELECT 1 FROM catch_capture_lists cl WHERE cl.capture_id = c.id),
+                    'archived',
+                    'inbox'
+                ),
+                archived_at = IF(
+                    EXISTS(SELECT 1 FROM catch_capture_lists cl WHERE cl.capture_id = c.id),
+                    COALESCE(c.archived_at, UTC_TIMESTAMP(6)),
+                    NULL
+                ),
+                updated_at = UTC_TIMESTAMP(6)
+            WHERE c.id = :id AND c.user_id = :user AND c.deleted_at IS NOT NULL
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['id' => $id, 'user' => $userId]);
+
+        return $query->rowCount() > 0;
+    }
+
+    public function expiredTrashIds(string $userId, int $days = 30): array
+    {
+        $days = max(1, $days);
+        $sql = <<<SQL
+            SELECT id
+            FROM catch_captures
+            WHERE user_id = :user
+                AND deleted_at IS NOT NULL
+                AND deleted_at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL {$days} DAY)
+            ORDER BY deleted_at
+            LIMIT 200
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId]);
+
+        return array_values(array_filter($query->fetchAll(PDO::FETCH_COLUMN), 'is_string'));
+    }
+
+    public function updateEditableField(
+        string $id,
+        string $userId,
+        string $field,
+        string $value,
+    ): ?array {
+        $limits = [
+            'title' => 500,
+            'text' => 1_000_000,
+            'extracted_text' => 1_000_000,
+            'url' => 2_048,
+        ];
+
+        if (!isset($limits[$field])) {
+            throw new InvalidArgumentException('This field cannot be edited.');
+        }
+
+        $value = trim($value);
+        if (mb_strlen($value) > $limits[$field]) {
+            $label = ucfirst(str_replace('_', ' ', $field));
+            throw new InvalidArgumentException($label . ' is too long.');
+        }
+
+        if ($field === 'url' && $value !== '') {
+            $scheme = strtolower((string) (parse_url($value, PHP_URL_SCHEME) ?? ''));
+            if (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) {
+                throw new InvalidArgumentException('Enter a valid http or https URL.');
+            }
+        }
+
+        $exists = $this->db->prepare(
+            'SELECT 1 FROM catch_captures '
+            . 'WHERE id = :id AND user_id = :user AND deleted_at IS NULL',
+        );
+        $exists->execute(['id' => $id, 'user' => $userId]);
+        if (!$exists->fetchColumn()) {
+            return null;
+        }
+
+        $sql = "UPDATE catch_captures SET {$field} = :value, updated_at = UTC_TIMESTAMP(6) "
+            . 'WHERE id = :id AND user_id = :user AND deleted_at IS NULL';
+        $query = $this->db->prepare($sql);
+        $query->execute([
+            'value' => $value === '' ? null : $value,
+            'id' => $id,
+            'user' => $userId,
+        ]);
+
+        return ['field' => $field, 'value' => $value];
+    }
+
+    public function attachmentStorageNames(string $userId, array $ids): array
+    {
+        [$placeholders, $params] = $this->captureIdParams($userId, $ids);
+        if (!$placeholders) {
+            return [];
+        }
+
+        $sql = 'SELECT a.storage_name FROM catch_attachments a '
+            . 'JOIN catch_captures c ON c.id = a.capture_id '
+            . 'WHERE c.user_id = :user AND c.deleted_at IS NOT NULL '
+            . 'AND c.id IN (' . implode(',', $placeholders) . ')';
+        $query = $this->db->prepare($sql);
+        $query->execute($params);
+
+        return array_values(array_filter($query->fetchAll(PDO::FETCH_COLUMN), 'is_string'));
+    }
+
+    /** @return array{deleted: int, storage_names: array<int, string>} */
+    public function purgeMany(string $userId, array $ids): array
+    {
+        [$placeholders, $params] = $this->captureIdParams($userId, $ids);
+        if (!$placeholders) {
+            return ['deleted' => 0, 'storage_names' => []];
+        }
+
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
+
+        try {
+            $filesSql = 'SELECT a.storage_name FROM catch_attachments a '
+                . 'JOIN catch_captures c ON c.id = a.capture_id '
+                . 'WHERE c.user_id = :user AND c.deleted_at IS NOT NULL '
+                . 'AND c.id IN (' . implode(',', $placeholders) . ') FOR UPDATE';
+            $files = $this->db->prepare($filesSql);
+            $files->execute($params);
+            $storageNames = array_values(array_filter(
+                $files->fetchAll(PDO::FETCH_COLUMN),
+                'is_string',
+            ));
+
+            $deleteSql = 'DELETE FROM catch_captures '
+                . 'WHERE user_id = :user AND deleted_at IS NOT NULL '
+                . 'AND id IN (' . implode(',', $placeholders) . ')';
+            $delete = $this->db->prepare($deleteSql);
+            $delete->execute($params);
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+
+            return [
+                'deleted' => $delete->rowCount(),
+                'storage_names' => $storageNames,
+            ];
+        } catch (Throwable $error) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $error;
+        }
+    }
+
+    public function findAttachment(string $id, string $userId): ?array
+    {
+        $sql = <<<'SQL'
+            SELECT a.*
+            FROM catch_attachments a
+            JOIN catch_captures c ON c.id = a.capture_id
+            WHERE a.id = :id AND c.user_id = :user
+            LIMIT 1
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['id' => $id, 'user' => $userId]);
+
+        return $query->fetch() ?: null;
     }
 
     private function hydrate(array $capture): array
     {
-        $metadata=json_decode((string)($capture['metadata_json']??''),true);
-        $capture['metadata']=is_array($metadata)?$metadata:[];
+        $metadata = json_decode((string) ($capture['metadata_json'] ?? ''), true);
+        $capture['metadata'] = is_array($metadata) ? $metadata : [];
+
         return $capture;
     }
-    private function withTags(array $captures,string $userId): array {foreach($captures as &$capture)$capture['tags']=$this->tagsForCapture((string)$capture['id'],$userId);unset($capture);return $captures;}
-    private function tagsForCapture(string $id,string $userId): array
+
+    private function withTags(array $captures, string $userId): array
     {
-        $q=$this->db->prepare('SELECT t.id,t.name FROM catch_tags t JOIN catch_capture_tags ct ON ct.tag_id=t.id JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.capture_id=:capture AND c.user_id=:user ORDER BY t.name');$q->execute(['capture'=>$id,'user'=>$userId]);
-        return array_map(static function(array $tag):array{$ascii=iconv('UTF-8','ASCII//TRANSLIT//IGNORE',(string)$tag['name'])?:$tag['name'];$tag['slug']=trim((string)preg_replace('/[^a-z0-9]+/','-',mb_strtolower((string)$ascii)),'-')?:'tag';$tag['url']='/tags/'.rawurlencode((string)$tag['id']).'-'.$tag['slug'].'/captures';return $tag;},$q->fetchAll());
+        foreach ($captures as &$capture) {
+            $capture['tags'] = $this->tagsForCapture((string) $capture['id'], $userId);
+        }
+        unset($capture);
+
+        return $captures;
+    }
+
+    private function tagsForCapture(string $id, string $userId): array
+    {
+        $sql = <<<'SQL'
+            SELECT t.id, t.name
+            FROM catch_tags t
+            JOIN catch_capture_tags ct ON ct.tag_id = t.id
+            JOIN catch_captures c ON c.id = ct.capture_id
+            WHERE ct.capture_id = :capture AND c.user_id = :user
+            ORDER BY t.name
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['capture' => $id, 'user' => $userId]);
+
+        return array_map(static function (array $tag): array {
+            $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', (string) $tag['name'])
+                ?: $tag['name'];
+            $tag['slug'] = trim(
+                (string) preg_replace('/[^a-z0-9]+/', '-', mb_strtolower((string) $ascii)),
+                '-',
+            ) ?: 'tag';
+            $tag['url'] = '/tags/' . rawurlencode((string) $tag['id'])
+                . '-' . $tag['slug'] . '/captures';
+
+            return $tag;
+        }, $query->fetchAll());
+    }
+
+    private function listsForCapture(string $id, string $userId): array
+    {
+        $sql = <<<'SQL'
+            SELECT l.id, l.title
+            FROM catch_lists l
+            JOIN catch_capture_lists cl ON cl.list_id = l.id
+            JOIN catch_captures c ON c.id = cl.capture_id
+            WHERE cl.capture_id = :capture AND c.user_id = :user
+            ORDER BY l.title
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['capture' => $id, 'user' => $userId]);
+
+        return array_map(static function (array $list): array {
+            $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', (string) $list['title'])
+                ?: $list['title'];
+            $list['slug'] = trim(
+                (string) preg_replace('/[^a-z0-9]+/', '-', mb_strtolower((string) $ascii)),
+                '-',
+            ) ?: 'list';
+            $list['url'] = '/lists/' . rawurlencode((string) $list['id'])
+                . '-' . $list['slug'] . '/captures';
+
+            return $list;
+        }, $query->fetchAll());
+    }
+
+    /** @return array{0: array<int, string>, 1: array<string, string>} */
+    private function captureIdParams(string $userId, array $ids): array
+    {
+        $ids = array_values(array_unique(array_filter(
+            $ids,
+            static fn (mixed $id): bool => is_string($id)
+                && preg_match('/^[0-9a-f-]{36}$/i', $id) === 1,
+        )));
+        $ids = array_slice($ids, 0, 200);
+
+        $params = ['user' => $userId];
+        $placeholders = [];
+        foreach ($ids as $index => $id) {
+            $key = 'capture_' . $index;
+            $placeholders[] = ':' . $key;
+            $params[$key] = $id;
+        }
+
+        return [$placeholders, $params];
     }
 }

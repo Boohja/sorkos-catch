@@ -11,7 +11,9 @@ final class Database
 {
     private ?PDO $pdo = null;
 
-    public function __construct(private readonly Config $config) {}
+    public function __construct(private readonly Config $config)
+    {
+    }
 
     public function connection(): PDO
     {
@@ -30,7 +32,7 @@ final class Database
                 $this->config->get('database.host', '127.0.0.1'),
                 (int) $this->config->get('database.port', 3306),
                 $this->config->get('database.name'),
-                $this->config->get('database.charset', 'utf8mb4')
+                $this->config->get('database.charset', 'utf8mb4'),
             );
         }
         $this->pdo = new PDO($dsn, (string) $this->config->get('database.user', ''), (string) $this->config->get('database.password', ''), [
@@ -60,7 +62,9 @@ final class Database
             $pdo->commit();
             return $result;
         } catch (\Throwable $error) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             throw $error;
         }
     }

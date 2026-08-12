@@ -29,6 +29,8 @@ Catch redirects the browser to Sorkos `/authorize`, validates the returned state
 ```text
 php bin/migrate.php
 composer test
+composer cs:check
+composer cs:fix
 ```
 
 `GET /health` reports application and database availability without exposing credentials.

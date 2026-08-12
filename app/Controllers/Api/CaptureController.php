@@ -17,7 +17,8 @@ final class CaptureController
         private readonly DeviceRepository $devices,
         private readonly CaptureRepository $captures,
         private readonly CaptureService $service,
-    ) {}
+    ) {
+    }
 
     private function user(string $scope = 'full', bool $shortcut = false): array
     {
@@ -35,7 +36,16 @@ final class CaptureController
     public function index(): never
     {
         $user = $this->user();
-        Response::json(['data' => $this->captures->list($user['id'], $_GET['status'] ?? 'inbox')]);
+        $status = (string) ($_GET['status'] ?? 'inbox');
+
+        if ($status === 'trash') {
+            $captures = $this->captures->listTrash($user['id']);
+        } else {
+            $status = in_array($status, ['inbox', 'archived'], true) ? $status : 'inbox';
+            $captures = $this->captures->list($user['id'], $status);
+        }
+
+        Response::json(['data' => $captures]);
     }
 
     public function create(): never
@@ -114,10 +124,10 @@ final class CaptureController
     public function delete(\Base $f3, array $params): never
     {
         $user = $this->user();
-        if (!$this->captures->setStatus((string) $params['id'], $user['id'], 'deleted')) {
+        if (!$this->captures->trash((string) $params['id'], $user['id'])) {
             Response::json(['error' => ['code' => 'not_found', 'message' => 'Capture not found.']], 404);
         }
-        Response::json(['status' => 'deleted']);
+        Response::json(['status' => 'trashed', 'deleted_at' => gmdate(DATE_ATOM)]);
     }
 
     private function validationMessage(mixed $fields): string

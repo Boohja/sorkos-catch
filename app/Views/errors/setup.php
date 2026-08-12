@@ -6,6 +6,6 @@
     <p>The application is running. Add the credentials to <code>config/config.ini</code> or provide them as environment variables, then run the migration.</p>
     <pre><code>Copy-Item config/config.example.ini config/config.ini
 php bin/migrate.php</code></pre>
-    <p class="status-line"><span class="status-icon" aria-hidden="true"></span><?= $configured?'Database configured but unavailable.':'Database not configured yet.' ?></p>
+    <p class="status-line"><span class="status-icon" aria-hidden="true"></span><?= $configured ? 'Database configured but unavailable.' : 'Database not configured yet.' ?></p>
   </div>
 </section>

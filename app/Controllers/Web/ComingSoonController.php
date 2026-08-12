@@ -14,7 +14,8 @@ final class ComingSoonController
         private readonly View $view,
         private readonly AuthService $auth,
         private readonly Csrf $csrf,
-    ) {}
+    ) {
+    }
 
     public function show(): void
     {

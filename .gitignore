@@ -12,5 +12,6 @@
 !/storage/tmp/.gitkeep
 !/storage/uploads/.gitkeep
 /.phpunit.cache/
+/.php-cs-fixer.cache
 /docs
 /extension/build/

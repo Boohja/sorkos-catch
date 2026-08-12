@@ -2,6 +2,37 @@
   grid-template-columns: 38px minmax(0, 1fr);
 }
 
+@media (max-width: 900px) {
+  .devices-table-row {
+    grid-template-columns: 1fr auto;
+    gap: 8px 16px;
+    padding: 10px 0;
+  }
+
+  .device-main-link {
+    grid-column: 1 / -1;
+    padding: 3px 0;
+  }
+
+  .device-date {
+    display: block;
+    grid-column: 1 / -1;
+  }
+
+  .devices-table-row > .button {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .device-captures > header,
+  .device-capture-list a {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
 .shortcut-install-options {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 64px 150px;

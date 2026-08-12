@@ -14,7 +14,8 @@ final class ShortcutController
     public function __construct(
         private readonly DeviceRepository $devices,
         private readonly Config $config,
-    ) {}
+    ) {
+    }
 
     public function pairDevice(): never
     {

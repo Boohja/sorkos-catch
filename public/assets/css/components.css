@@ -2,7 +2,27 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
   text-decoration: none;
+}
+
+.glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: 1em;
+  block-size: 1em;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.glyph::before {
+  display: block;
+  inline-size: 1em;
+  line-height: 1;
+  text-align: center;
 }
 
 .button-danger-outline {
@@ -14,4 +34,31 @@
 .button-danger-outline:hover {
   border-color: var(--danger);
   background: var(--danger-soft);
+}
+
+.button > .glyph {
+  font-size: 1.05em;
+}
+
+.filter-tabs a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.icon-page-heading {
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.icon-page-heading > .glyph {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 11px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 21px;
 }

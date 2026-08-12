@@ -187,7 +187,7 @@
         "tags": ["Shortcut"],
         "summary": "Submit a capture from iOS Shortcuts",
         "operationId": "createShortcutCapture",
-        "description": "iOS-friendly alias of `POST /api/v1/captures`. It uses the shared capture fields, but accepts at most one file in the singular multipart field `attachment`, matching the iOS Shortcuts `File` (`Datei`) value type. For a voice-to-text Shortcut, use `type=text` and place the transcript in `text` (not `extracted_text`). On success, `result` is the user's human-facing catch number, suitable for a message such as `Stored Catch #334`. Reusing `client_capture_id` for the same account returns the existing capture instead of creating a duplicate.",
+        "description": "iOS-friendly alias of `POST /api/v1/captures`. It uses the shared capture fields, but accepts at most one file in the singular multipart field `attachment`, matching the iOS Shortcuts `File` (`Datei`) value type. For a voice-to-text Shortcut without a recording, use `type=text` and place the transcript in `text`. To preserve the recording, use `type=audio`, send the audio file as `attachment`, and place the transcript in `extracted_text`. On success, `result` is the user's human-facing catch number, suitable for a message such as `Stored Catch #334`. Reusing `client_capture_id` for the same account returns the existing capture instead of creating a duplicate.",
         "security": [{ "deviceToken": [] }],
         "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
         "requestBody": { "$ref": "#/components/requestBodies/ShortcutCaptureRequest" },
@@ -228,8 +228,8 @@
           {
             "name": "status",
             "in": "query",
-            "description": "Capture status to list.",
-            "schema": { "$ref": "#/components/schemas/CaptureStatus" }
+            "description": "Capture state to list. Trash is selected by the presence of `deleted_at`, not by the stored status.",
+            "schema": { "type": "string", "enum": ["inbox", "archived", "trash"], "default": "inbox" }
           }
         ],
         "responses": {
@@ -308,18 +308,18 @@
       },
       "delete": {
         "tags": ["Reserved full access"],
-        "summary": "Soft-delete a capture (reserved)",
+        "summary": "Move a capture to Trash (reserved)",
         "operationId": "deleteCapture",
-        "description": "Marks a capture as deleted. Requires a `full` token, which the public pairing flow does not currently issue.",
+        "description": "Sets `deleted_at` and keeps the capture recoverable for 30 days. The stored status remains either `inbox` or `archived`. Requires a `full` token, which the public pairing flow does not currently issue.",
         "security": [{ "fullDeviceToken": [] }],
         "parameters": [{ "$ref": "#/components/parameters/CaptureId" }],
         "responses": {
           "200": {
-            "description": "Capture marked deleted.",
+            "description": "Capture moved to Trash.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/StatusResponse" },
-                "example": { "status": "deleted" }
+                "example": { "status": "trashed", "deleted_at": "2026-08-12T09:30:00Z" }
               }
             }
           },
@@ -417,7 +417,7 @@
                     "attachments[]": {
                       "type": "array",
                       "items": { "type": "string", "format": "binary" },
-                      "description": "Optional files. Repeat this field to send multiple files. For `type=unknown`, only configured image MIME types and PDF are accepted; audio, video, text-file, empty, and disguised attachments are rejected. Both each file and the combined unknown-capture attachments are limited to 15 MiB by the example configuration."
+                      "description": "Optional files. Repeat this field to send multiple files. For `type=unknown`, configured image and audio MIME types plus PDF are accepted; video, text-file, empty, and disguised attachments are rejected. Both each file and the combined unknown-capture attachments are limited to 15 MiB by the example configuration."
                     }
                   }
                 }
@@ -679,7 +679,7 @@
           "extracted_text": {
             "type": "string",
             "nullable": true,
-            "description": "Optional machine-derived text that supplements the primary content, such as OCR from an image. It may intentionally duplicate `text`. For known capture types this field alone does not satisfy the content requirement. For `type=unknown`, OCR-only input is copied to `text` so the original result remains available in both fields.",
+            "description": "Optional machine-derived text that supplements the primary content, such as OCR from an image or a transcript from an attached recording. It may intentionally duplicate `text`. For known capture types this field alone does not satisfy the content requirement. For `type=audio`, the attachment remains the source and this field holds its transcript. For `type=unknown`, extracted-text-only input without an attachment is copied to `text`.",
             "example": "Recognized text from the attached image or audio."
           },
           "source": {
@@ -710,7 +710,7 @@
       "CaptureType": {
         "type": "string",
         "enum": ["text", "url", "image", "audio", "file", "mixed", "unknown"],
-        "description": "Required input classification: `text` for typed or dictated text (including a voice-to-text transcript); `url` for a link; `image` for image attachment(s); `audio` for an actual audio attachment; `file` for other attachment(s); `mixed` when multiple known primary kinds are intentionally combined; or `unknown` when the iOS Share Sheet input must be inspected by Catch. `unknown` is input-only and is replaced with a detected stored type. Unknown attachments deliberately accept images and PDFs only.",
+        "description": "Required input classification: `text` for typed or dictated text (including a voice-to-text transcript with no retained recording); `url` for a link; `image` for image attachment(s); `audio` for an actual audio attachment whose transcript belongs in `extracted_text`; `file` for other attachment(s); `mixed` when multiple known primary kinds are intentionally combined; or `unknown` when the iOS Share Sheet input must be inspected by Catch. `unknown` is input-only and is replaced with a detected stored type. Unknown attachments accept configured image and audio MIME types plus PDF.",
         "example": "text"
       },
       "StoredCaptureType": {
@@ -720,8 +720,9 @@
       },
       "CaptureStatus": {
         "type": "string",
-        "enum": ["inbox", "archived", "deleted"],
-        "default": "inbox"
+        "enum": ["inbox", "archived"],
+        "default": "inbox",
+        "description": "Workflow state for active captures. Trash is represented separately by a non-null `deleted_at`."
       },
       "CreateCaptureResponse": {
         "type": "object",

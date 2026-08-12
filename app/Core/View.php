@@ -6,11 +6,13 @@ namespace Catch\Core;
 
 final class View
 {
-    public function __construct(private readonly string $path) {}
-
-    public function render(string $template, array $data = [], int $status = 200): void
+    public function __construct(private readonly string $path)
     {
-        http_response_code($status);
+    }
+
+    public function render(string $template, array $data = [], int $httpStatus = 200): void
+    {
+        http_response_code($httpStatus);
         extract($data, EXTR_SKIP);
         $templateFile = $this->path . '/' . $template . '.php';
         ob_start();

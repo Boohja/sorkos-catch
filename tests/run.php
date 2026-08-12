@@ -1,56 +1,600 @@
 <?php
+
 declare(strict_types=1);
-$root=dirname(__DIR__);require $root.'/app/bootstrap.php';$failures=0;
-$test=function(string $name,callable $case)use(&$failures):void{try{$case();echo "PASS $name\n";}catch(Throwable $e){$failures++;echo "FAIL $name: {$e->getMessage()}\n";}};
-$test('UUID format',function(){if(!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',Catch\Core\Id::uuid()))throw new RuntimeException('Invalid UUID');});
-$test('Capture validation requires content',function(){$errors=(new Catch\Validation\CaptureValidator())->validate(['client_capture_id'=>'test','type'=>'text']);if(!isset($errors['content']))throw new RuntimeException('Content accepted');});
-$test('Capture validation accepts text',function(){$errors=(new Catch\Validation\CaptureValidator())->validate(['client_capture_id'=>'test','type'=>'text','text'=>'Hello']);if($errors)throw new RuntimeException(json_encode($errors));});
-$test('Unknown captures resolve content and reject unsafe attachments',function()use($root){
-    $config=Catch\Core\Config::load($root);$uploads=new Catch\Services\UploadService($config,sys_get_temp_dir());
-    $service=new Catch\Services\CaptureService(new Catch\Core\Database($config),new Catch\Validation\CaptureValidator(),$uploads);
-    $normalize=(new ReflectionClass($service))->getMethod('normalizeUnknownInput');
-    $url=$normalize->invoke($service,['type'=>'unknown','text'=>'https://example.com/article','extracted_text'=>'https://example.com/article'],[]);
-    if($url['type']!=='url'||$url['url']!=='https://example.com/article'||$url['text']!==null)throw new RuntimeException('A lone URL was not promoted');
-    $text=$normalize->invoke($service,['type'=>'unknown','text'=>'First line'.PHP_EOL.'Second line','extracted_text'=>'First line Second line'],[]);
-    if($text['type']!=='text'||$text['title']!=='First line'||$text['extracted_text']!=='First line Second line')throw new RuntimeException('Text was not classified without destroying OCR output');
-    $ocr=$normalize->invoke($service,['type'=>'unknown','extracted_text'=>'Recognized date: tomorrow'],[]);
-    if($ocr['type']!=='text'||$ocr['text']!=='Recognized date: tomorrow')throw new RuntimeException('OCR-only input was not preserved as text');
-    $png=tempnam(sys_get_temp_dir(),'catch-unknown-png-');$pdf=tempnam(sys_get_temp_dir(),'catch-unknown-pdf-');$plain=tempnam(sys_get_temp_dir(),'catch-unknown-txt-');
-    try{
-        file_put_contents($png,base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
-        file_put_contents($pdf,"%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF");
-        file_put_contents($plain,'not an image');
-        $imageFile=['attachment'=>['name'=>'pixel.png','tmp_name'=>$png,'error'=>UPLOAD_ERR_OK,'size'=>filesize($png)]];
-        $image=$normalize->invoke($service,['type'=>'unknown','extracted_text'=>'pixel'],$imageFile);
-        if($image['type']!=='image'||$image['title']!=='pixel.png')throw new RuntimeException('Image input was not classified');
-        $mixed=$normalize->invoke($service,['type'=>'unknown','text'=>'Context'],$imageFile);
-        if($mixed['type']!=='mixed')throw new RuntimeException('Text plus image was not classified as mixed');
-        $pdfFile=['attachment'=>['name'=>'paper.pdf','tmp_name'=>$pdf,'error'=>UPLOAD_ERR_OK,'size'=>filesize($pdf)]];
-        $document=$normalize->invoke($service,['type'=>'unknown','extracted_text'=>'Thesis OCR'],$pdfFile);
-        if($document['type']!=='file'||$document['title']!=='paper.pdf')throw new RuntimeException('PDF input was not classified');
-        $unsafe=['attachment'=>['name'=>'notes.txt','tmp_name'=>$plain,'error'=>UPLOAD_ERR_OK,'size'=>filesize($plain)]];
-        try{$normalize->invoke($service,['type'=>'unknown','text'=>'Context'],$unsafe);throw new RuntimeException('Unsafe attachment was accepted');}catch(InvalidArgumentException $error){if(!str_contains($error->getMessage(),'image formats and PDF'))throw $error;}
-        $tinyRoot=sys_get_temp_dir().'/catch-unknown-config-'.bin2hex(random_bytes(4));mkdir($tinyRoot.'/config',0777,true);file_put_contents($tinyRoot.'/config/config.ini',"[uploads]\nmax_bytes=10\nallowed_mime=\"image/png,application/pdf\"\n");
-        try{$tinyUploads=new Catch\Services\UploadService(Catch\Core\Config::load($tinyRoot),sys_get_temp_dir());try{$tinyUploads->inspectUnknownAttachment($imageFile['attachment']);throw new RuntimeException('Oversized attachment was accepted');}catch(RuntimeException $error){if(!str_contains($error->getMessage(),'upload limit'))throw $error;}}finally{@unlink($tinyRoot.'/config/config.ini');@rmdir($tinyRoot.'/config');@rmdir($tinyRoot);}
-    }finally{@unlink($png);@unlink($pdf);@unlink($plain);}
-    $spec=json_decode((string)file_get_contents($root.'/public/docs/api/openapi.json'),true,512,JSON_THROW_ON_ERROR);
-    if(!in_array('unknown',$spec['components']['schemas']['CaptureType']['enum']??[],true)||in_array('unknown',$spec['components']['schemas']['StoredCaptureType']['enum']??[],true))throw new RuntimeException('OpenAPI does not distinguish unknown input from stored types');
+$root = dirname(__DIR__);
+require $root . '/app/bootstrap.php';
+$failures = 0;
+$test = function (string $name, callable $case) use (&$failures): void {
+    try {
+        $case();
+        echo "PASS $name\n";
+    } catch (Throwable $e) {
+        $failures++;
+        echo "FAIL $name: {$e->getMessage()}\n";
+    }
+};
+$test('UUID format', function () {
+    if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', Catch\Core\Id::uuid())) {
+        throw new RuntimeException('Invalid UUID');
+    }
 });
-$test('Prerelease access permits only the configured Sorkos user',function()use($root){$directory=sys_get_temp_dir().'/catch-access-'.bin2hex(random_bytes(6));mkdir($directory.'/config',0777,true);file_put_contents($directory.'/config/config.ini',"[access]\nprerelease=true\nallowed_sorkos_user_id=usr_allowed\n");$policy=new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));if(!$policy->allowsSorkosUserId('usr_allowed')||$policy->allowsSorkosUserId('usr_other')||$policy->allowsSorkosUserId(''))throw new RuntimeException('Prerelease allowlist failed');unlink($directory.'/config/config.ini');rmdir($directory.'/config');rmdir($directory);});
-$test('Released access does not require an allowlist',function()use($root){$directory=sys_get_temp_dir().'/catch-access-'.bin2hex(random_bytes(6));mkdir($directory.'/config',0777,true);file_put_contents($directory.'/config/config.ini',"[access]\nprerelease=false\n");$policy=new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));if(!$policy->allowsSorkosUserId('usr_any'))throw new RuntimeException('Released access was denied');unlink($directory.'/config/config.ini');rmdir($directory.'/config');rmdir($directory);});
-$test('Auth exchange is compatible with PHP 8.5',function()use($root){$source=(string)file_get_contents($root.'/app/Services/AuthService.php');if(str_contains($source,'curl_'.'close('))throw new RuntimeException('Deprecated cURL close call found');});
-$test('Shortcut responses expose exactly one flat string',function(){$success=Catch\Http\Response::shortcutPayload('', 'capture-id');$failure=Catch\Http\Response::shortcutPayload('Failed.', '');if($success!==['result'=>'capture-id']||$failure!==['error'=>'Failed.'])throw new RuntimeException('Invalid shortcut response envelope');foreach([['',''],['Failed.','capture-id']] as [$error,$result]){try{Catch\Http\Response::shortcutPayload($error,$result);throw new RuntimeException('Ambiguous shortcut response accepted');}catch(LogicException){}}});
-$test('Capture ID fallback preserves client precedence and rejects device tokens',function(){$class=new ReflectionClass(Catch\Controllers\Api\CaptureController::class);$controller=$class->newInstanceWithoutConstructor();$method=$class->getMethod('clientCaptureId');if($method->invoke($controller,'manual-id','header-id')!=='manual-id')throw new RuntimeException('Body capture ID did not take precedence');if($method->invoke($controller,null,'header-id')!=='header-id')throw new RuntimeException('Idempotency key was not used');foreach([[null,null],['',''],['catch_device_secret',null],[null,'catch_device_secret']] as $values){$generated=$method->invoke($controller,...$values);if(!preg_match('/^client_capture_[0-9a-f]{32}$/',$generated))throw new RuntimeException('Safe random capture ID was not generated');}});
-$test('Pairing codes are ten numeric digits',function(){$class=new ReflectionClass(Catch\Repositories\DeviceRepository::class);$repository=$class->newInstanceWithoutConstructor();$generate=$class->getMethod('newCode');$normalize=$class->getMethod('normalizeCode');for($i=0;$i<100;$i++){[$plain,$display]=$generate->invoke($repository);if(!preg_match('/^[1-9]\d{9}$/',$plain)||!preg_match('/^[1-9]\d{4} \d{5}$/',$display)||$normalize->invoke($repository,$display)!==$plain)throw new RuntimeException('Invalid numeric pairing code');}foreach(['1234567890','12345 67890','12345-67890'] as $valid)if($normalize->invoke($repository,$valid)!=='1234567890')throw new RuntimeException('Valid pairing code rejected');foreach(['0123456789','123456789','12345678901','12345A6789'] as $invalid)if($normalize->invoke($repository,$invalid)!==null)throw new RuntimeException('Invalid pairing code accepted');if(Catch\Repositories\DeviceRepository::PAIRING_CODE_TTL_MINUTES!==15)throw new RuntimeException('Unexpected pairing code lifetime');});
-$test('Extension pairing keeps tokens out of approval URLs',function()use($root){$migration=(string)file_get_contents($root.'/database/migrations/003_extension_pairing.sql');foreach(['code_challenge CHAR(43)','token_encrypted TEXT','expires_at DATETIME(6)'] as $required)if(!str_contains($migration,$required))throw new RuntimeException('Extension pairing migration is missing '.$required);$controller=(string)file_get_contents($root.'/app/Controllers/Api/ExtensionController.php');if(!str_contains($controller,"http_build_query(['request'=>\$pairing['request_id']]")||str_contains($controller,"http_build_query(['device_token'"))throw new RuntimeException('Approval URL does not contain only the short-lived request ID');$background=(string)file_get_contents($root.'/extension/src/background.js');$browser=(string)file_get_contents($root.'/extension/src/shared/browser.js');if(!str_contains($background,"crypto.subtle.digest('SHA-256'")||!str_contains($browser,'storage.local'))throw new RuntimeException('Extension verifier or extension storage is missing');});
-$test('OpenAPI documents every public machine route',function()use($root){$source=(string)file_get_contents($root.'/app/Core/Application.php');preg_match_all("/\\\$f3->route\\('([A-Z]+) ([^']+)'/",$source,$matches,PREG_SET_ORDER);$routes=[];foreach($matches as $match){if($match[2]!=='/health'&&!str_starts_with($match[2],'/api/'))continue;$path=preg_replace('/@([A-Za-z_][A-Za-z0-9_]*)/','{$1}',$match[2]);$routes[]=$match[1].' '.$path;}$spec=json_decode((string)file_get_contents($root.'/public/docs/api/openapi.json'),true,512,JSON_THROW_ON_ERROR);$documented=[];foreach($spec['paths'] as $path=>$methods)foreach($methods as $method=>$operation)if(in_array($method,['get','post','put','patch','delete'],true))$documented[]=strtoupper($method).' '.$path;sort($routes);sort($documented);if($routes!==$documented)throw new RuntimeException('OpenAPI route inventory differs from Application routes: '.json_encode(['routes'=>$routes,'documented'=>$documented]));});
-$test('Capture aliases document their respective multipart attachment shapes',function()use($root){$spec=json_decode((string)file_get_contents($root.'/public/docs/api/openapi.json'),true,512,JSON_THROW_ON_ERROR);$shortcut=$spec['paths']['/api/shortcut/captures']['post']['requestBody']['$ref']??null;$versioned=$spec['paths']['/api/v1/captures']['post']['requestBody']['$ref']??null;if($shortcut!=='#/components/requestBodies/ShortcutCaptureRequest'||$versioned!=='#/components/requestBodies/CaptureRequest')throw new RuntimeException('Capture aliases use the wrong request bodies');$shortcutContent=$spec['components']['requestBodies']['ShortcutCaptureRequest']['content']??[];$versionedContent=$spec['components']['requestBodies']['CaptureRequest']['content']??[];if(array_key_first($shortcutContent)!=='multipart/form-data'||array_key_first($versionedContent)!=='multipart/form-data')throw new RuntimeException('Multipart form data is not the default documented capture format');$shortcutProperties=$shortcutContent['multipart/form-data']['schema']['allOf'][1]['properties']??[];$versionedProperties=$versionedContent['multipart/form-data']['schema']['allOf'][1]['properties']??[];if(($shortcutProperties['attachment']['format']??null)!=='binary'||isset($shortcutProperties['attachments[]'])||!isset($versionedProperties['attachments[]']))throw new RuntimeException('Shortcut and versioned attachment fields are not distinct');$controllerClass=new ReflectionClass(Catch\Controllers\Api\CaptureController::class);$controller=$controllerClass->newInstanceWithoutConstructor();$count=$controllerClass->getMethod('uploadedFileCount');$two=['attachments'=>['error'=>[UPLOAD_ERR_OK,UPLOAD_ERR_OK]]];if($count->invoke($controller,$two)!==2)throw new RuntimeException('Shortcut multi-file enforcement cannot count uploads');$typeDescription=$spec['components']['schemas']['CaptureType']['description']??'';$textDescription=$spec['components']['schemas']['CaptureInput']['properties']['text']['description']??'';$extractedDescription=$spec['components']['schemas']['CaptureInput']['properties']['extracted_text']['description']??'';if(!str_contains($typeDescription,'voice-to-text')||!str_contains($textDescription,'voice-to-text')||!str_contains($extractedDescription,'does not satisfy'))throw new RuntimeException('Voice-to-text field semantics are not documented');});
-$test('OpenAPI documents verifier-protected extension pairing',function()use($root){$spec=json_decode((string)file_get_contents($root.'/public/docs/api/openapi.json'),true,512,JSON_THROW_ON_ERROR);foreach(['/api/extension/pairing-requests','/api/extension/pairing-requests/{request}/exchange','/api/extension/disconnect'] as $path)if(!isset($spec['paths'][$path]['post']))throw new RuntimeException('Missing extension endpoint '.$path);$challenge=$spec['components']['schemas']['ExtensionPairingStartRequest']['properties']['code_challenge']??[];if(($challenge['minLength']??0)!==43||($challenge['maxLength']??0)!==43)throw new RuntimeException('Code challenge constraints are missing');});
-$test('Extension pairing failures are logged and service-safe',function()use($root){$controller=(string)file_get_contents($root.'/app/Controllers/Api/ExtensionController.php');foreach(['pairing_unavailable','storage/logs/extension.log','503'] as $required)if(!str_contains($controller,$required))throw new RuntimeException('Extension pairing failure handling is missing '.$required);});
-$test('Capture provenance migration links devices without deleting history',function()use($root){$migration=(string)file_get_contents($root.'/database/migrations/004_capture_provenance.sql');foreach(['client_type ENUM','user_agent VARCHAR(500)','device_id CHAR(36)','ON DELETE SET NULL'] as $required)if(!str_contains($migration,$required))throw new RuntimeException('Capture provenance migration is missing '.$required);$repository=(string)file_get_contents($root.'/app/Repositories/DeviceRepository.php');foreach(['DELETE FROM catch_device_tokens','UPDATE catch_devices SET status=','ensureWebDevice'] as $required)if(!str_contains($repository,$required))throw new RuntimeException('Device revocation or web registration is missing '.$required);});
-$test('Extension validates revoked connections and supports images',function()use($root){$application=(string)file_get_contents($root.'/app/Core/Application.php');$background=(string)file_get_contents($root.'/extension/src/background.js');$storage=(string)file_get_contents($root.'/extension/src/shared/storage.js');$manifest=json_decode((string)file_get_contents($root.'/extension/manifest.firefox.json'),true,512,JSON_THROW_ON_ERROR);if(!str_contains($application,'GET /api/extension/connection'))throw new RuntimeException('Connection validation endpoint is missing');foreach(['catch-image','feedback.toast','remoteAttachmentUrl','source_url','source_title','capture_method','extension_version','history.get'] as $required)if(!str_contains($background,$required))throw new RuntimeException('Extension capture feedback, image handling, provenance, or history is missing '.$required);foreach(['recordCaptureEvent','getCaptureHistory','slice(0, 20)'] as $required)if(!str_contains($storage,$required))throw new RuntimeException('Extension history storage is missing '.$required);if(($manifest['action']['default_area']??null)!=='navbar')throw new RuntimeException('Firefox action does not default to the toolbar');});
-$test('Remote Reddit previews resolve to their canonical original',function(){$service=new Catch\Services\RemoteContentService();$method=(new ReflectionClass($service))->getMethod('canonicalImageUrl');$preview='https://preview.redd.it/example-v0-ols9a6zsjoqg1.png?width=307';if($method->invoke($service,$preview)!=='https://i.redd.it/ols9a6zsjoqg1.png')throw new RuntimeException('Reddit preview URL was not normalized');});
-$test('Browser labels distinguish common desktop clients',function(){$firefox=Catch\Services\BrowserInfo::fromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0');$edge=Catch\Services\BrowserInfo::fromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0 Safari/537.36 Edg/150.0');if($firefox['label']!=='Firefox on Windows'||$edge['label']!=='Microsoft Edge on Windows')throw new RuntimeException('Browser labels are not specific enough');});
-$test('Catch numbers are durable per-user references',function()use($root){$migration=(string)file_get_contents($root.'/database/migrations/002_capture_numbers.sql');foreach(['next_catch_number','ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at, id)','UNIQUE KEY uq_captures_user_number (user_id, catch_number)'] as $required)if(!str_contains($migration,$required))throw new RuntimeException('Capture number migration is incomplete: '.$required);$repository=(string)file_get_contents($root.'/app/Repositories/CaptureRepository.php');if(!str_contains($repository,'FOR UPDATE')||!str_contains($repository,'next_catch_number=next_catch_number+1'))throw new RuntimeException('Catch number allocation is not transaction-safe');$controller=(string)file_get_contents($root.'/app/Controllers/Api/CaptureController.php');if(!str_contains($controller,"Response::shortcut('', (string) \$capture['catch_number']")||!str_contains($controller,"'catch_number' => (int) \$capture['catch_number']"))throw new RuntimeException('Capture APIs do not return catch numbers');$spec=json_decode((string)file_get_contents($root.'/public/docs/api/openapi.json'),true,512,JSON_THROW_ON_ERROR);if(($spec['components']['schemas']['CatchNumber']['readOnly']??false)!==true||!in_array('catch_number',$spec['components']['schemas']['CreateCaptureResponse']['required']??[],true))throw new RuntimeException('OpenAPI does not expose catch numbers');});
-$test('Swagger UI is fully local',function()use($root){$index=(string)file_get_contents($root.'/public/docs/api/index.html');foreach(['swagger-ui.css','swagger-ui-bundle.js','swagger-ui-standalone-preset.js','LICENSE'] as $asset)if(!is_file($root.'/public/vendor/swagger-ui/'.$asset))throw new RuntimeException('Missing Swagger UI vendor asset: '.$asset);if(!str_contains($index,'/vendor/swagger-ui/')||preg_match('/(?:src|href)=["\']https?:/i',$index))throw new RuntimeException('Swagger UI has an external runtime dependency');});
-exit($failures?1:0);
+$test('Capture validation requires content', function () {
+    $errors = (new Catch\Validation\CaptureValidator())->validate(['client_capture_id' => 'test','type' => 'text']);
+    if (!isset($errors['content'])) {
+        throw new RuntimeException('Content accepted');
+    }
+});
+$test('Capture validation accepts text', function () {
+    $errors = (new Catch\Validation\CaptureValidator())->validate(['client_capture_id' => 'test','type' => 'text','text' => 'Hello']);
+    if ($errors) {
+        throw new RuntimeException(json_encode($errors));
+    }
+});
+$test('Unknown captures resolve content and reject unsafe attachments', function () use ($root) {
+    $config = Catch\Core\Config::load($root);
+    $uploads = new Catch\Services\UploadService($config, sys_get_temp_dir());
+    $service = new Catch\Services\CaptureService(new Catch\Core\Database($config), new Catch\Validation\CaptureValidator(), $uploads);
+    $normalize = (new ReflectionClass($service))->getMethod('normalizeUnknownInput');
+    $url = $normalize->invoke($service, ['type' => 'unknown','text' => 'https://example.com/article','extracted_text' => 'https://example.com/article'], []);
+    if ($url['type'] !== 'url' || $url['url'] !== 'https://example.com/article' || $url['text'] !== null) {
+        throw new RuntimeException('A lone URL was not promoted');
+    }
+    $text = $normalize->invoke($service, ['type' => 'unknown','text' => 'First line' . PHP_EOL . 'Second line','extracted_text' => 'First line Second line'], []);
+    if ($text['type'] !== 'text' || $text['title'] !== 'First line' || $text['extracted_text'] !== 'First line Second line') {
+        throw new RuntimeException('Text was not classified without destroying OCR output');
+    }
+    $ocr = $normalize->invoke($service, ['type' => 'unknown','extracted_text' => 'Recognized date: tomorrow'], []);
+    if ($ocr['type'] !== 'text' || $ocr['text'] !== 'Recognized date: tomorrow') {
+        throw new RuntimeException('OCR-only input was not preserved as text');
+    }
+    $png = tempnam(sys_get_temp_dir(), 'catch-unknown-png-');
+    $pdf = tempnam(sys_get_temp_dir(), 'catch-unknown-pdf-');
+    $wav = tempnam(sys_get_temp_dir(), 'catch-unknown-wav-');
+    $plain = tempnam(sys_get_temp_dir(), 'catch-unknown-txt-');
+    try {
+        file_put_contents($png, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='));
+        file_put_contents($pdf, "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF");
+        file_put_contents($wav, base64_decode('UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='));
+        file_put_contents($plain, 'not an image');
+        $imageFile = ['attachment' => ['name' => 'pixel.png','tmp_name' => $png,'error' => UPLOAD_ERR_OK,'size' => filesize($png)]];
+        $image = $normalize->invoke($service, ['type' => 'unknown','extracted_text' => 'pixel'], $imageFile);
+        if ($image['type'] !== 'image' || $image['title'] !== 'pixel.png') {
+            throw new RuntimeException('Image input was not classified');
+        }
+        $mixed = $normalize->invoke($service, ['type' => 'unknown','text' => 'Context'], $imageFile);
+        if ($mixed['type'] !== 'mixed') {
+            throw new RuntimeException('Text plus image was not classified as mixed');
+        }
+        $pdfFile = ['attachment' => ['name' => 'paper.pdf','tmp_name' => $pdf,'error' => UPLOAD_ERR_OK,'size' => filesize($pdf)]];
+        $document = $normalize->invoke($service, ['type' => 'unknown','extracted_text' => 'Thesis OCR'], $pdfFile);
+        if ($document['type'] !== 'file' || $document['title'] !== 'paper.pdf') {
+            throw new RuntimeException('PDF input was not classified');
+        }
+        $audioFile = ['attachment' => ['name' => 'memo.wav','tmp_name' => $wav,'error' => UPLOAD_ERR_OK,'size' => filesize($wav)]];
+        $audio = $normalize->invoke($service, ['type' => 'unknown','extracted_text' => 'Call Alice tomorrow'], $audioFile);
+        if ($audio['type'] !== 'audio' || $audio['title'] !== 'memo.wav' || $audio['extracted_text'] !== 'Call Alice tomorrow' || isset($audio['text'])) {
+            throw new RuntimeException('Audio input was not classified without preserving the recording as the source');
+        }
+        $unsafe = ['attachment' => ['name' => 'notes.txt','tmp_name' => $plain,'error' => UPLOAD_ERR_OK,'size' => filesize($plain)]];
+        try {
+            $normalize->invoke($service, ['type' => 'unknown','text' => 'Context'], $unsafe);
+            throw new RuntimeException('Unsafe attachment was accepted');
+        } catch (InvalidArgumentException $error) {
+            $fields = json_decode($error->getMessage(), true);
+            $message = (string)($fields['attachment'] ?? '');
+            if (!str_contains($message, 'text/plain') || !str_contains($message, '.txt')) {
+                throw $error;
+            }
+        }
+        $tinyRoot = sys_get_temp_dir() . '/catch-unknown-config-' . bin2hex(random_bytes(4));
+        mkdir($tinyRoot . '/config', 0777, true);
+        file_put_contents($tinyRoot . '/config/config.ini', "[uploads]\nmax_bytes=10\nallowed_mime=\"image/png,application/pdf\"\n");
+        try {
+            $tinyUploads = new Catch\Services\UploadService(Catch\Core\Config::load($tinyRoot), sys_get_temp_dir());
+            try {
+                $tinyUploads->inspectUnknownAttachment($imageFile['attachment']);
+                throw new RuntimeException('Oversized attachment was accepted');
+            } catch (RuntimeException $error) {
+                if (!str_contains($error->getMessage(), 'upload limit')) {
+                    throw $error;
+                }
+            }
+        } finally {
+            @unlink($tinyRoot . '/config/config.ini');
+            @rmdir($tinyRoot . '/config');
+            @rmdir($tinyRoot);
+        }
+    } finally {
+        @unlink($png);
+        @unlink($pdf);
+        @unlink($wav);
+        @unlink($plain);
+    }
+    $spec = json_decode((string)file_get_contents($root . '/public/docs/api/openapi.json'), true, 512, JSON_THROW_ON_ERROR);
+    if (!in_array('unknown', $spec['components']['schemas']['CaptureType']['enum'] ?? [], true) || in_array('unknown', $spec['components']['schemas']['StoredCaptureType']['enum'] ?? [], true)) {
+        throw new RuntimeException('OpenAPI does not distinguish unknown input from stored types');
+    }
+});
+$test('Prerelease access permits only the configured Sorkos user', function () use ($root) {
+    $directory = sys_get_temp_dir() . '/catch-access-' . bin2hex(random_bytes(6));
+    mkdir($directory . '/config', 0777, true);
+    file_put_contents($directory . '/config/config.ini', "[access]\nprerelease=true\nallowed_sorkos_user_id=usr_allowed\n");
+    $policy = new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));
+    if (!$policy->allowsSorkosUserId('usr_allowed') || $policy->allowsSorkosUserId('usr_other') || $policy->allowsSorkosUserId('')) {
+        throw new RuntimeException('Prerelease allowlist failed');
+    }unlink($directory . '/config/config.ini');
+    rmdir($directory . '/config');
+    rmdir($directory);
+});
+$test('Released access does not require an allowlist', function () use ($root) {
+    $directory = sys_get_temp_dir() . '/catch-access-' . bin2hex(random_bytes(6));
+    mkdir($directory . '/config', 0777, true);
+    file_put_contents($directory . '/config/config.ini', "[access]\nprerelease=false\n");
+    $policy = new Catch\Core\AccessPolicy(Catch\Core\Config::load($directory));
+    if (!$policy->allowsSorkosUserId('usr_any')) {
+        throw new RuntimeException('Released access was denied');
+    }unlink($directory . '/config/config.ini');
+    rmdir($directory . '/config');
+    rmdir($directory);
+});
+$test('Auth exchange is compatible with PHP 8.5', function () use ($root) {
+    $source = (string)file_get_contents($root . '/app/Services/AuthService.php');
+    if (str_contains($source, 'curl_' . 'close(')) {
+        throw new RuntimeException('Deprecated cURL close call found');
+    }
+});
+$test('Shortcut responses expose exactly one flat string', function () {
+    $success = Catch\Http\Response::shortcutPayload('', 'capture-id');
+    $failure = Catch\Http\Response::shortcutPayload('Failed.', '');
+    if ($success !== ['result' => 'capture-id'] || $failure !== ['error' => 'Failed.']) {
+        throw new RuntimeException('Invalid shortcut response envelope');
+    }foreach ([['',''],['Failed.','capture-id']] as [$error,$result]) {
+        try {
+            Catch\Http\Response::shortcutPayload($error, $result);
+            throw new RuntimeException('Ambiguous shortcut response accepted');
+        } catch (LogicException) {
+        }
+    }
+});
+$test('Capture ID fallback preserves client precedence and rejects device tokens', function () {
+    $class = new ReflectionClass(Catch\Controllers\Api\CaptureController::class);
+    $controller = $class->newInstanceWithoutConstructor();
+    $method = $class->getMethod('clientCaptureId');
+    if ($method->invoke($controller, 'manual-id', 'header-id') !== 'manual-id') {
+        throw new RuntimeException('Body capture ID did not take precedence');
+    }if ($method->invoke($controller, null, 'header-id') !== 'header-id') {
+        throw new RuntimeException('Idempotency key was not used');
+    }foreach ([[null,null],['',''],['catch_device_secret',null],[null,'catch_device_secret']] as $values) {
+        $generated = $method->invoke($controller, ...$values);
+        if (!preg_match('/^client_capture_[0-9a-f]{32}$/', $generated)) {
+            throw new RuntimeException('Safe random capture ID was not generated');
+        }
+    }
+});
+$test('Pairing codes are ten numeric digits', function () {
+    $class = new ReflectionClass(Catch\Repositories\DeviceRepository::class);
+    $repository = $class->newInstanceWithoutConstructor();
+    $generate = $class->getMethod('newCode');
+    $normalize = $class->getMethod('normalizeCode');
+    for ($i = 0;$i < 100;$i++) {
+        [$plain,$display] = $generate->invoke($repository);
+        if (!preg_match('/^[1-9]\d{9}$/', $plain) || !preg_match('/^[1-9]\d{4} \d{5}$/', $display) || $normalize->invoke($repository, $display) !== $plain) {
+            throw new RuntimeException('Invalid numeric pairing code');
+        }
+    }foreach (['1234567890','12345 67890','12345-67890'] as $valid) {
+        if ($normalize->invoke($repository, $valid) !== '1234567890') {
+            throw new RuntimeException('Valid pairing code rejected');
+        }
+    }foreach (['0123456789','123456789','12345678901','12345A6789'] as $invalid) {
+        if ($normalize->invoke($repository, $invalid) !== null) {
+            throw new RuntimeException('Invalid pairing code accepted');
+        }
+    }if (Catch\Repositories\DeviceRepository::PAIRING_CODE_TTL_MINUTES !== 15) {
+        throw new RuntimeException('Unexpected pairing code lifetime');
+    }
+});
+$test('Extension pairing keeps tokens out of approval URLs', function () use ($root) {
+    $migration = (string)file_get_contents($root . '/database/migrations/003_extension_pairing.sql');
+    foreach (['code_challenge CHAR(43)','token_encrypted TEXT','expires_at DATETIME(6)'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Extension pairing migration is missing ' . $required);
+        }
+    }
+    $controller = (string)file_get_contents($root . '/app/Controllers/Api/ExtensionController.php');
+    if (
+        !str_contains($controller, "http_build_query(['request' => \$pairing['request_id']]")
+        || str_contains($controller, "http_build_query(['device_token' =>")
+    ) {
+        throw new RuntimeException('Approval URL does not contain only the short-lived request ID');
+    }
+    $background = (string)file_get_contents($root . '/extension/src/background.js');
+    $browser = (string)file_get_contents($root . '/extension/src/shared/browser.js');
+    if (!str_contains($background, "crypto.subtle.digest('SHA-256'") || !str_contains($browser, 'storage.local')) {
+        throw new RuntimeException('Extension verifier or extension storage is missing');
+    }
+});
+$test('OpenAPI documents every public machine route', function () use ($root) {
+    $source = (string)file_get_contents($root . '/app/Core/Application.php');
+    preg_match_all("/\\\$f3->route\\('([A-Z]+) ([^']+)'/", $source, $matches, PREG_SET_ORDER);
+    $routes = [];
+    foreach ($matches as $match) {
+        if ($match[2] !== '/health' && !str_starts_with($match[2], '/api/')) {
+            continue;
+        }$path = preg_replace('/@([A-Za-z_][A-Za-z0-9_]*)/', '{$1}', $match[2]);
+        $routes[] = $match[1] . ' ' . $path;
+    }$spec = json_decode((string)file_get_contents($root . '/public/docs/api/openapi.json'), true, 512, JSON_THROW_ON_ERROR);
+    $documented = [];
+    foreach ($spec['paths'] as $path => $methods) {
+        foreach ($methods as $method => $operation) {
+            if (in_array($method, ['get','post','put','patch','delete'], true)) {
+                $documented[] = strtoupper($method) . ' ' . $path;
+            }
+        }
+    }sort($routes);
+    sort($documented);
+    if ($routes !== $documented) {
+        throw new RuntimeException('OpenAPI route inventory differs from Application routes: ' . json_encode(['routes' => $routes,'documented' => $documented]));
+    }
+});
+$test('Capture aliases document their respective multipart attachment shapes', function () use ($root) {
+    $spec = json_decode((string)file_get_contents($root . '/public/docs/api/openapi.json'), true, 512, JSON_THROW_ON_ERROR);
+    $shortcut = $spec['paths']['/api/shortcut/captures']['post']['requestBody']['$ref'] ?? null;
+    $versioned = $spec['paths']['/api/v1/captures']['post']['requestBody']['$ref'] ?? null;
+    if ($shortcut !== '#/components/requestBodies/ShortcutCaptureRequest' || $versioned !== '#/components/requestBodies/CaptureRequest') {
+        throw new RuntimeException('Capture aliases use the wrong request bodies');
+    }$shortcutContent = $spec['components']['requestBodies']['ShortcutCaptureRequest']['content'] ?? [];
+    $versionedContent = $spec['components']['requestBodies']['CaptureRequest']['content'] ?? [];
+    if (array_key_first($shortcutContent) !== 'multipart/form-data' || array_key_first($versionedContent) !== 'multipart/form-data') {
+        throw new RuntimeException('Multipart form data is not the default documented capture format');
+    }$shortcutProperties = $shortcutContent['multipart/form-data']['schema']['allOf'][1]['properties'] ?? [];
+    $versionedProperties = $versionedContent['multipart/form-data']['schema']['allOf'][1]['properties'] ?? [];
+    if (($shortcutProperties['attachment']['format'] ?? null) !== 'binary' || isset($shortcutProperties['attachments[]']) || !isset($versionedProperties['attachments[]'])) {
+        throw new RuntimeException('Shortcut and versioned attachment fields are not distinct');
+    }$controllerClass = new ReflectionClass(Catch\Controllers\Api\CaptureController::class);
+    $controller = $controllerClass->newInstanceWithoutConstructor();
+    $count = $controllerClass->getMethod('uploadedFileCount');
+    $two = ['attachments' => ['error' => [UPLOAD_ERR_OK,UPLOAD_ERR_OK]]];
+    if ($count->invoke($controller, $two) !== 2) {
+        throw new RuntimeException('Shortcut multi-file enforcement cannot count uploads');
+    }$typeDescription = $spec['components']['schemas']['CaptureType']['description'] ?? '';
+    $textDescription = $spec['components']['schemas']['CaptureInput']['properties']['text']['description'] ?? '';
+    $extractedDescription = $spec['components']['schemas']['CaptureInput']['properties']['extracted_text']['description'] ?? '';
+    if (!str_contains($typeDescription, 'voice-to-text') || !str_contains($textDescription, 'voice-to-text') || !str_contains($extractedDescription, 'does not satisfy')) {
+        throw new RuntimeException('Voice-to-text field semantics are not documented');
+    }
+});
+$test('OpenAPI documents verifier-protected extension pairing', function () use ($root) {
+    $spec = json_decode((string)file_get_contents($root . '/public/docs/api/openapi.json'), true, 512, JSON_THROW_ON_ERROR);
+    foreach (['/api/extension/pairing-requests','/api/extension/pairing-requests/{request}/exchange','/api/extension/disconnect'] as $path) {
+        if (!isset($spec['paths'][$path]['post'])) {
+            throw new RuntimeException('Missing extension endpoint ' . $path);
+        }
+    }$challenge = $spec['components']['schemas']['ExtensionPairingStartRequest']['properties']['code_challenge'] ?? [];
+    if (($challenge['minLength'] ?? 0) !== 43 || ($challenge['maxLength'] ?? 0) !== 43) {
+        throw new RuntimeException('Code challenge constraints are missing');
+    }
+});
+$test('Extension pairing failures are logged and service-safe', function () use ($root) {
+    $controller = (string)file_get_contents($root . '/app/Controllers/Api/ExtensionController.php');
+    foreach (['pairing_unavailable','storage/logs/extension.log','503'] as $required) {
+        if (!str_contains($controller, $required)) {
+            throw new RuntimeException('Extension pairing failure handling is missing ' . $required);
+        }
+    }
+});
+$test('Capture provenance migration links devices without deleting history', function () use ($root) {
+    $migration = (string)file_get_contents($root . '/database/migrations/004_capture_provenance.sql');
+    foreach (['client_type ENUM','user_agent VARCHAR(500)','device_id CHAR(36)','ON DELETE SET NULL'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Capture provenance migration is missing ' . $required);
+        }
+    }$repository = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
+    foreach (['DELETE FROM catch_device_tokens','UPDATE catch_devices SET status=','ensureWebDevice'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('Device revocation or web registration is missing ' . $required);
+        }
+    }
+});
+$test('Extension validates revoked connections and supports images', function () use ($root) {
+    $application = (string)file_get_contents($root . '/app/Core/Application.php');
+    $background = (string)file_get_contents($root . '/extension/src/background.js');
+    $storage = (string)file_get_contents($root . '/extension/src/shared/storage.js');
+    $manifest = json_decode((string)file_get_contents($root . '/extension/manifest.firefox.json'), true, 512, JSON_THROW_ON_ERROR);
+    if (!str_contains($application, 'GET /api/extension/connection')) {
+        throw new RuntimeException('Connection validation endpoint is missing');
+    }foreach (['catch-image','feedback.toast','remoteAttachmentUrl','source_url','source_title','capture_method','extension_version','history.get'] as $required) {
+        if (!str_contains($background, $required)) {
+            throw new RuntimeException('Extension capture feedback, image handling, provenance, or history is missing ' . $required);
+        }
+    }foreach (['recordCaptureEvent','getCaptureHistory','slice(0, 20)'] as $required) {
+        if (!str_contains($storage, $required)) {
+            throw new RuntimeException('Extension history storage is missing ' . $required);
+        }
+    }if (($manifest['action']['default_area'] ?? null) !== 'navbar') {
+        throw new RuntimeException('Firefox action does not default to the toolbar');
+    }
+});
+$test('Remote Reddit previews resolve to their canonical original', function () {
+    $service = new Catch\Services\RemoteContentService();
+    $method = (new ReflectionClass($service))->getMethod('canonicalImageUrl');
+    $preview = 'https://preview.redd.it/example-v0-ols9a6zsjoqg1.png?width=307';
+    if ($method->invoke($service, $preview) !== 'https://i.redd.it/ols9a6zsjoqg1.png') {
+        throw new RuntimeException('Reddit preview URL was not normalized');
+    }
+});
+$test('Browser labels distinguish common desktop clients', function () {
+    $firefox = Catch\Services\BrowserInfo::fromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0');
+    $edge = Catch\Services\BrowserInfo::fromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0 Safari/537.36 Edg/150.0');
+    if ($firefox['label'] !== 'Firefox on Windows' || $edge['label'] !== 'Microsoft Edge on Windows') {
+        throw new RuntimeException('Browser labels are not specific enough');
+    }
+});
+$test('Catch numbers are durable per-user references', function () use ($root) {
+    $migration = (string)file_get_contents($root . '/database/migrations/002_capture_numbers.sql');
+    foreach (['next_catch_number','ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at, id)','UNIQUE KEY uq_captures_user_number (user_id, catch_number)'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Capture number migration is incomplete: ' . $required);
+        }
+    }$repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    if (!str_contains($repository, 'FOR UPDATE') || !str_contains($repository, 'next_catch_number = next_catch_number + 1')) {
+        throw new RuntimeException('Catch number allocation is not transaction-safe');
+    }$controller = (string)file_get_contents($root . '/app/Controllers/Api/CaptureController.php');
+    if (!str_contains($controller, "Response::shortcut('', (string) \$capture['catch_number']") || !str_contains($controller, "'catch_number' => (int) \$capture['catch_number']")) {
+        throw new RuntimeException('Capture APIs do not return catch numbers');
+    }$spec = json_decode((string)file_get_contents($root . '/public/docs/api/openapi.json'), true, 512, JSON_THROW_ON_ERROR);
+    if (($spec['components']['schemas']['CatchNumber']['readOnly'] ?? false) !== true || !in_array('catch_number', $spec['components']['schemas']['CreateCaptureResponse']['required'] ?? [], true)) {
+        throw new RuntimeException('OpenAPI does not expose catch numbers');
+    }
+});
+$test('Inbox bulk delete is confirmed and permanently removes related data', function () use ($root) {
+    $application = (string)file_get_contents($root . '/app/Core/Application.php');
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
+    $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/index.php');
+    $list = (string)file_get_contents($root . '/app/Views/captures/_list.php');
+    $script = (string)file_get_contents($root . '/public/assets/js/capture-bulk.js');
+    $style = (string)file_get_contents($root . '/public/assets/css/capture-bulk.css');
+    foreach (['POST /captures/bulk-delete','bulkDelete'] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('Bulk delete route is missing ' . $required);
+        }
+    }foreach (['attachmentFilesDeletable','removeAttachmentFiles','unlink(','flash_success'] as $required) {
+        if (!str_contains($controller, $required)) {
+            throw new RuntimeException('Bulk deletion does not safely remove attachment files or report success: ' . $required);
+        }
+    }foreach (['DELETE FROM catch_captures','FOR UPDATE','beginTransaction','rollBack'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('Bulk database deletion is not permanent or transactional: ' . $required);
+        }
+    }foreach (['data-bulk-delete-dialog','This action cannot be undone','data-bulk-actions'] as $required) {
+        if (!str_contains($view, $required)) {
+            throw new RuntimeException('Bulk confirmation UI is missing ' . $required);
+        }
+    }foreach (['name="capture_ids[]"','form="<?=htmlspecialchars($bulkFormId)?>"'] as $required) {
+        if (!str_contains($list, $required)) {
+            throw new RuntimeException('Capture selections are not associated with the bulk form');
+        }
+    }foreach (['showModal','form.hidden=total===0','requestSubmit'] as $required) {
+        if (!str_contains($script, $required)) {
+            throw new RuntimeException('Bulk visibility or confirmation behavior is missing ' . $required);
+        }
+    }if (!str_contains($style, 'position:sticky') || !str_contains($style, 'justify-content:flex-end')) {
+        throw new RuntimeException('Bulk action bar is not sticky and right aligned');
+    }
+});
+$test('Lists group captures many-to-many and appear in capture details', function () use ($root) {
+    $migration = (string)file_get_contents($root . '/database/migrations/005_lists.sql');
+    $application = (string)file_get_contents($root . '/app/Core/Application.php');
+    $repository = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
+    $captureRepository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $detail = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $index = (string)file_get_contents($root . '/app/Views/lists/index.php');
+    foreach (['catch_lists','catch_capture_lists','PRIMARY KEY (capture_id, list_id)','ON DELETE CASCADE'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('List migration is incomplete: ' . $required);
+        }
+    }foreach (['GET /lists','POST /captures/@id/lists','ListController'] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('List routes are incomplete: ' . $required);
+        }
+    }foreach (['top_capture_title','capture_count','INSERT IGNORE INTO catch_capture_lists'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('List repository is incomplete: ' . $required);
+        }
+    }if (!str_contains($captureRepository, 'listByList') || !str_contains($captureRepository, 'listsForCapture')) {
+        throw new RuntimeException('Captures do not expose their lists');
+    }foreach (['data-capture-lists','Add to list','availableLists'] as $required) {
+        if (!str_contains($detail, $required)) {
+            throw new RuntimeException('Capture list selection is incomplete: ' . $required);
+        }
+    }foreach (['list-grid','top_capture_title','capture_count'] as $required) {
+        if (!str_contains($index, $required)) {
+            throw new RuntimeException('List cards are incomplete: ' . $required);
+        }
+    }
+});
+$test('Audio attachments retain transcripts and report rejected MIME details', function () use ($root) {
+    $service = (string)file_get_contents($root . '/app/Services/CaptureService.php');
+    $upload = (string)file_get_contents($root . '/app/Services/UploadService.php');
+    $detail = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    foreach (['hasAudio','extracted_text','UnsupportedAttachmentException'] as $required) {
+        if (!str_contains($service, $required)) {
+            throw new RuntimeException('Audio capture behavior is incomplete: ' . $required);
+        }
+    }foreach (['audio/x-m4a','audio/x-caf','Detected MIME type','file extension'] as $required) {
+        if (!str_contains($upload, $required)) {
+            throw new RuntimeException('Audio MIME support or diagnostics are incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($detail, '<audio controls') || !str_contains($detail, "'Transcript'")) {
+        throw new RuntimeException('Audio detail playback or transcript rendering is missing');
+    }
+});
+$test('Trash is timestamp-based, recoverable, and expires after 30 days', function () use ($root) {
+    $migration = (string)file_get_contents($root . '/database/migrations/006_capture_trash.sql');
+    $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/index.php');
+    foreach (["status='archived'","ENUM('inbox','archived')",'idx_captures_user_deleted'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Trash migration is incomplete: ' . $required);
+        }
+    }
+    foreach (['listTrash','trashMany','restore','expiredTrashIds','DATE_SUB(UTC_TIMESTAMP(6), INTERVAL','deleted_at IS NOT NULL'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('Trash repository behavior is incomplete: ' . $required);
+        }
+    }foreach (['purgeExpiredTrash','purgeCaptures','Move to Trash','30 days'] as $required) {
+        if (!str_contains($controller . $view, $required)) {
+            throw new RuntimeException('Trash lifecycle or UI is incomplete: ' . $required);
+        }
+    }
+});
+$test('List membership controls the active capture state', function () use ($root) {
+    $repository = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
+    $migration = (string)file_get_contents($root . '/database/migrations/007_reconcile_list_capture_states.sql');
+    foreach (["status='archived'",'archived_at=COALESCE','NOT EXISTS(SELECT 1 FROM catch_capture_lists',"status='inbox'",'archived_at=NULL'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('List state transition is incomplete: ' . $required);
+        }
+    }if (!str_contains($migration, 'EXISTS (SELECT 1 FROM catch_capture_lists')) {
+        throw new RuntimeException('Existing list members are not reconciled');
+    }
+});
+$test('Capture detail supports quiet in-place editing and global request progress', function () use ($root) {
+    $application = (string)file_get_contents($root . '/app/Core/Application.php');
+    $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $editing = (string)file_get_contents($root . '/public/assets/js/capture-edit.js');
+    $progress = (string)file_get_contents($root . '/public/assets/js/request-progress.js');
+    $style = (string)file_get_contents($root . '/public/assets/css/capture-detail.css');
+    if (!str_contains($application, 'POST /captures/@id') || !str_contains($repository, 'updateEditableField')) {
+        throw new RuntimeException('Capture update endpoint is missing');
+    }foreach (['data-capture-field="title"','data-capture-field="text"','data-capture-field="extracted_text"','data-capture-field="url"'] as $required) {
+        if (!str_contains($view, $required)) {
+            throw new RuntimeException('Editable detail field is missing: ' . $required);
+        }
+    }foreach (["event.key==='Enter'",'addEventListener(\'blur\'','fetch(`/captures/','setValue(element,before)'] as $required) {
+        if (!str_contains($editing, $required)) {
+            throw new RuntimeException('In-place save behavior is incomplete: ' . $required);
+        }
+    }if (!str_contains($progress, 'window.fetch=async') || !str_contains($style, 'position:fixed;inset:0 0 auto') || !str_contains($style, 'height:4px')) {
+        throw new RuntimeException('Global async progress indicator is incomplete');
+    }
+});
+$test('Capture lists use membership truth and a batch assignment dialog', function () use ($root) {
+    $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $lists = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/ListController.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $script = (string)file_get_contents($root . '/public/assets/js/capture-lists.js');
+    if (str_contains($repository, 'c.status=:status AND c.deleted_at IS NULL AND cl.list_id=:list')) {
+        throw new RuntimeException('List detail still hides members by capture status');
+    }foreach (['syncAssignments','list_ids','capture_status'] as $required) {
+        if (!str_contains($lists . $controller, $required)) {
+            throw new RuntimeException('Batch list assignment is incomplete: ' . $required);
+        }
+    }foreach (['data-list-dialog','data-list-form','data-assigned-lists','Add to list'] as $required) {
+        if (!str_contains($view, $required)) {
+            throw new RuntimeException('List assignment dialog is incomplete: ' . $required);
+        }
+    }if (!str_contains($script, 'renderLists') || !str_contains($script, 'showModal')) {
+        throw new RuntimeException('List dialog behavior is incomplete');
+    }
+});
+$test('Devices expose capture counts, last use time, and capture history', function () use ($root) {
+    $devices = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
+    $captures = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
+    $index = (string)file_get_contents($root . '/app/Views/devices/index.php');
+    $detail = (string)file_get_contents($root . '/app/Views/devices/show.php');
+    foreach (['capture_count','capture_last_used_at','MAX(c.created_at)'] as $required) {
+        if (!str_contains($devices, $required)) {
+            throw new RuntimeException('Device summary query is incomplete: ' . $required);
+        }
+    }if (!str_contains($captures, 'listByDevice') || !str_contains($controller, 'listByDevice')) {
+        throw new RuntimeException('Device capture history query is missing');
+    }foreach (['capture_count','last_seen_at','Last used:'] as $required) {
+        if (!str_contains($index, $required)) {
+            throw new RuntimeException('Device list summary is missing: ' . $required);
+        }
+    }if (!str_contains($detail, 'Captures from this device')) {
+        throw new RuntimeException('Device detail capture history is missing');
+    }
+});
+$test('Device types drive icons and remain editable', function () use ($root) {
+    $migration = (string)file_get_contents($root . '/database/migrations/008_device_types.sql') . (string)file_get_contents($root . '/database/migrations/009_refine_device_type_guesses.sql');
+    $repository = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
+    $index = (string)file_get_contents($root . '/app/Views/devices/index.php');
+    $detail = (string)file_get_contents($root . '/app/Views/devices/show.php');
+    foreach (["ENUM('laptop','phone','pc','tablet')","DEFAULT 'pc'",'%iphone%',"'%ipad%'"] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Device type migration is incomplete: ' . $required);
+        }
+    }
+    foreach (['deviceType(', 'device_type = :device_type'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('Device type inference or update is missing: ' . $required);
+        }
+    }if (!str_contains($controller, "\$_POST['device_type']")) {
+        throw new RuntimeException('Device type is not accepted by the rename action');
+    }
+    foreach (['glyph-<?= htmlspecialchars($deviceType) ?>','Last used:','capture_count'] as $required) {
+        if (!str_contains($index, $required)) {
+            throw new RuntimeException('Device list type or usage UI is incomplete: ' . $required);
+        }
+    }foreach (['device-type-picker','name="device_type"','Last used','Captures from this device'] as $required) {
+        if (!str_contains($detail, $required)) {
+            throw new RuntimeException('Device detail type or usage UI is incomplete: ' . $required);
+        }
+    }
+});
+$test('Requested interface icons and danger outline are used consistently', function () use ($root) {
+    $capture = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $inbox = (string)file_get_contents($root . '/app/Views/captures/index.php');
+    $list = (string)file_get_contents($root . '/app/Views/lists/captures.php');
+    $views = '';
+    foreach (glob($root . '/app/Views/*/*.php') as $path) {
+        $views .= (string)file_get_contents($path);
+    }foreach (['glyph-capture','glyph-list','glyph-archive','glyph-trash'] as $required) {
+        if (!str_contains($capture, $required)) {
+            throw new RuntimeException('Capture detail icon is missing: ' . $required);
+        }
+    }foreach (['glyph-inbox','glyph-archive','glyph-trash'] as $required) {
+        if (!str_contains($inbox, $required)) {
+            throw new RuntimeException('Capture tab icon is missing: ' . $required);
+        }
+    }if (!str_contains($list, 'glyph-list')) {
+        throw new RuntimeException('List heading icon is missing');
+    }if (preg_match('/button-danger(?!-outline)/', $views)) {
+        throw new RuntimeException('A filled danger button remains');
+    }
+});
+$test('Scrolling remains browser-native and progress uses the primary color', function () use ($root) {
+    $layout = (string)file_get_contents($root . '/app/Views/layout.php');
+    $app = (string)file_get_contents($root . '/public/assets/js/app.js');
+    $style = (string)file_get_contents($root . '/public/assets/css/capture-detail.css');
+    if (str_contains($layout . $app, 'page-scrollbar')) {
+        throw new RuntimeException('Custom page scrolling is still installed');
+    }if (!str_contains($style, 'background:var(--primary)')) {
+        throw new RuntimeException('Request progress does not use the primary color');
+    }
+});
+$test('View data can expose capture status without colliding with the HTTP status', function () use ($root) {
+    $view = (string)file_get_contents($root . '/app/Core/View.php');
+    if (!str_contains($view, 'int $httpStatus = 200') || !str_contains($view, 'http_response_code($httpStatus)')) {
+        throw new RuntimeException('View status data is still shadowed by the response parameter');
+    }
+});
+$test('Swagger UI is fully local', function () use ($root) {
+    $index = (string)file_get_contents($root . '/public/docs/api/index.html');
+    foreach (['swagger-ui.css','swagger-ui-bundle.js','swagger-ui-standalone-preset.js','LICENSE'] as $asset) {
+        if (!is_file($root . '/public/vendor/swagger-ui/' . $asset)) {
+            throw new RuntimeException('Missing Swagger UI vendor asset: ' . $asset);
+        }
+    }if (!str_contains($index, '/vendor/swagger-ui/') || preg_match('/(?:src|href)=["\']https?:/i', $index)) {
+        throw new RuntimeException('Swagger UI has an external runtime dependency');
+    }
+});
+exit($failures ? 1 : 0);
