@@ -105,6 +105,7 @@ final class Application
         $f3->route('POST /captures/bulk-lists', [$listController,'bulkAssign']);
         $f3->route('GET /captures/@id', [$web,'show']);
         $f3->route('POST /captures/@id', [$web,'update']);
+        $f3->route('POST /captures/@id/preview', [$web, 'preview']);
         $f3->route('GET /attachments/@id', [$web,'attachment']);
         $f3->route('POST /captures/@id/archive', [$web,'archive']);
         $f3->route('POST /captures/@id/restore', [$web,'restore']);

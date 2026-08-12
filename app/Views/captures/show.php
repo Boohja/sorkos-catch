@@ -43,6 +43,7 @@ if ($capture['type'] === 'audio') {
         }
     }
 }
+$isTrashed = !empty($capture['deleted_at']);
 $previewAttachment = null;
 foreach ($capture['attachments'] as $attachment) {
     if (($attachment['kind'] ?? 'source') === 'preview' && !empty($attachment['available'])) {
@@ -50,6 +51,16 @@ foreach ($capture['attachments'] as $attachment) {
         break;
     }
 }
+$previewFetch = is_array($metadata['link_preview_fetch'] ?? null)
+    ? $metadata['link_preview_fetch']
+    : ['status' => 'pending', 'attempts' => 0];
+$previewRetryAt = strtotime((string)($previewFetch['retry_at'] ?? ''));
+$previewFetchDue = !$previewAttachment
+    && !$isTrashed
+    && !empty($capture['url'])
+    && in_array((string)($previewFetch['status'] ?? 'pending'), ['pending', 'retry'], true)
+    && (int)($previewFetch['attempts'] ?? 0) < 3
+    && ($previewRetryAt === false || $previewRetryAt <= time());
 $textMatchesTitle = $capture['text'] && trim((string)$capture['text']) === trim((string)$capture['title']);
 $urlIsPrimary = !$primaryImage && !empty($capture['url']) && ($capture['type'] === 'url' || empty($capture['text']) || $textMatchesTitle);
 $deviceLabel = trim((string)($capture['device_name'] ?? '')) ?: match((string)$capture['source']) {
@@ -58,13 +69,20 @@ $deviceLabel = trim((string)($capture['device_name'] ?? '')) ?: match((string)$c
 $assignedIds = array_column($capture['tags'] ?? [], 'id');
 $assignedListIds = array_column($capture['lists'] ?? [], 'id');
 $remainingAttachments = array_values(array_filter($capture['attachments'], static fn (array $attachment): bool => ($attachment['kind'] ?? 'source') === 'source' && (!$primaryImage || $attachment['id'] !== $primaryImage['id']) && (!$primaryAudio || $attachment['id'] !== $primaryAudio['id'])));
-$isTrashed = !empty($capture['deleted_at']);
 $trashExpires = $isTrashed ? date('Y-m-d H:i:s', strtotime((string)$capture['deleted_at'] . ' UTC +30 days')) : null;
 $backRoute = $isTrashed ? '/trash' : ($capture['status'] === 'archived' ? '/archive' : '/inbox');
 $backLabel = $isTrashed ? 'Trash' : ($capture['status'] === 'archived' ? 'Archived' : 'Inbox');
 ?>
 <a class="back-link" href="<?=htmlspecialchars($backRoute)?>">&larr; Back to <?=$backLabel?></a>
-<article class="detail" data-capture-detail data-capture-lists data-capture-id="<?=htmlspecialchars($capture['id'])?>" data-csrf="<?=htmlspecialchars($csrf)?>" <?=$capture['title'] ? 'data-has-title="true"' : ''?>>
+<article
+  class="detail"
+  data-capture-detail
+  data-capture-lists
+  data-capture-id="<?=htmlspecialchars($capture['id'])?>"
+  data-csrf="<?=htmlspecialchars($csrf)?>"
+  <?=$capture['title'] ? 'data-has-title="true"' : ''?>
+  <?=$previewFetchDue ? 'data-preview-fetch-due' : ''?>
+>
   <header class="capture-detail-heading">
     <i class="glyph glyph-capture capture-detail-icon" aria-hidden="true"></i><div><h1><span class="capture-heading-number">#<?=(int)$capture['catch_number']?><span data-title-separator <?=empty($capture['title']) ? 'hidden' : ''?>> -</span></span> <span class="<?=$isTrashed ? '' : 'capture-editable'?><?=empty($capture['title']) ? ' is-empty' : ''?>" data-capture-field="title" data-single-line data-placeholder="Add title" role="textbox" aria-label="Capture title" <?=$isTrashed ? '' : 'contenteditable="true"'?>><?=htmlspecialchars((string)$capture['title'])?></span></h1>
     <p class="capture-heading-meta"><time datetime="<?=htmlspecialchars($utc($capture['created_at']))?>" data-local-time data-date-style="medium" data-time-style="short">UTC <?=htmlspecialchars($capture['created_at'])?></time><span class="capture-heading-lists" data-assigned-lists><?php foreach ($capture['lists'] ?? [] as $list): ?><a data-list-id="<?=htmlspecialchars($list['id'])?>" href="<?=htmlspecialchars($list['url'])?>"><?=htmlspecialchars($list['title'])?></a><?php endforeach; ?></span></p></div>

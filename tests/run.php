@@ -864,6 +864,37 @@ $test('URL captures store immutable WebP preview attachments', function () use (
         }
     }
 });
+$test('Link previews are deferred, bounded, and use the social preview identity', function () use ($root) {
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $service = (string) file_get_contents($root . '/app/Services/CaptureService.php');
+    $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
+    $detail = (string) file_get_contents($root . '/app/Views/captures/show.php');
+    $client = (string) file_get_contents($root . '/public/assets/js/capture-preview.js');
+    $devices = (string) file_get_contents($root . '/app/Repositories/DeviceRepository.php');
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+
+    foreach (['link_preview_fetch', "'status' => 'pending'", 'previewFetchIsDue', 'failedPreviewFetchState'] as $required) {
+        if (!str_contains($service, $required)) {
+            throw new RuntimeException('Deferred preview state is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($application, 'POST /captures/@id/preview')
+        || !str_contains($detail, 'data-preview-fetch-due')
+        || !str_contains($client, 'requestIdleCallback')) {
+        throw new RuntimeException('Detail-triggered preview fetching is incomplete');
+    }
+    if (!str_contains($remote, "'Discordbot/2.0'") || !str_contains($remote, 'Accept-Language:')) {
+        throw new RuntimeException('The social preview request identity is incomplete');
+    }
+    if (!str_contains($devices, 'ORDER BY COALESCE(t.last_used_at, d.last_seen_at, d.created_at) DESC')) {
+        throw new RuntimeException('Devices are not sorted by last use');
+    }
+    foreach (['glyph-dots-vertical', 'glyph-table', 'glyph-grid'] as $required) {
+        if (!str_contains($collection, $required)) {
+            throw new RuntimeException('Capture collection icon is missing: ' . $required);
+        }
+    }
+});
 $test('Swagger UI is fully local', function () use ($root) {
     $index = (string)file_get_contents($root . '/public/docs/api/index.html');
     foreach (['swagger-ui.css','swagger-ui-bundle.js','swagger-ui-standalone-preset.js','LICENSE'] as $asset) {

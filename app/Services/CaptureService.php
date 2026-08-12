@@ -27,25 +27,19 @@ final class CaptureService
         $metadata = is_array($input['metadata'] ?? null) ? $input['metadata'] : [];
         $source = (string)($input['source'] ?? 'web');
         $url = trim((string)($input['url'] ?? ''));
-        $linkPreview = null;
-        if (
-            ($input['type'] ?? '') === 'url'
-            && $url !== ''
-            && $this->isHttpUrl($url)
-            && $this->remote
-        ) {
-            try {
-                $linkPreview = $this->remote->linkPreview($url);
-            } catch (\Throwable) {
-                $linkPreview = null;
-            }
+        $repo = new CaptureRepository($this->database->connection());
+        if ($existing = $repo->findByClientId((string) $input['client_capture_id'], $userId)) {
+            return ['capture' => $existing, 'created' => false];
         }
-        if ($linkPreview) {
-            $metadata['link_preview'] = $linkPreview['metadata'];
+
+        if ($url !== '' && $this->isHttpUrl($url) && $this->remote) {
+            $metadata['link_preview_fetch'] = [
+                'status' => 'pending',
+                'attempts' => 0,
+            ];
         }
         if (empty(trim((string)($input['title'] ?? ''))) && $url !== '') {
-            $input['title'] = $this->nullable($linkPreview['metadata']['title'] ?? null)
-                ?: $this->nullable($metadata['link_text'] ?? null);
+            $input['title'] = $this->nullable($metadata['link_text'] ?? null);
         }
         if ($url !== '' && empty($metadata['source_url'])) {
             $metadata['source_url'] = $url;
@@ -60,10 +54,6 @@ final class CaptureService
             $metadata['capture_method'] = $source === 'browser-extension' ? (str_contains((string)($metadata['browser_context'] ?? ''), 'context-menu') ? 'browser-extension-context-menu' : 'browser-extension') : $source;
         }
         $input['metadata'] = $metadata;
-        $repo = new CaptureRepository($this->database->connection());
-        if ($existing = $repo->findByClientId((string)$input['client_capture_id'], $userId)) {
-            return ['capture' => $existing,'created' => false];
-        }
         $remoteImage = !empty($input['remote_attachment_url']) && $this->remote ? $this->remote->image((string)$input['remote_attachment_url']) : null;
         if (!empty($input['remote_attachment_url']) && !$remoteImage) {
             throw new InvalidArgumentException(json_encode(['attachment' => $this->remote?->lastError() ?: 'The image could not be retrieved from the source page.']));
@@ -75,7 +65,7 @@ final class CaptureService
         $data = ['id' => $id,'user_id' => $userId,'device_id' => $deviceId,'client_capture_id' => (string)$input['client_capture_id'],'type' => (string)$input['type'],'title' => $this->nullable($input['title'] ?? null),'text' => $this->nullable($input['text'] ?? null),'url' => $this->nullable($input['url'] ?? null),'extracted_text' => $this->nullable($input['extracted_text'] ?? null),'source' => $source,'metadata_json' => json_encode($input['metadata'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
         $stored = [];
         try {
-            $this->database->transaction(function () use ($repo, &$data, $files, $id, &$stored, $remoteImage, $linkPreview) {
+            $this->database->transaction(function () use ($repo, &$data, $files, $id, &$stored, $remoteImage) {
                 $data['catch_number'] = $repo->nextCatchNumber($data['user_id']);
                 $repo->insert($data);
                 foreach ($this->normalizeFiles($files) as $file) {
@@ -87,17 +77,6 @@ final class CaptureService
                     $attachment = $this->uploads->storeContents($remoteImage['contents'], $remoteImage['name'], $remoteImage['type'], $id);
                     $stored[] = $attachment['storage_name'];
                     $repo->addAttachment($attachment);
-                }
-                if (!empty($linkPreview['image']['contents'])) {
-                    try {
-                        $preview = $this->uploads->storePreview($linkPreview['image']['contents'], $id);
-                        $stored[] = $preview['storage_name'];
-                        $repo->addAttachment($preview);
-                    } catch (\Throwable) {
-                        if (isset($preview['storage_name'])) {
-                            $this->uploads->remove($preview['storage_name']);
-                        }
-                    }
                 }
             });
         } catch (UnsupportedAttachmentException $error) {
@@ -118,6 +97,7 @@ final class CaptureService
         string $captureId,
         string $userId,
         bool $removeOnFailure = false,
+        bool $force = false,
     ): bool {
         if (!$this->remote) {
             return false;
@@ -125,10 +105,20 @@ final class CaptureService
 
         $repo = new CaptureRepository($this->database->connection());
         $capture = $repo->find($captureId, $userId);
-        $url = trim((string) ($capture['url'] ?? ''));
         if (!$capture) {
             return false;
         }
+
+        $url = trim((string) ($capture['url'] ?? ''));
+        $metadata = is_array($capture['metadata'] ?? null) ? $capture['metadata'] : [];
+        $fetch = is_array($metadata['link_preview_fetch'] ?? null)
+            ? $metadata['link_preview_fetch']
+            : ['status' => 'pending', 'attempts' => 0];
+        if (!$force && !$this->previewFetchIsDue($fetch)) {
+            return false;
+        }
+
+        $attempts = min(3, max(0, (int) ($fetch['attempts'] ?? 0)) + 1);
 
         $linkPreview = null;
         if ($this->isHttpUrl($url)) {
@@ -138,15 +128,19 @@ final class CaptureService
                 $linkPreview = null;
             }
         }
-        if (!$linkPreview && !$removeOnFailure) {
-            return false;
-        }
 
-        $metadata = is_array($capture['metadata'] ?? null) ? $capture['metadata'] : [];
         if ($linkPreview) {
             $metadata['link_preview'] = $linkPreview['metadata'];
+            $metadata['link_preview_fetch'] = [
+                'status' => 'complete',
+                'attempts' => $attempts,
+                'attempted_at' => gmdate(DATE_ATOM),
+            ];
         } else {
-            unset($metadata['link_preview']);
+            if ($removeOnFailure) {
+                unset($metadata['link_preview']);
+            }
+            $metadata['link_preview_fetch'] = $this->failedPreviewFetchState($attempts);
         }
 
         $newPreview = null;
@@ -161,7 +155,13 @@ final class CaptureService
             }
         }
 
-        $oldStorageNames = $repo->previewStorageNames($captureId, $userId);
+        $replacePreview = $linkPreview !== null || $removeOnFailure;
+        $oldStorageNames = $replacePreview
+            ? $repo->previewStorageNames($captureId, $userId)
+            : [];
+        $defaultTitle = $this->nullable($capture['title'] ?? null) === null
+            ? $this->nullable($linkPreview['metadata']['title'] ?? null)
+            : null;
         try {
             $this->database->transaction(function () use (
                 $repo,
@@ -169,9 +169,18 @@ final class CaptureService
                 $userId,
                 $metadata,
                 $newPreview,
+                $replacePreview,
+                $defaultTitle,
             ): void {
-                $repo->deletePreviewAttachments($captureId, $userId);
-                $repo->updateMetadata($captureId, $userId, $metadata);
+                if ($replacePreview) {
+                    $repo->deletePreviewAttachments($captureId, $userId);
+                }
+                $repo->updateMetadata(
+                    $captureId,
+                    $userId,
+                    $metadata,
+                    $defaultTitle,
+                );
                 if ($newPreview) {
                     $repo->addAttachment($newPreview);
                 }
@@ -187,7 +196,46 @@ final class CaptureService
             $this->uploads->remove($storageName);
         }
 
-        return $newPreview !== null;
+        return $linkPreview !== null;
+    }
+
+    private function previewFetchIsDue(array $fetch): bool
+    {
+        $status = (string) ($fetch['status'] ?? 'pending');
+        if (in_array($status, ['complete', 'unavailable'], true)) {
+            return false;
+        }
+
+        if ((int) ($fetch['attempts'] ?? 0) >= 3) {
+            return false;
+        }
+
+        $retryAt = strtotime((string) ($fetch['retry_at'] ?? ''));
+
+        return $retryAt === false || $retryAt <= time();
+    }
+
+    private function failedPreviewFetchState(int $attempts): array
+    {
+        $error = $this->remote?->lastError();
+        $retryable = $error !== null && (
+            str_contains($error, 'request failed')
+            || str_contains($error, 'could not be resolved')
+            || preg_match('/HTTP (429|5\d\d)\b/', $error) === 1
+        );
+
+        $state = [
+            'status' => $retryable && $attempts < 3 ? 'retry' : 'unavailable',
+            'attempts' => $attempts,
+            'attempted_at' => gmdate(DATE_ATOM),
+            'error' => $error ?? 'No supported preview metadata was found.',
+        ];
+        if ($state['status'] === 'retry') {
+            $delays = [900, 21600, 86400];
+            $state['retry_at'] = gmdate(DATE_ATOM, time() + $delays[$attempts - 1]);
+        }
+
+        return $state;
     }
     private function nullable(mixed $value): ?string
     {

@@ -10,10 +10,10 @@ $captureEmptyText = $captureEmptyText ?? (($status ?? null) === 'trash'
 <?php if ($captureShowViewToggle && $captures): ?>
   <div class="capture-view-switch" role="group" aria-label="Capture layout" data-capture-view-switch>
     <button type="button" data-capture-view="list" aria-label="List view" aria-pressed="true">
-      <span class="capture-view-icon capture-view-icon-list" aria-hidden="true"></span>
+      <i class="glyph glyph-table" aria-hidden="true"></i>
     </button>
     <button type="button" data-capture-view="grid" aria-label="Grid view" aria-pressed="false">
-      <span class="capture-view-icon capture-view-icon-grid" aria-hidden="true"></span>
+      <i class="glyph glyph-grid" aria-hidden="true"></i>
     </button>
   </div>
 <?php endif; ?>
@@ -141,7 +141,7 @@ $captureEmptyText = $captureEmptyText ?? (($status ?? null) === 'trash'
             data-capture-id="<?=htmlspecialchars($capture['id'])?>"
             data-capture-status="<?=htmlspecialchars($captureStatus)?>"
             data-list-ids="<?=htmlspecialchars(json_encode($assignedListIds, JSON_THROW_ON_ERROR))?>"
-          ><span aria-hidden="true"></span></button>
+          ><i class="glyph glyph-dots-vertical" aria-hidden="true"></i></button>
         <?php endif; ?>
       <?php endif; ?>
     </footer>

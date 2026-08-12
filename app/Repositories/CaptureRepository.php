@@ -279,11 +279,17 @@ final class CaptureRepository
         $query->execute(['capture' => $id, 'user' => $userId]);
     }
 
-    public function updateMetadata(string $id, string $userId, array $metadata): void
-    {
+    public function updateMetadata(
+        string $id,
+        string $userId,
+        array $metadata,
+        ?string $defaultTitle = null,
+    ): void {
         $query = $this->db->prepare(<<<'SQL'
             UPDATE catch_captures
-            SET metadata_json = :metadata, updated_at = UTC_TIMESTAMP(6)
+            SET metadata_json = :metadata,
+                title = COALESCE(NULLIF(title, ''), :default_title),
+                updated_at = UTC_TIMESTAMP(6)
             WHERE id = :id AND user_id = :user
             SQL);
         $query->execute([
@@ -291,6 +297,7 @@ final class CaptureRepository
                 $metadata,
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
             ),
+            'default_title' => $defaultTitle,
             'id' => $id,
             'user' => $userId,
         ]);

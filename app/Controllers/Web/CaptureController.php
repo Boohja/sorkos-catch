@@ -205,6 +205,7 @@ final class CaptureController
                         (string) $params['id'],
                         $user['id'],
                         true,
+                        true,
                     );
                 } catch (Throwable) {
                     // The URL edit remains valid when optional preview generation fails.
@@ -215,6 +216,29 @@ final class CaptureController
             Response::json($result);
         } catch (InvalidArgumentException $error) {
             Response::json(['error' => $error->getMessage()], 422);
+        }
+    }
+
+    public function preview(\Base $f3, array $params): never
+    {
+        $user = $this->user();
+        if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            Response::json(['error' => 'Your session expired. Refresh and try again.'], 419);
+        }
+
+        $capture = $this->captures->find((string) $params['id'], $user['id']);
+        if (!$capture) {
+            Response::json(['error' => 'Capture not found.'], 404);
+        }
+
+        try {
+            $updated = $this->service->refreshLinkPreview(
+                (string) $params['id'],
+                $user['id'],
+            );
+            Response::json(['updated' => $updated]);
+        } catch (Throwable) {
+            Response::json(['updated' => false]);
         }
     }
 

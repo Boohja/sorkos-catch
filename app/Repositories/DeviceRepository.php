@@ -21,8 +21,20 @@ final class DeviceRepository
 
     public function all(string $userId): array
     {
-        $query = $this->db->prepare('SELECT d.*,t.last_used_at,(SELECT COUNT(*) FROM catch_captures c WHERE c.device_id=d.id) capture_count,(SELECT MAX(c.created_at) FROM catch_captures c WHERE c.device_id=d.id) capture_last_used_at FROM catch_devices d LEFT JOIN catch_device_tokens t ON t.device_id=d.id WHERE d.user_id=:user AND d.status<>\'revoked\' ORDER BY d.created_at DESC');
+        $query = $this->db->prepare(<<<'SQL'
+            SELECT d.*,
+                t.last_used_at,
+                (SELECT COUNT(*) FROM catch_captures c WHERE c.device_id = d.id) AS capture_count,
+                (SELECT MAX(c.created_at) FROM catch_captures c WHERE c.device_id = d.id) AS capture_last_used_at
+            FROM catch_devices d
+            LEFT JOIN catch_device_tokens t ON t.device_id = d.id
+            WHERE d.user_id = :user
+                AND d.status <> 'revoked'
+            ORDER BY COALESCE(t.last_used_at, d.last_seen_at, d.created_at) DESC,
+                d.created_at DESC
+            SQL);
         $query->execute(['user' => $userId]);
+
         return $query->fetchAll();
     }
 

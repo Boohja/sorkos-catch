@@ -10,6 +10,7 @@ use DOMXPath;
 final class RemoteContentService
 {
     private const PAGE_LIMIT = 524288;
+    private const LINK_PREVIEW_USER_AGENT = 'Discordbot/2.0';
     private ?string $lastError = null;
     private ?string $lastResolvedUrl = null;
 
@@ -44,6 +45,8 @@ final class RemoteContentService
             $url,
             self::PAGE_LIMIT,
             ['text/html', 'application/xhtml+xml'],
+            self::LINK_PREVIEW_USER_AGENT,
+            true,
         );
         $canonicalUrl = $page['url'] ?? $this->lastResolvedUrl ?? $url;
         $document = $page ? $this->documentMetadata($page['body'], $canonicalUrl) : [];
@@ -77,7 +80,7 @@ final class RemoteContentService
             'image_source_url' => $imageUrl,
         ], static fn (?string $value): bool => $value !== null && $value !== '');
 
-        return count($metadata) > 1 || $image
+        return $title || $description || $author || $image
             ? ['metadata' => $metadata, 'image' => $image]
             : null;
     }
@@ -106,15 +109,20 @@ final class RemoteContentService
     }
 
     /** @return array{body:string,type:string,url:string}|null */
-    private function request(string $url, int $limit, array $allowedTypes): ?array
-    {
+    private function request(
+        string $url,
+        int $limit,
+        array $allowedTypes,
+        string $userAgent = 'Catch link preview/1.0',
+        bool $allowTruncated = false,
+    ): ?array {
         $this->lastError = null;
         $this->lastResolvedUrl = null;
         for ($redirects = 0; $redirects <= 3; $redirects++) {
             $this->lastResolvedUrl = $url;
             $target = $this->safeTarget($url);
             if (!$target) {
-                $this->lastError = 'The remote address is not safe to retrieve.';
+                $this->lastError ??= 'The remote address is not safe to retrieve.';
                 return null;
             }
             $body = '';
@@ -130,8 +138,11 @@ final class RemoteContentService
                 CURLOPT_FOLLOWLOCATION => false,
                 CURLOPT_CONNECTTIMEOUT => 4,
                 CURLOPT_TIMEOUT => 8,
-                CURLOPT_USERAGENT => 'Catch link preview/1.0',
-                CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml,application/json,image/avif,image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.1'],
+                CURLOPT_USERAGENT => $userAgent,
+                CURLOPT_HTTPHEADER => [
+                    'Accept: text/html,application/xhtml+xml,application/json,image/avif,image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.1',
+                    'Accept-Language: en-US,en;q=0.8',
+                ],
                 CURLOPT_RESOLVE => [$target['resolve']],
                 CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
                     $length = strlen($line);
@@ -162,7 +173,19 @@ final class RemoteContentService
             $curlError = curl_error($curl);
             $curl = null;
             if ($executed === false) {
-                $this->lastError = $tooLarge ? 'The image exceeds the configured upload limit.' : 'The remote request failed' . ($curlError !== '' ? ': ' . $curlError : '.');
+                if (
+                    $tooLarge
+                    && $allowTruncated
+                    && $body !== ''
+                    && $status >= 200
+                    && $status < 300
+                    && in_array($type, $allowedTypes, true)
+                ) {
+                    return ['body' => $body, 'type' => $type, 'url' => $url];
+                }
+                $this->lastError = $tooLarge
+                    ? 'The remote response exceeds the configured download limit.'
+                    : 'The remote request failed' . ($curlError !== '' ? ': ' . $curlError : '.');
                 return null;
             }
             if ($status >= 300 && $status < 400 && isset($headers['location'])) {
@@ -404,6 +427,7 @@ final class RemoteContentService
             }
         }
         if ($ip === null) {
+            $this->lastError = 'The remote address could not be resolved.';
             return null;
         }
         $resolvedIp = str_contains($ip, ':') ? '[' . $ip . ']' : $ip;
