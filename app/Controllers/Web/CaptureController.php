@@ -77,6 +77,9 @@ final class CaptureController
             'user' => $user,
             'captures' => $captures,
             'status' => $status,
+            'availableLists' => $this->lists->list($user['id']),
+            'enableListDialog' => $status !== 'trash',
+            'enableCaptureActionMenu' => $status !== 'trash',
             'csrf' => $this->csrf->token(),
         ]);
     }
@@ -133,6 +136,7 @@ final class CaptureController
             'capture' => $capture,
             'availableTags' => $this->tags->list($user['id']),
             'availableLists' => $this->lists->list($user['id']),
+            'enableListDialog' => empty($capture['deleted_at']),
             'csrf' => $this->csrf->token(),
         ]);
     }
@@ -193,6 +197,19 @@ final class CaptureController
 
             if (!$result) {
                 Response::json(['error' => 'Capture not found.'], 404);
+            }
+
+            if (($result['field'] ?? null) === 'url') {
+                try {
+                    $this->service->refreshLinkPreview(
+                        (string) $params['id'],
+                        $user['id'],
+                        true,
+                    );
+                } catch (Throwable) {
+                    // The URL edit remains valid when optional preview generation fails.
+                }
+                $result['reload'] = true;
             }
 
             Response::json($result);
@@ -262,16 +279,7 @@ final class CaptureController
             Response::redirect($redirect);
         }
 
-        $ids = is_array($_POST['capture_ids'] ?? null) ? $_POST['capture_ids'] : [];
-        $ids = array_slice(
-            array_values(array_unique(array_filter(
-                $ids,
-                static fn (mixed $id): bool => is_string($id)
-                    && preg_match('/^[0-9a-f-]{36}$/i', $id) === 1,
-            ))),
-            0,
-            200,
-        );
+        $ids = $this->selectedCaptureIds();
 
         if (!$ids) {
             $_SESSION['flash_error'] = 'Select at least one capture to delete.';
@@ -299,6 +307,43 @@ final class CaptureController
         }
 
         Response::redirect($redirect);
+    }
+
+    public function bulkArchive(): never
+    {
+        $user = $this->user();
+        $redirect = (string) ($_POST['view'] ?? '') === 'archived' ? '/archive' : '/inbox';
+
+        if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            $_SESSION['flash_error'] = 'Your session expired. Select the captures and try again.';
+            Response::redirect($redirect);
+        }
+
+        $ids = $this->selectedCaptureIds();
+        if (!$ids) {
+            $_SESSION['flash_error'] = 'Select at least one capture to archive.';
+            Response::redirect($redirect);
+        }
+
+        $archived = $this->captures->archiveMany($user['id'], $ids);
+        $noun = $archived === 1 ? 'capture was' : 'captures were';
+        $_SESSION['flash_success'] = $archived . ' ' . $noun . ' archived.';
+        Response::redirect($redirect);
+    }
+
+    private function selectedCaptureIds(): array
+    {
+        $ids = is_array($_POST['capture_ids'] ?? null) ? $_POST['capture_ids'] : [];
+
+        return array_slice(
+            array_values(array_unique(array_filter(
+                $ids,
+                static fn (mixed $id): bool => is_string($id)
+                    && preg_match('/^[0-9a-f-]{36}$/i', $id) === 1,
+            ))),
+            0,
+            200,
+        );
     }
 
     private function purgeExpiredTrash(string $userId): void

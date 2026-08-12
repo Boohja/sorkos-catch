@@ -20,11 +20,32 @@ final class CaptureService
         if (($input['type'] ?? '') === 'unknown') {
             $input = $this->normalizeUnknownInput($input, $files);
         }
+        $errors = $this->validator->validate($input);
+        if ($errors) {
+            throw new InvalidArgumentException(json_encode($errors));
+        }
         $metadata = is_array($input['metadata'] ?? null) ? $input['metadata'] : [];
         $source = (string)($input['source'] ?? 'web');
         $url = trim((string)($input['url'] ?? ''));
-        if (empty(trim((string)($input['title'] ?? ''))) && $url !== '' && ($input['type'] ?? '') === 'url') {
-            $input['title'] = $this->remote?->pageTitle($url) ?: $this->nullable($metadata['link_text'] ?? null);
+        $linkPreview = null;
+        if (
+            ($input['type'] ?? '') === 'url'
+            && $url !== ''
+            && $this->isHttpUrl($url)
+            && $this->remote
+        ) {
+            try {
+                $linkPreview = $this->remote->linkPreview($url);
+            } catch (\Throwable) {
+                $linkPreview = null;
+            }
+        }
+        if ($linkPreview) {
+            $metadata['link_preview'] = $linkPreview['metadata'];
+        }
+        if (empty(trim((string)($input['title'] ?? ''))) && $url !== '') {
+            $input['title'] = $this->nullable($linkPreview['metadata']['title'] ?? null)
+                ?: $this->nullable($metadata['link_text'] ?? null);
         }
         if ($url !== '' && empty($metadata['source_url'])) {
             $metadata['source_url'] = $url;
@@ -39,10 +60,6 @@ final class CaptureService
             $metadata['capture_method'] = $source === 'browser-extension' ? (str_contains((string)($metadata['browser_context'] ?? ''), 'context-menu') ? 'browser-extension-context-menu' : 'browser-extension') : $source;
         }
         $input['metadata'] = $metadata;
-        $errors = $this->validator->validate($input);
-        if ($errors) {
-            throw new InvalidArgumentException(json_encode($errors));
-        }
         $repo = new CaptureRepository($this->database->connection());
         if ($existing = $repo->findByClientId((string)$input['client_capture_id'], $userId)) {
             return ['capture' => $existing,'created' => false];
@@ -58,24 +75,119 @@ final class CaptureService
         $data = ['id' => $id,'user_id' => $userId,'device_id' => $deviceId,'client_capture_id' => (string)$input['client_capture_id'],'type' => (string)$input['type'],'title' => $this->nullable($input['title'] ?? null),'text' => $this->nullable($input['text'] ?? null),'url' => $this->nullable($input['url'] ?? null),'extracted_text' => $this->nullable($input['extracted_text'] ?? null),'source' => $source,'metadata_json' => json_encode($input['metadata'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
         $stored = [];
         try {
-            $this->database->transaction(function () use ($repo, &$data, $files, $id, &$stored, $remoteImage) {
+            $this->database->transaction(function () use ($repo, &$data, $files, $id, &$stored, $remoteImage, $linkPreview) {
                 $data['catch_number'] = $repo->nextCatchNumber($data['user_id']);
                 $repo->insert($data);
                 foreach ($this->normalizeFiles($files) as $file) {
                     $attachment = $this->uploads->store($file, $id);
-                    $repo->addAttachment($attachment);
                     $stored[] = $attachment['storage_name'];
+                    $repo->addAttachment($attachment);
                 }
                 if ($remoteImage) {
                     $attachment = $this->uploads->storeContents($remoteImage['contents'], $remoteImage['name'], $remoteImage['type'], $id);
-                    $repo->addAttachment($attachment);
                     $stored[] = $attachment['storage_name'];
+                    $repo->addAttachment($attachment);
+                }
+                if (!empty($linkPreview['image']['contents'])) {
+                    try {
+                        $preview = $this->uploads->storePreview($linkPreview['image']['contents'], $id);
+                        $stored[] = $preview['storage_name'];
+                        $repo->addAttachment($preview);
+                    } catch (\Throwable) {
+                        if (isset($preview['storage_name'])) {
+                            $this->uploads->remove($preview['storage_name']);
+                        }
+                    }
                 }
             });
         } catch (UnsupportedAttachmentException $error) {
+            foreach ($stored as $storageName) {
+                $this->uploads->remove($storageName);
+            }
             throw new InvalidArgumentException(json_encode(['attachment' => $error->getMessage()]));
+        } catch (\Throwable $error) {
+            foreach ($stored as $storageName) {
+                $this->uploads->remove($storageName);
+            }
+            throw $error;
         }
         return ['capture' => $repo->find($id, $userId),'created' => true];
+    }
+
+    public function refreshLinkPreview(
+        string $captureId,
+        string $userId,
+        bool $removeOnFailure = false,
+    ): bool {
+        if (!$this->remote) {
+            return false;
+        }
+
+        $repo = new CaptureRepository($this->database->connection());
+        $capture = $repo->find($captureId, $userId);
+        $url = trim((string) ($capture['url'] ?? ''));
+        if (!$capture) {
+            return false;
+        }
+
+        $linkPreview = null;
+        if ($this->isHttpUrl($url)) {
+            try {
+                $linkPreview = $this->remote->linkPreview($url);
+            } catch (\Throwable) {
+                $linkPreview = null;
+            }
+        }
+        if (!$linkPreview && !$removeOnFailure) {
+            return false;
+        }
+
+        $metadata = is_array($capture['metadata'] ?? null) ? $capture['metadata'] : [];
+        if ($linkPreview) {
+            $metadata['link_preview'] = $linkPreview['metadata'];
+        } else {
+            unset($metadata['link_preview']);
+        }
+
+        $newPreview = null;
+        if (!empty($linkPreview['image']['contents'])) {
+            try {
+                $newPreview = $this->uploads->storePreview(
+                    $linkPreview['image']['contents'],
+                    $captureId,
+                );
+            } catch (\Throwable) {
+                $newPreview = null;
+            }
+        }
+
+        $oldStorageNames = $repo->previewStorageNames($captureId, $userId);
+        try {
+            $this->database->transaction(function () use (
+                $repo,
+                $captureId,
+                $userId,
+                $metadata,
+                $newPreview,
+            ): void {
+                $repo->deletePreviewAttachments($captureId, $userId);
+                $repo->updateMetadata($captureId, $userId, $metadata);
+                if ($newPreview) {
+                    $repo->addAttachment($newPreview);
+                }
+            });
+        } catch (\Throwable $error) {
+            if ($newPreview) {
+                $this->uploads->remove($newPreview['storage_name']);
+            }
+            throw $error;
+        }
+
+        foreach ($oldStorageNames as $storageName) {
+            $this->uploads->remove($storageName);
+        }
+
+        return $newPreview !== null;
     }
     private function nullable(mixed $value): ?string
     {
@@ -159,10 +271,7 @@ final class CaptureService
         $input['type'] = count($kinds) > 1 ? 'mixed' : ($kinds[0] ?? 'text');
 
         if (empty(trim((string)($input['title'] ?? '')))) {
-            if ($url !== '') {
-                $input['title'] = $this->remote?->pageTitle($url);
-            }
-            if (empty(trim((string)($input['title'] ?? ''))) && $text !== '') {
+            if ($text !== '') {
                 $input['title'] = $this->textTitle($text);
             }
             if (empty(trim((string)($input['title'] ?? ''))) && count($attachments) === 1) {

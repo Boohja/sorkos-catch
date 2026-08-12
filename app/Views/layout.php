@@ -21,8 +21,9 @@ $isComingSoon = $currentPath === '/coming-soon'; ?>
   <link rel="stylesheet" href="/assets/css/devices.css?v=5">
   <link rel="stylesheet" href="/assets/css/device-detail.css?v=3">
   <link rel="stylesheet" href="/assets/css/device-provenance.css?v=1">
-  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=6">
-  <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=1">
+  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=9">
+  <link rel="stylesheet" href="/assets/css/capture-collection.css?v=5">
+  <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=2">
   <link rel="stylesheet" href="/assets/css/tags.css?v=1">
   <link rel="stylesheet" href="/assets/css/lists.css?v=2">
   <link rel="stylesheet" href="/assets/css/pair.css?v=1">
@@ -62,6 +63,8 @@ $isComingSoon = $currentPath === '/coming-soon'; ?>
   </footer>
   <div class="sync-toast" data-sync-status role="status" aria-live="polite" hidden></div>
   <div class="request-progress" data-request-progress role="progressbar" aria-label="Saving changes" hidden></div>
-  <script type="module" src="/assets/js/app.js?v=16"></script>
+  <?php if (!empty($enableCaptureActionMenu)): ?><?php require __DIR__ . '/captures/_action_menu.php'; ?><?php endif; ?>
+  <?php if (!empty($enableListDialog)): ?><?php require __DIR__ . '/captures/_list_dialog.php'; ?><?php endif; ?>
+  <script type="module" src="/assets/js/app.js?v=20"></script>
 </body>
 </html>

@@ -20,7 +20,16 @@ final class CaptureRepository
         $limit = max(1, min($limit, 200));
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
-                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
+                (SELECT a.id FROM catch_attachments a
+                    WHERE a.capture_id = c.id
+                        AND a.mime_type LIKE 'image/%'
+                        AND (a.kind = 'preview' OR (a.kind = 'source' AND c.type = 'image'))
+                    ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
+                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
+                    FROM catch_capture_lists cl
+                    WHERE cl.capture_id = c.id) assigned_list_ids
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.user_id = :user
@@ -40,7 +49,16 @@ final class CaptureRepository
         $limit = max(1, min($limit, 200));
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
-                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
+                (SELECT a.id FROM catch_attachments a
+                    WHERE a.capture_id = c.id
+                        AND a.mime_type LIKE 'image/%'
+                        AND (a.kind = 'preview' OR (a.kind = 'source' AND c.type = 'image'))
+                    ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
+                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
+                    FROM catch_capture_lists cl
+                    WHERE cl.capture_id = c.id) assigned_list_ids
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.user_id = :user
@@ -63,7 +81,16 @@ final class CaptureRepository
         $limit = max(1, min($limit, 200));
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
-                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
+                (SELECT a.id FROM catch_attachments a
+                    WHERE a.capture_id = c.id
+                        AND a.mime_type LIKE 'image/%'
+                        AND (a.kind = 'preview' OR (a.kind = 'source' AND c.type = 'image'))
+                    ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
+                (SELECT GROUP_CONCAT(assigned.list_id ORDER BY assigned.list_id)
+                    FROM catch_capture_lists assigned
+                    WHERE assigned.capture_id = c.id) assigned_list_ids
             FROM catch_captures c
             JOIN catch_capture_tags ct ON ct.capture_id = c.id
             LEFT JOIN catch_devices d ON d.id = c.device_id
@@ -85,7 +112,16 @@ final class CaptureRepository
         $limit = max(1, min($limit, 200));
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
-                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
+                (SELECT a.id FROM catch_attachments a
+                    WHERE a.capture_id = c.id
+                        AND a.mime_type LIKE 'image/%'
+                        AND (a.kind = 'preview' OR (a.kind = 'source' AND c.type = 'image'))
+                    ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
+                (SELECT GROUP_CONCAT(assigned.list_id ORDER BY assigned.list_id)
+                    FROM catch_capture_lists assigned
+                    WHERE assigned.capture_id = c.id) assigned_list_ids
             FROM catch_captures c
             JOIN catch_capture_lists cl ON cl.capture_id = c.id
             LEFT JOIN catch_devices d ON d.id = c.device_id
@@ -106,7 +142,7 @@ final class CaptureRepository
         $limit = max(1, min($limit, 500));
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
-                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id) attachment_count
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.user_id = :user
@@ -141,7 +177,7 @@ final class CaptureRepository
 
         $capture = $this->hydrate($capture);
         $attachments = $this->db->prepare(
-            'SELECT id, original_name, mime_type, size_bytes, width, height, created_at '
+            'SELECT id, kind, original_name, mime_type, size_bytes, width, height, created_at '
             . 'FROM catch_attachments WHERE capture_id = :id ORDER BY created_at',
         );
         $attachments->execute(['id' => $id]);
@@ -202,14 +238,62 @@ final class CaptureRepository
     {
         $sql = <<<'SQL'
             INSERT INTO catch_attachments (
-                id, capture_id, original_name, storage_name, mime_type,
+                id, capture_id, kind, original_name, storage_name, mime_type,
                 size_bytes, width, height, checksum, created_at
             ) VALUES (
-                :id, :capture_id, :original_name, :storage_name, :mime_type,
+                :id, :capture_id, :kind, :original_name, :storage_name, :mime_type,
                 :size_bytes, :width, :height, :checksum, UTC_TIMESTAMP(6)
             )
             SQL;
         $this->db->prepare($sql)->execute($data);
+    }
+
+    public function previewStorageNames(string $id, string $userId): array
+    {
+        $query = $this->db->prepare(<<<'SQL'
+            SELECT a.storage_name
+            FROM catch_attachments a
+            JOIN catch_captures c ON c.id = a.capture_id
+            WHERE a.capture_id = :capture
+                AND a.kind = 'preview'
+                AND c.user_id = :user
+            SQL);
+        $query->execute(['capture' => $id, 'user' => $userId]);
+
+        return array_values(array_filter($query->fetchAll(PDO::FETCH_COLUMN), 'is_string'));
+    }
+
+    public function deletePreviewAttachments(string $id, string $userId): void
+    {
+        $query = $this->db->prepare(<<<'SQL'
+            DELETE FROM catch_attachments
+            WHERE capture_id = :capture
+                AND kind = 'preview'
+                AND EXISTS (
+                    SELECT 1
+                    FROM catch_captures c
+                    WHERE c.id = catch_attachments.capture_id
+                        AND c.user_id = :user
+                )
+            SQL);
+        $query->execute(['capture' => $id, 'user' => $userId]);
+    }
+
+    public function updateMetadata(string $id, string $userId, array $metadata): void
+    {
+        $query = $this->db->prepare(<<<'SQL'
+            UPDATE catch_captures
+            SET metadata_json = :metadata, updated_at = UTC_TIMESTAMP(6)
+            WHERE id = :id AND user_id = :user
+            SQL);
+        $query->execute([
+            'metadata' => json_encode(
+                $metadata,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            ),
+            'id' => $id,
+            'user' => $userId,
+        ]);
     }
 
     public function setStatus(string $id, string $userId, string $status): bool
@@ -257,6 +341,24 @@ final class CaptureRepository
         $sql = 'UPDATE catch_captures '
             . 'SET deleted_at = UTC_TIMESTAMP(6), updated_at = UTC_TIMESTAMP(6) '
             . 'WHERE user_id = :user AND deleted_at IS NULL '
+            . 'AND id IN (' . implode(',', $placeholders) . ')';
+        $query = $this->db->prepare($sql);
+        $query->execute($params);
+
+        return $query->rowCount();
+    }
+
+    public function archiveMany(string $userId, array $ids): int
+    {
+        [$placeholders, $params] = $this->captureIdParams($userId, $ids);
+        if (!$placeholders) {
+            return 0;
+        }
+
+        $sql = 'UPDATE catch_captures '
+            . "SET status = 'archived', archived_at = COALESCE(archived_at, UTC_TIMESTAMP(6)), "
+            . 'updated_at = UTC_TIMESTAMP(6) '
+            . 'WHERE user_id = :user AND status = \'inbox\' AND deleted_at IS NULL '
             . 'AND id IN (' . implode(',', $placeholders) . ')';
         $query = $this->db->prepare($sql);
         $query->execute($params);

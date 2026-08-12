@@ -11,6 +11,9 @@ use RuntimeException;
 
 final class UploadService
 {
+    private const MAX_PREVIEW_BYTES = 8_388_608;
+    private const MAX_PREVIEW_PIXELS = 8_000_000;
+
     private const DEFAULT_ALLOWED_MIME = [
         'image/jpeg',
         'image/png',
@@ -81,6 +84,7 @@ final class UploadService
         return [
             'id' => Id::uuid(),
             'capture_id' => $captureId,
+            'kind' => 'source',
             'original_name' => basename((string) $file['name']),
             'storage_name' => $relativeDirectory . '/' . $storageName,
             'mime_type' => $mime,
@@ -132,6 +136,7 @@ final class UploadService
         string $name,
         string $mime,
         string $captureId,
+        string $kind = 'source',
     ): array {
         $size = strlen($contents);
         if ($size === 0 || $size > $this->maxBytes()) {
@@ -161,6 +166,7 @@ final class UploadService
         return [
             'id' => Id::uuid(),
             'capture_id' => $captureId,
+            'kind' => $kind,
             'original_name' => basename($name),
             'storage_name' => $relative,
             'mime_type' => $mime,
@@ -169,6 +175,87 @@ final class UploadService
             'height' => $height,
             'checksum' => hash('sha256', $contents),
         ];
+    }
+
+    public function storePreview(string $contents, string $captureId): array
+    {
+        if (strlen($contents) > self::MAX_PREVIEW_BYTES) {
+            throw new RuntimeException('The preview image is too large.');
+        }
+
+        $dimensions = @getimagesizefromstring($contents);
+        if (!$dimensions || $dimensions[0] < 1 || $dimensions[1] < 1) {
+            throw new RuntimeException('The preview image is invalid.');
+        }
+
+        $width = (int) $dimensions[0];
+        $height = (int) $dimensions[1];
+        if ($width * $height > self::MAX_PREVIEW_PIXELS) {
+            throw new RuntimeException('The preview image dimensions are too large.');
+        }
+
+        $source = @imagecreatefromstring($contents);
+        if ($source === false) {
+            throw new RuntimeException('The preview image could not be decoded.');
+        }
+
+        $scale = min(1, 800 / max($width, $height));
+        $targetWidth = max(1, (int) round($width * $scale));
+        $targetHeight = max(1, (int) round($height * $scale));
+        $target = imagecreatetruecolor($targetWidth, $targetHeight);
+        if ($target === false) {
+            imagedestroy($source);
+            throw new RuntimeException('The preview image could not be resized.');
+        }
+
+        imagealphablending($target, false);
+        imagesavealpha($target, true);
+        $transparent = imagecolorallocatealpha($target, 0, 0, 0, 127);
+        imagefill($target, 0, 0, $transparent);
+        imagecopyresampled(
+            $target,
+            $source,
+            0,
+            0,
+            0,
+            0,
+            $targetWidth,
+            $targetHeight,
+            $width,
+            $height,
+        );
+
+        ob_start();
+        $encoded = imagewebp($target, null, 82);
+        $webp = ob_get_clean();
+        imagedestroy($target);
+        imagedestroy($source);
+
+        if (!$encoded || !is_string($webp) || $webp === '') {
+            throw new RuntimeException('The preview image could not be encoded.');
+        }
+
+        return $this->storeContents(
+            $webp,
+            'link-preview.webp',
+            'image/webp',
+            $captureId,
+            'preview',
+        );
+    }
+
+    public function remove(string $storageName): void
+    {
+        $base = realpath($this->path);
+        $path = realpath($this->path . '/' . $storageName);
+        if (
+            $base !== false
+            && $path !== false
+            && str_starts_with($path, $base . DIRECTORY_SEPARATOR)
+            && is_file($path)
+        ) {
+            @unlink($path);
+        }
     }
 
     private function rejectionMessage(

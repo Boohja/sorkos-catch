@@ -8,6 +8,7 @@
     "ext-json": "*",
     "ext-fileinfo": "*",
     "ext-curl": "*",
+    "ext-gd": "*",
     "ext-sodium": "*"
   },
   "scripts": {

@@ -167,6 +167,63 @@ final class ListRepository
         }
     }
 
+    public function assignMany(string $userId, array $captureIds, array $listIds): ?int
+    {
+        $captureIds = $this->validIds($captureIds);
+        $listIds = $this->validIds($listIds);
+        if (!$captureIds || !$listIds) {
+            return 0;
+        }
+
+        $ownedCaptures = $this->ownedIds('catch_captures', $userId, $captureIds, true);
+        $ownedLists = $this->ownedIds('catch_lists', $userId, $listIds);
+        if (count($ownedCaptures) !== count($captureIds) || count($ownedLists) !== count($listIds)) {
+            return null;
+        }
+
+        $ownsTransaction = !$this->db->inTransaction();
+        if ($ownsTransaction) {
+            $this->db->beginTransaction();
+        }
+
+        try {
+            $insert = $this->db->prepare(
+                'INSERT IGNORE INTO catch_capture_lists (capture_id,list_id,assigned_at) '
+                . 'VALUES (:capture,:list,UTC_TIMESTAMP(6))',
+            );
+            $assigned = 0;
+            foreach ($ownedCaptures as $captureId) {
+                foreach ($ownedLists as $listId) {
+                    $insert->execute(['capture' => $captureId, 'list' => $listId]);
+                    $assigned += $insert->rowCount();
+                }
+            }
+
+            $captureSlots = implode(',', array_fill(0, count($ownedCaptures), '?'));
+            $this->db->prepare(
+                "UPDATE catch_captures SET status='archived', "
+                . 'archived_at=COALESCE(archived_at,UTC_TIMESTAMP(6)), '
+                . 'updated_at=UTC_TIMESTAMP(6) WHERE id IN (' . $captureSlots . ') AND user_id = ?',
+            )->execute([...$ownedCaptures, $userId]);
+
+            $listSlots = implode(',', array_fill(0, count($ownedLists), '?'));
+            $this->db->prepare(
+                'UPDATE catch_lists SET updated_at=UTC_TIMESTAMP(6) WHERE id IN (' . $listSlots . ')',
+            )->execute($ownedLists);
+
+            if ($ownsTransaction) {
+                $this->db->commit();
+            }
+
+            return $assigned;
+        } catch (\Throwable $error) {
+            if ($ownsTransaction && $this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $error;
+        }
+    }
+
     public function idFromRoute(string $value): string
     {
         return substr($value, 0, 36);
@@ -180,6 +237,32 @@ final class ListRepository
         $query = $this->db->prepare('SELECT 1 FROM catch_captures WHERE id=:id AND user_id=:user AND deleted_at IS NULL');
         $query->execute(['id' => $id,'user' => $userId]);
         return (bool)$query->fetchColumn();
+    }
+
+    private function validIds(array $ids): array
+    {
+        return array_slice(array_values(array_unique(array_filter(
+            $ids,
+            static fn (mixed $id): bool => is_string($id)
+                && preg_match('/^[0-9a-f-]{36}$/i', $id) === 1,
+        ))), 0, 200);
+    }
+
+    private function ownedIds(
+        string $table,
+        string $userId,
+        array $ids,
+        bool $excludeTrash = false,
+    ): array {
+        $slots = implode(',', array_fill(0, count($ids), '?'));
+        $sql = 'SELECT id FROM ' . $table . ' WHERE user_id = ? AND id IN (' . $slots . ')';
+        if ($excludeTrash) {
+            $sql .= ' AND deleted_at IS NULL';
+        }
+        $query = $this->db->prepare($sql);
+        $query->execute([$userId, ...$ids]);
+
+        return array_values(array_filter($query->fetchAll(PDO::FETCH_COLUMN), 'is_string'));
     }
     private function title(string $title): string
     {

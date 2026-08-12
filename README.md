@@ -1,6 +1,6 @@
 # Catch
 
-Catch is a personal capture inbox built with PHP 8.2+, Fat-Free Framework, server-rendered HTML, and a progressively enhanced PWA.
+Catch is a personal capture inbox built with PHP 8.2+, Fat-Free Framework, server-rendered HTML, and a progressively enhanced PWA. PHP's GD extension with WebP support is required for locally stored link previews.
 
 ## Local setup
 

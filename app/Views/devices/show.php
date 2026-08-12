@@ -25,7 +25,20 @@ $deviceType = array_key_exists($device['device_type'] ?? '', $deviceTypes) ? $de
 
 <?php if ($device['status'] !== 'revoked'): ?><section class="settings-section device-identity"><h2>Name this device</h2><p>Use a name and icon that distinguish it from your other devices.</p><form class="device-identity-form" method="post" action="<?=htmlspecialchars($deviceUrl)?>/rename"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><fieldset class="device-type-picker"><legend class="sr-only">Device icon</legend><?php foreach ($deviceTypes as $value => $label): ?><label title="<?=htmlspecialchars($label)?>"><input type="radio" name="device_type" value="<?=htmlspecialchars($value)?>" <?=$deviceType === $value ? 'checked' : ''?>><i class="glyph glyph-<?=htmlspecialchars($value)?>" aria-hidden="true"></i><span class="sr-only"><?=htmlspecialchars($label)?></span></label><?php endforeach; ?></fieldset><label class="device-name-input"><span class="sr-only">Device name</span><input name="name" maxlength="120" required value="<?=htmlspecialchars($device['name'])?>"></label><button class="button button-secondary" type="submit">Save name</button></form><?php if (!empty($device['user_agent'])): ?><details><summary>Technical browser information</summary><code><?=htmlspecialchars($device['user_agent'])?></code></details><?php endif; ?></section><?php endif; ?>
 
-<section class="device-captures"><header><h2>Captures from this device</h2><p><?=count($captures)?> <?=count($captures) === 1 ? 'capture' : 'captures'?></p></header><?php if (!$captures): ?><p class="muted">No captures have been created by this device.</p><?php else: ?><div class="device-capture-list"><?php foreach ($captures as $capture): ?><a href="/captures/<?=urlencode($capture['id'])?>"><span><strong><?=htmlspecialchars($capture['title'] ?: mb_strimwidth($capture['text'] ?: $capture['url'] ?: 'Attachment', 0, 90, '…'))?></strong><small>#<?=(int)$capture['catch_number']?> · <time datetime="<?=htmlspecialchars($utc($capture['created_at']))?>" data-local-time data-date-style="medium" data-time-style="short">UTC <?=htmlspecialchars($capture['created_at'])?></time></small></span><em><?=!empty($capture['deleted_at']) ? 'Trash' : htmlspecialchars(ucfirst((string)$capture['status']))?></em></a><?php endforeach; ?></div><?php endif; ?></section>
+<section class="device-captures">
+  <header>
+    <h2>Captures from this device</h2>
+    <p><?=count($captures)?> <?=count($captures) === 1 ? 'capture' : 'captures'?></p>
+  </header>
+  <?php
+$captureCollectionVariant = 'compact';
+$captureShowActions = false;
+$captureShowViewToggle = false;
+$captureEmptyTitle = 'No captures yet';
+$captureEmptyText = 'No captures have been created by this device.';
+require dirname(__DIR__) . '/captures/_list.php';
+?>
+</section>
 
 <?php if ($debugEnabled): ?>
   <?php require __DIR__ . '/_debug_requests.php'; ?>

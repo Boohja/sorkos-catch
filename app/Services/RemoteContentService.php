@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Catch\Services;
 
+use DOMDocument;
+use DOMXPath;
+
 final class RemoteContentService
 {
     private const PAGE_LIMIT = 524288;
     private ?string $lastError = null;
+    private ?string $lastResolvedUrl = null;
 
     public function __construct(private readonly int $imageLimit = 15728640)
     {
@@ -26,6 +30,56 @@ final class RemoteContentService
         }
         $title = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($match[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
         return $title === '' ? null : mb_substr($title, 0, 500);
+    }
+
+    /**
+     * @return array{
+     *     metadata: array<string, string>,
+     *     image: array{name: string, type: string, contents: string}|null
+     * }|null
+     */
+    public function linkPreview(string $url): ?array
+    {
+        $page = $this->request(
+            $url,
+            self::PAGE_LIMIT,
+            ['text/html', 'application/xhtml+xml'],
+        );
+        $canonicalUrl = $page['url'] ?? $this->lastResolvedUrl ?? $url;
+        $document = $page ? $this->documentMetadata($page['body'], $canonicalUrl) : [];
+        $canonicalUrl = $this->canonicalPreviewUrl($document['canonical_url'] ?? $canonicalUrl);
+        $embedUrl = $document['oembed_url'] ?? $this->providerOembedUrl($canonicalUrl);
+        $embed = $embedUrl ? $this->oembed($embedUrl) : [];
+
+        $title = $this->firstText($embed['title'] ?? null, $document['title'] ?? null);
+        $description = $this->firstText(
+            $document['description'] ?? null,
+            $embed['author_name'] ?? null,
+        );
+        $provider = $this->firstText(
+            $embed['provider_name'] ?? null,
+            $document['provider_name'] ?? null,
+            $this->providerName($canonicalUrl),
+        );
+        $author = $this->firstText($embed['author_name'] ?? null, $document['author'] ?? null);
+        $imageUrl = $this->firstUrl(
+            $embed['thumbnail_url'] ?? null,
+            $document['image_url'] ?? null,
+        );
+        $image = $imageUrl ? $this->image($imageUrl) : null;
+
+        $metadata = array_filter([
+            'canonical_url' => $canonicalUrl,
+            'title' => $title,
+            'description' => $description,
+            'provider_name' => $provider,
+            'author_name' => $author,
+            'image_source_url' => $imageUrl,
+        ], static fn (?string $value): bool => $value !== null && $value !== '');
+
+        return count($metadata) > 1 || $image
+            ? ['metadata' => $metadata, 'image' => $image]
+            : null;
     }
 
     /** @return array{name:string,type:string,contents:string}|null */
@@ -55,7 +109,9 @@ final class RemoteContentService
     private function request(string $url, int $limit, array $allowedTypes): ?array
     {
         $this->lastError = null;
+        $this->lastResolvedUrl = null;
         for ($redirects = 0; $redirects <= 3; $redirects++) {
+            $this->lastResolvedUrl = $url;
             $target = $this->safeTarget($url);
             if (!$target) {
                 $this->lastError = 'The remote address is not safe to retrieve.';
@@ -75,7 +131,7 @@ final class RemoteContentService
                 CURLOPT_CONNECTTIMEOUT => 4,
                 CURLOPT_TIMEOUT => 8,
                 CURLOPT_USERAGENT => 'Catch link preview/1.0',
-                CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml,image/avif,image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.1'],
+                CURLOPT_HTTPHEADER => ['Accept: text/html,application/xhtml+xml,application/json,image/avif,image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.1'],
                 CURLOPT_RESOLVE => [$target['resolve']],
                 CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
                     $length = strlen($line);
@@ -144,6 +200,188 @@ final class RemoteContentService
         return 'https://i.redd.it/' . $match[1] . '.' . strtolower($match[2]);
     }
 
+    /** @return array<string, string> */
+    private function documentMetadata(string $html, string $baseUrl): array
+    {
+        $previous = libxml_use_internal_errors(true);
+        $document = new DOMDocument();
+        $loaded = $document->loadHTML(
+            '<?xml encoding="utf-8" ?>' . $html,
+            LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING,
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        if (!$loaded) {
+            return [];
+        }
+
+        $xpath = new DOMXPath($document);
+        $meta = [];
+        foreach ($xpath->query('//meta[@content]') ?: [] as $node) {
+            $key = strtolower(trim(
+                $node->attributes?->getNamedItem('property')?->nodeValue
+                ?? $node->attributes?->getNamedItem('name')?->nodeValue
+                ?? '',
+            ));
+            $value = $this->cleanText($node->attributes?->getNamedItem('content')?->nodeValue);
+            if ($key !== '' && $value !== null && !isset($meta[$key])) {
+                $meta[$key] = $value;
+            }
+        }
+
+        $titleNode = $xpath->query('//title')->item(0);
+        $title = $this->firstText(
+            $meta['og:title'] ?? null,
+            $meta['twitter:title'] ?? null,
+            $titleNode?->textContent,
+        );
+        $canonical = $this->linkUrl($xpath, 'canonical', $baseUrl);
+        $oembed = $this->oembedUrl($xpath, $baseUrl);
+        $image = $this->firstUrl(
+            $this->absoluteUrl($baseUrl, $meta['og:image:secure_url'] ?? ''),
+            $this->absoluteUrl($baseUrl, $meta['og:image'] ?? ''),
+            $this->absoluteUrl($baseUrl, $meta['twitter:image'] ?? ''),
+        );
+
+        return array_filter([
+            'title' => $title,
+            'description' => $this->firstText(
+                $meta['og:description'] ?? null,
+                $meta['twitter:description'] ?? null,
+                $meta['description'] ?? null,
+            ),
+            'provider_name' => $this->firstText($meta['og:site_name'] ?? null),
+            'author' => $this->firstText($meta['author'] ?? null, $meta['article:author'] ?? null),
+            'canonical_url' => $canonical,
+            'oembed_url' => $oembed,
+            'image_url' => $image,
+        ], static fn (?string $value): bool => $value !== null && $value !== '');
+    }
+
+    private function linkUrl(DOMXPath $xpath, string $relation, string $baseUrl): ?string
+    {
+        foreach ($xpath->query('//link[@href]') ?: [] as $node) {
+            $rel = strtolower((string) $node->attributes?->getNamedItem('rel')?->nodeValue);
+            if (!in_array($relation, preg_split('/\s+/', trim($rel)) ?: [], true)) {
+                continue;
+            }
+
+            return $this->absoluteUrl(
+                $baseUrl,
+                (string) $node->attributes?->getNamedItem('href')?->nodeValue,
+            );
+        }
+
+        return null;
+    }
+
+    private function oembedUrl(DOMXPath $xpath, string $baseUrl): ?string
+    {
+        foreach ($xpath->query('//link[@href]') ?: [] as $node) {
+            $rel = strtolower((string) $node->attributes?->getNamedItem('rel')?->nodeValue);
+            $type = strtolower((string) $node->attributes?->getNamedItem('type')?->nodeValue);
+            if (!str_contains($rel, 'alternate') || !str_contains($type, 'json+oembed')) {
+                continue;
+            }
+
+            return $this->absoluteUrl(
+                $baseUrl,
+                (string) $node->attributes?->getNamedItem('href')?->nodeValue,
+            );
+        }
+
+        return null;
+    }
+
+    /** @return array<string, mixed> */
+    private function oembed(string $url): array
+    {
+        $resource = $this->request(
+            $url,
+            262144,
+            ['application/json', 'application/json+oembed'],
+        );
+        if (!$resource) {
+            return [];
+        }
+
+        $decoded = json_decode($resource['body'], true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function providerOembedUrl(string $url): ?string
+    {
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+
+        return $host === 'tiktok.com' || str_ends_with($host, '.tiktok.com')
+            ? 'https://www.tiktok.com/oembed?url=' . rawurlencode($url)
+            : null;
+    }
+
+    private function providerName(string $url): ?string
+    {
+        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+        $host = preg_replace('/^www\./', '', $host) ?? $host;
+
+        return $host === '' ? null : $host;
+    }
+
+    private function canonicalPreviewUrl(string $url): string
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return $url;
+        }
+
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        if (($host === 'tiktok.com' || str_ends_with($host, '.tiktok.com'))
+            && preg_match('~^/@[^/]+/video/\d+~', (string) ($parts['path'] ?? ''))) {
+            return (string) $parts['scheme'] . '://' . $host . $parts['path'];
+        }
+
+        return $url;
+    }
+
+    private function firstText(mixed ...$values): ?string
+    {
+        foreach ($values as $value) {
+            $text = $this->cleanText($value);
+            if ($text !== null) {
+                return mb_substr($text, 0, 1000);
+            }
+        }
+
+        return null;
+    }
+
+    private function cleanText(mixed $value): ?string
+    {
+        if (!is_scalar($value)) {
+            return null;
+        }
+
+        $text = trim(preg_replace(
+            '/\s+/u',
+            ' ',
+            html_entity_decode(strip_tags((string) $value), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+        ) ?? '');
+
+        return $text === '' ? null : $text;
+    }
+
+    private function firstUrl(mixed ...$values): ?string
+    {
+        foreach ($values as $value) {
+            if (is_string($value) && $this->isHttpUrl($value)) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
     /** @return array{resolve:string}|null */
     private function safeTarget(string $url): ?array
     {
@@ -174,8 +412,11 @@ final class RemoteContentService
 
     private function absoluteUrl(string $base, string $location): ?string
     {
+        if ($location === '') {
+            return null;
+        }
         if (filter_var($location, FILTER_VALIDATE_URL)) {
-            return $location;
+            return $this->isHttpUrl($location) ? $location : null;
         }
         $parts = parse_url($base);
         if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
@@ -190,5 +431,13 @@ final class RemoteContentService
         }
         $directory = preg_replace('~/[^/]*$~', '/', (string) ($parts['path'] ?? '/')) ?: '/';
         return $origin . $directory . $location;
+    }
+
+    private function isHttpUrl(string $url): bool
+    {
+        $scheme = strtolower((string) (parse_url($url, PHP_URL_SCHEME) ?? ''));
+
+        return filter_var($url, FILTER_VALIDATE_URL) !== false
+            && in_array($scheme, ['http', 'https'], true);
     }
 }

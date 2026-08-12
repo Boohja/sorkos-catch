@@ -82,7 +82,7 @@ final class Application
         $authController = new AuthController($view, $auth, $csrf, $access);
         $comingSoon = new ComingSoonController($view, $auth, $csrf);
         $web = new WebCaptures($view, $auth, $captures, $tags, $lists, $service, $csrf, $this->root . '/storage/uploads', $webDeviceId);
-        $tagController = new TagController($view, $auth, $tags, $captures, $csrf);
+        $tagController = new TagController($view, $auth, $tags, $lists, $captures, $csrf);
         $listController = new ListController($view, $auth, $lists, $captures, $csrf);
         $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config, $captureDebug);
         $pairController = new PairController($view, $auth, $devices, $csrf);
@@ -101,6 +101,8 @@ final class Application
         $f3->route('GET /trash', [$web,'trashIndex']);
         $f3->route('POST /captures', [$web,'create']);
         $f3->route('POST /captures/bulk-delete', [$web,'bulkDelete']);
+        $f3->route('POST /captures/bulk-archive', [$web,'bulkArchive']);
+        $f3->route('POST /captures/bulk-lists', [$listController,'bulkAssign']);
         $f3->route('GET /captures/@id', [$web,'show']);
         $f3->route('POST /captures/@id', [$web,'update']);
         $f3->route('GET /attachments/@id', [$web,'attachment']);

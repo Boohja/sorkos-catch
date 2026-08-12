@@ -1,5 +1,6 @@
 <?php
 $metadata = is_array($capture['metadata'] ?? null) ? $capture['metadata'] : [];
+$linkPreview = is_array($metadata['link_preview'] ?? null) ? $metadata['link_preview'] : [];
 $utc = static fn (?string $value): string => $value ? str_replace(' ', 'T', substr($value, 0, 19)) . 'Z' : '';
 $safeHttp = static fn (mixed $value): ?string => is_string($value) && preg_match('~^https?://~i', $value) ? $value : null;
 $sourceUrl = $safeHttp($metadata['source_url'] ?? null) ?? $safeHttp($metadata['referring_page_url'] ?? null) ?? $safeHttp($capture['url'] ?? null);
@@ -27,7 +28,7 @@ $methodLabel = match($method) {
 $primaryImage = null;
 if ($capture['type'] === 'image') {
     foreach ($capture['attachments'] as $attachment) {
-        if (str_starts_with((string)$attachment['mime_type'], 'image/')) {
+        if (($attachment['kind'] ?? 'source') === 'source' && str_starts_with((string)$attachment['mime_type'], 'image/')) {
             $primaryImage = $attachment;
             break;
         }
@@ -36,10 +37,17 @@ if ($capture['type'] === 'image') {
 $primaryAudio = null;
 if ($capture['type'] === 'audio') {
     foreach ($capture['attachments'] as $attachment) {
-        if (str_starts_with((string)$attachment['mime_type'], 'audio/')) {
+        if (($attachment['kind'] ?? 'source') === 'source' && str_starts_with((string)$attachment['mime_type'], 'audio/')) {
             $primaryAudio = $attachment;
             break;
         }
+    }
+}
+$previewAttachment = null;
+foreach ($capture['attachments'] as $attachment) {
+    if (($attachment['kind'] ?? 'source') === 'preview' && !empty($attachment['available'])) {
+        $previewAttachment = $attachment;
+        break;
     }
 }
 $textMatchesTitle = $capture['text'] && trim((string)$capture['text']) === trim((string)$capture['title']);
@@ -49,7 +57,7 @@ $deviceLabel = trim((string)($capture['device_name'] ?? '')) ?: match((string)$c
 };
 $assignedIds = array_column($capture['tags'] ?? [], 'id');
 $assignedListIds = array_column($capture['lists'] ?? [], 'id');
-$remainingAttachments = array_values(array_filter($capture['attachments'], static fn (array $attachment): bool => (!$primaryImage || $attachment['id'] !== $primaryImage['id']) && (!$primaryAudio || $attachment['id'] !== $primaryAudio['id'])));
+$remainingAttachments = array_values(array_filter($capture['attachments'], static fn (array $attachment): bool => ($attachment['kind'] ?? 'source') === 'source' && (!$primaryImage || $attachment['id'] !== $primaryImage['id']) && (!$primaryAudio || $attachment['id'] !== $primaryAudio['id'])));
 $isTrashed = !empty($capture['deleted_at']);
 $trashExpires = $isTrashed ? date('Y-m-d H:i:s', strtotime((string)$capture['deleted_at'] . ' UTC +30 days')) : null;
 $backRoute = $isTrashed ? '/trash' : ($capture['status'] === 'archived' ? '/archive' : '/inbox');
@@ -69,6 +77,7 @@ $backLabel = $isTrashed ? 'Trash' : ($capture['status'] === 'archived' ? 'Archiv
     <?php elseif ($primaryAudio): ?><?php $primaryAudioUrl = '/attachments/' . urlencode($primaryAudio['id']); ?>
       <?php if (!empty($primaryAudio['available'])): ?><div class="primary-audio"><audio controls preload="metadata" src="<?=htmlspecialchars($primaryAudioUrl)?>">Your browser does not support audio playback. <a href="<?=htmlspecialchars($primaryAudioUrl)?>">Download the recording</a>.</audio><span><?=htmlspecialchars($primaryAudio['original_name'])?> &middot; <?=htmlspecialchars($primaryAudio['mime_type'])?></span></div>
       <?php else: ?><div class="missing-attachment" role="status"><strong><?=htmlspecialchars($primaryAudio['original_name'])?></strong><span>The stored audio file is unavailable.</span></div><?php endif; ?>
+    <?php elseif ($urlIsPrimary && $previewAttachment): ?><?php require __DIR__ . '/_link_preview.php'; ?>
     <?php elseif ($urlIsPrimary): ?><div class="url-card"><span><span data-url-fallback><?=htmlspecialchars($capture['title'] ?: $capture['url'])?></span><small class="editable-url <?=$isTrashed ? '' : 'capture-editable'?>" data-capture-field="url" data-single-line data-placeholder="Add URL" role="textbox" aria-label="Capture URL" <?=$isTrashed ? '' : 'contenteditable="true"'?>><?=htmlspecialchars((string)$capture['url'])?></small></span><a class="url-card-open" data-open-capture-url href="<?=htmlspecialchars($capture['url'])?>" target="_blank" rel="noopener noreferrer" aria-label="Open captured URL"><i class="glyph glyph-link" aria-hidden="true"></i></a></div>
     <?php elseif ($capture['text'] || $capture['type'] === 'text'): ?><div class="prose <?=$isTrashed ? '' : 'capture-editable'?>" data-capture-field="text" data-placeholder="Add text" role="textbox" aria-label="Capture text" aria-multiline="true" <?=$isTrashed ? '' : 'contenteditable="true"'?>><?=nl2br(htmlspecialchars((string)$capture['text']))?></div>
     <?php elseif ($capture['url']): ?><div class="url-card"><span><span data-url-fallback><?=htmlspecialchars($capture['title'] ?: $capture['url'])?></span><small class="editable-url <?=$isTrashed ? '' : 'capture-editable'?>" data-capture-field="url" data-single-line data-placeholder="Add URL" role="textbox" aria-label="Capture URL" <?=$isTrashed ? '' : 'contenteditable="true"'?>><?=htmlspecialchars((string)$capture['url'])?></small></span><a class="url-card-open" data-open-capture-url href="<?=htmlspecialchars($capture['url'])?>" target="_blank" rel="noopener noreferrer" aria-label="Open captured URL"><i class="glyph glyph-link" aria-hidden="true"></i></a></div>
@@ -85,12 +94,11 @@ $backLabel = $isTrashed ? 'Trash' : ($capture['status'] === 'archived' ? 'Archiv
   <?php if (!$isTrashed): ?>
   <section class="capture-tags-panel" data-capture-tags data-capture-id="<?=htmlspecialchars($capture['id'])?>"><h2>Tags</h2><div class="assigned-tags" data-assigned-tags><?php foreach ($capture['tags'] ?? [] as $tag): ?><span class="assigned-tag" data-tag-id="<?=htmlspecialchars($tag['id'])?>"><a href="<?=htmlspecialchars($tag['url'])?>"><?=htmlspecialchars($tag['name'])?></a><button type="button" data-remove-tag aria-label="Remove <?=htmlspecialchars($tag['name'])?>">×</button></span><?php endforeach; ?></div><?php $unassigned = array_filter($availableTags, static fn (array $tag): bool => !in_array($tag['id'], $assignedIds, true)); ?><?php if ($availableTags): ?><form class="tag-assign-form" data-tag-assign method="post" action="/captures/<?=urlencode($capture['id'])?>/tags"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><label class="sr-only" for="capture-tag">Tag</label><select id="capture-tag" name="tag_id" <?=!$unassigned ? 'disabled' : ''?>><?php foreach ($unassigned as $tag): ?><option value="<?=htmlspecialchars($tag['id'])?>"><?=htmlspecialchars($tag['name'])?></option><?php endforeach; ?></select><button class="button button-secondary" <?=!$unassigned ? 'disabled' : ''?>>Add tag</button></form><?php else: ?><p class="muted">No tags yet. <a href="/tags">Create one</a>.</p><?php endif; ?><p class="tag-status" data-tag-status role="status" aria-live="polite"></p></section>
   <?php endif; ?>
-  <?php if (!$isTrashed): ?><dialog class="confirm-dialog list-dialog" data-list-dialog aria-labelledby="list-dialog-title"><form method="post" action="/captures/<?=urlencode($capture['id'])?>/lists/sync" data-list-form><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><h2 id="list-dialog-title">Add to lists</h2><?php if ($availableLists): ?><div class="list-checklist"><?php foreach ($availableLists as $list): ?><label><input type="checkbox" name="list_ids[]" value="<?=htmlspecialchars($list['id'])?>" <?=in_array($list['id'], $assignedListIds, true) ? 'checked' : ''?>><span><?=htmlspecialchars($list['title'])?></span></label><?php endforeach; ?></div><?php else: ?><p>No lists yet. <a href="/lists">Create one first</a>.</p><?php endif; ?><p class="list-status" data-list-status role="status" aria-live="polite"></p><div class="confirm-dialog-actions"><button class="button button-secondary" type="button" data-close-list-dialog>Cancel</button><?php if ($availableLists): ?><button class="button button-primary" type="submit">Save lists</button><?php endif; ?></div></form></dialog><?php endif; ?>
   <p class="edit-status" data-edit-status role="status" aria-live="polite"></p>
   <section class="capture-metadata"><h2>Captured from</h2><dl>
     <div><dt>Device</dt><dd class="metadata-device"><i class="glyph glyph-<?=htmlspecialchars((string)($capture['device_type'] ?? 'pc'))?>" aria-hidden="true"></i><?php if (!empty($capture['device_id'])): ?><a href="/devices/<?=urlencode($capture['device_id'])?>"><?=htmlspecialchars($deviceLabel)?></a><?php else: ?><?=htmlspecialchars($deviceLabel)?><?php endif; ?></dd></div>
     <?php if ($sourceUrl): ?><div><dt>Web</dt><dd><a href="<?=htmlspecialchars($sourceUrl)?>" target="_blank" rel="noopener noreferrer"><?=htmlspecialchars($sourceTitle ?: $sourceDomain ?: $sourceUrl)?></a><?php if ($linkedUrl): ?><small>Wrapping link: <a href="<?=htmlspecialchars($linkedUrl)?>" target="_blank" rel="noopener noreferrer"><?=htmlspecialchars($linkedUrl)?></a></small><?php endif; ?></dd></div><?php endif; ?>
     <div><dt>Method</dt><dd><?=htmlspecialchars($methodLabel)?></dd></div>
   </dl></section>
-  <footer class="detail-actions"><?php if ($isTrashed): ?><form method="post" action="/captures/<?=urlencode($capture['id'])?>/restore"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-primary">Restore</button></form><form method="post" action="/captures/<?=urlencode($capture['id'])?>/delete" onsubmit="return confirm('Permanently delete this capture and its attachments? This cannot be undone.')"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-danger-outline"><i class="glyph glyph-trash" aria-hidden="true"></i>Delete permanently</button></form><?php else: ?><button class="button button-secondary" type="button" data-open-list-dialog><i class="glyph glyph-list" aria-hidden="true"></i>Add to list</button><form method="post" action="/captures/<?=urlencode($capture['id'])?>/archive" data-archive-action <?=$capture['status'] === 'inbox' ? '' : 'hidden'?>> <input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-secondary"><i class="glyph glyph-archive" aria-hidden="true"></i>Archive</button></form><form method="post" action="/captures/<?=urlencode($capture['id'])?>/delete"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-danger-outline"><i class="glyph glyph-trash" aria-hidden="true"></i>Move to Trash</button></form><?php endif; ?></footer>
+  <footer class="detail-actions"><?php if ($isTrashed): ?><form method="post" action="/captures/<?=urlencode($capture['id'])?>/restore"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-primary">Restore</button></form><form method="post" action="/captures/<?=urlencode($capture['id'])?>/delete" onsubmit="return confirm('Permanently delete this capture and its attachments? This cannot be undone.')"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-danger-outline"><i class="glyph glyph-trash" aria-hidden="true"></i>Delete permanently</button></form><?php else: ?><button class="button button-secondary" type="button" data-open-list-dialog data-capture-id="<?=htmlspecialchars($capture['id'])?>" data-list-ids="<?=htmlspecialchars(json_encode($assignedListIds, JSON_THROW_ON_ERROR))?>"><i class="glyph glyph-list" aria-hidden="true"></i>Add to list</button><form method="post" action="/captures/<?=urlencode($capture['id'])?>/archive" data-archive-action <?=$capture['status'] === 'inbox' ? '' : 'hidden'?>> <input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-secondary"><i class="glyph glyph-archive" aria-hidden="true"></i>Archive</button></form><form method="post" action="/captures/<?=urlencode($capture['id'])?>/delete"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-danger-outline"><i class="glyph glyph-trash" aria-hidden="true"></i>Move to Trash</button></form><?php endif; ?></footer>
 </article>

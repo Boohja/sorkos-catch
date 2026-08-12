@@ -9,4 +9,44 @@
 <nav class="filter-tabs" aria-label="Capture views"><a href="/inbox" <?=$status === 'inbox' ? 'aria-current="page"' : ''?>><i class="glyph glyph-inbox" aria-hidden="true"></i>Inbox</a><a href="/archive" <?=$status === 'archived' ? 'aria-current="page"' : ''?>><i class="glyph glyph-archive" aria-hidden="true"></i>Archived</a><a href="/trash" <?=$status === 'trash' ? 'aria-current="page"' : ''?>><i class="glyph glyph-trash" aria-hidden="true"></i>Trash</a></nav>
 <?php $bulkFormId = 'capture-bulk-form';
 require __DIR__ . '/_list.php'; ?>
-<?php if ($captures): $permanent = $status === 'trash'; ?><form id="capture-bulk-form" class="bulk-actions" method="post" action="/captures/bulk-delete" data-bulk-actions data-permanent="<?=$permanent ? 'true' : 'false'?>" hidden><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><input type="hidden" name="view" value="<?=htmlspecialchars($status)?>"><span class="bulk-selection-count" data-bulk-count role="status" aria-live="polite"></span><button class="button button-danger-outline" type="button" data-open-bulk-delete><?=$permanent ? 'Delete permanently' : 'Move to Trash'?></button></form><dialog class="confirm-dialog" data-bulk-delete-dialog aria-labelledby="bulk-delete-title" aria-describedby="bulk-delete-description"><form method="dialog"><h2 id="bulk-delete-title"><?=$permanent ? 'Permanently delete captures?' : 'Move captures to Trash?'?></h2><p id="bulk-delete-description" data-bulk-delete-description><?=$permanent ? 'The selected captures and their attachments will be permanently deleted. This action cannot be undone.' : 'The selected captures can be restored from Trash for 30 days.'?></p><div class="confirm-dialog-actions"><button class="button button-secondary" value="cancel" autofocus>Cancel</button><button class="button button-danger-outline" type="submit" form="capture-bulk-form" data-confirm-bulk-delete><?=$permanent ? 'Delete permanently' : 'Move to Trash'?></button></div></form></dialog><?php endif; ?>
+<?php if ($captures): ?>
+  <?php $permanent = $status === 'trash'; ?>
+  <form
+    id="capture-bulk-form"
+    class="bulk-actions"
+    method="post"
+    action="/captures/bulk-delete"
+    data-bulk-actions
+    data-permanent="<?=$permanent ? 'true' : 'false'?>"
+    hidden
+  >
+    <input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>">
+    <input type="hidden" name="view" value="<?=htmlspecialchars($status)?>">
+    <span class="bulk-selection-count" data-bulk-count role="status" aria-live="polite"></span>
+    <?php if (!$permanent): ?>
+      <button class="button button-secondary" type="button" data-open-bulk-lists>
+        <i class="glyph glyph-list" aria-hidden="true"></i>Add to list
+      </button>
+    <?php endif; ?>
+    <?php if ($status === 'inbox'): ?>
+      <button class="button button-secondary" type="submit" formaction="/captures/bulk-archive">
+        <i class="glyph glyph-archive" aria-hidden="true"></i>Archive
+      </button>
+    <?php endif; ?>
+    <button class="button button-danger-outline" type="button" data-open-bulk-delete>
+      <i class="glyph glyph-trash" aria-hidden="true"></i><?=$permanent ? 'Delete permanently' : 'Move to Trash'?>
+    </button>
+  </form>
+  <dialog class="confirm-dialog" data-bulk-delete-dialog aria-labelledby="bulk-delete-title" aria-describedby="bulk-delete-description">
+    <form method="dialog">
+      <h2 id="bulk-delete-title"><?=$permanent ? 'Permanently delete captures?' : 'Move captures to Trash?'?></h2>
+      <p id="bulk-delete-description" data-bulk-delete-description><?=$permanent ? 'The selected captures and their attachments will be permanently deleted. This action cannot be undone.' : 'The selected captures can be restored from Trash for 30 days.'?></p>
+      <div class="confirm-dialog-actions">
+        <button class="button button-secondary" value="cancel" autofocus>Cancel</button>
+        <button class="button button-danger-outline" type="submit" form="capture-bulk-form" data-confirm-bulk-delete>
+          <i class="glyph glyph-trash" aria-hidden="true"></i><?=$permanent ? 'Delete permanently' : 'Move to Trash'?>
+        </button>
+      </div>
+    </form>
+  </dialog>
+<?php endif; ?>

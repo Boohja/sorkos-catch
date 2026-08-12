@@ -388,6 +388,7 @@ $test('Lists group captures many-to-many and appear in capture details', functio
     $repository = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
     $captureRepository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $detail = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.php');
     $index = (string)file_get_contents($root . '/app/Views/lists/index.php');
     foreach (['catch_lists','catch_capture_lists','PRIMARY KEY (capture_id, list_id)','ON DELETE CASCADE'] as $required) {
         if (!str_contains($migration, $required)) {
@@ -404,7 +405,7 @@ $test('Lists group captures many-to-many and appear in capture details', functio
     }if (!str_contains($captureRepository, 'listByList') || !str_contains($captureRepository, 'listsForCapture')) {
         throw new RuntimeException('Captures do not expose their lists');
     }foreach (['data-capture-lists','Add to list','availableLists'] as $required) {
-        if (!str_contains($detail, $required)) {
+        if (!str_contains($detail . $dialog, $required)) {
             throw new RuntimeException('Capture list selection is incomplete: ' . $required);
         }
     }foreach (['list-grid','top_capture_title','capture_count'] as $required) {
@@ -487,6 +488,7 @@ $test('Capture lists use membership truth and a batch assignment dialog', functi
     $lists = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/ListController.php');
     $view = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.php');
     $script = (string)file_get_contents($root . '/public/assets/js/capture-lists.js');
     if (str_contains($repository, 'c.status=:status AND c.deleted_at IS NULL AND cl.list_id=:list')) {
         throw new RuntimeException('List detail still hides members by capture status');
@@ -495,7 +497,7 @@ $test('Capture lists use membership truth and a batch assignment dialog', functi
             throw new RuntimeException('Batch list assignment is incomplete: ' . $required);
         }
     }foreach (['data-list-dialog','data-list-form','data-assigned-lists','Add to list'] as $required) {
-        if (!str_contains($view, $required)) {
+        if (!str_contains($view . $dialog, $required)) {
             throw new RuntimeException('List assignment dialog is incomplete: ' . $required);
         }
     }if (!str_contains($script, 'renderLists') || !str_contains($script, 'showModal')) {
@@ -619,6 +621,246 @@ $test('Debug capture logging is bounded, redacted, and device scoped', function 
     foreach (['<details class="debug-request">', 'Server verdict:', 'Token ID', 'Parameters', 'Uploaded files'] as $required) {
         if (!str_contains($view, $required)) {
             throw new RuntimeException('Device debug request UI is incomplete: ' . $required);
+        }
+    }
+});
+$test('Capture collections share responsive list and grid presentations', function () use ($root) {
+    $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $view = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $device = (string) file_get_contents($root . '/app/Views/devices/show.php');
+    $style = (string) file_get_contents($root . '/public/assets/css/capture-collection.css');
+    $script = (string) file_get_contents($root . '/public/assets/js/capture-view.js');
+
+    if (substr_count($repository, 'visual_attachment_id') !== 4) {
+        throw new RuntimeException('Every visual capture collection query must expose its best image');
+    }
+
+    foreach (['data-capture-collection', 'capture-visual-fallback', 'loading="lazy"', 'capture-item-footer'] as $required) {
+        if (!str_contains($view, $required)) {
+            throw new RuntimeException('Shared capture collection markup is missing ' . $required);
+        }
+    }
+
+    foreach (["[data-view='grid']", 'grid-template-columns: repeat(3', 'aspect-ratio: 16 / 9', 'object-fit: cover'] as $required) {
+        if (!str_contains($style, $required)) {
+            throw new RuntimeException('Capture collection layouts are missing ' . $required);
+        }
+    }
+
+    if (!str_contains($device, "require dirname(__DIR__) . '/captures/_list.php'")) {
+        throw new RuntimeException('Device capture history does not use the shared collection component');
+    }
+
+    foreach (['localStorage', 'catch-capture-view', "new Set(['list', 'grid'])", 'dataset.view = view'] as $required) {
+        if (!str_contains($script, $required)) {
+            throw new RuntimeException('The global capture layout preference is missing ' . $required);
+        }
+    }
+});
+$test('Relative capture times update globally and expose full local tooltips', function () use ($root) {
+    $view = new Catch\Core\View($root . '/app/Views');
+    $now = new DateTimeImmutable('2026-08-12 12:00:00', new DateTimeZone('UTC'));
+    $cases = [
+        '2026-08-12 11:59:30' => '<1m',
+        '2026-08-12 11:35:00' => '25m',
+        '2026-08-12 08:00:00' => '4h',
+        '2026-08-08 12:00:00' => '4d',
+        '2026-06-13 12:00:00' => '2mo',
+        '2024-08-12 12:00:00' => '2y',
+    ];
+    foreach ($cases as $value => $expected) {
+        if ($view->relativeTime($value, $now) !== $expected) {
+            throw new RuntimeException('Relative time modifier failed for ' . $value);
+        }
+    }
+
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $script = (string) file_get_contents($root . '/public/assets/js/relative-time.js');
+    foreach (['data-relative-time', 'relativeTime', 'setInterval', '60_000', 'element.title'] as $required) {
+        if (!str_contains($collection . $script, $required)) {
+            throw new RuntimeException('Dynamic relative capture time is missing ' . $required);
+        }
+    }
+});
+$test('Capture menus and bulk actions share list assignment controls', function () use ($root) {
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $captureRepository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $listRepository = (string) file_get_contents($root . '/app/Repositories/ListRepository.php');
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.php');
+    $dialog = (string) file_get_contents($root . '/app/Views/captures/_list_dialog.php');
+    $bulk = (string) file_get_contents($root . '/app/Views/captures/index.php');
+
+    foreach (['POST /captures/bulk-archive', 'POST /captures/bulk-lists'] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('Bulk action route is missing ' . $required);
+        }
+    }
+    if (!str_contains($captureRepository, 'archiveMany') || !str_contains($listRepository, 'assignMany')) {
+        throw new RuntimeException('Bulk archive or list assignment persistence is missing');
+    }
+    foreach (['data-capture-actions', 'data-capture-action-menu', 'data-list-dialog', 'data-open-bulk-lists', 'glyph-archive', 'glyph-trash'] as $required) {
+        if (!str_contains($collection . $menu . $dialog . $bulk, $required)) {
+            throw new RuntimeException('Capture action interface is missing ' . $required);
+        }
+    }
+});
+$test('URL captures store immutable WebP preview attachments', function () use ($root) {
+    $migration = (string) file_get_contents($root . '/database/migrations/011_link_preview_attachments.sql');
+    $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
+    $uploads = (string) file_get_contents($root . '/app/Services/UploadService.php');
+    $service = (string) file_get_contents($root . '/app/Services/CaptureService.php');
+    $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $detail = (string) file_get_contents($root . '/app/Views/captures/show.php');
+    $preview = (string) file_get_contents($root . '/app/Views/captures/_link_preview.php');
+
+    foreach (["ENUM('source','preview')", "DEFAULT 'source'", 'idx_attachments_capture_kind'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Preview attachment migration is incomplete: ' . $required);
+        }
+    }
+
+    foreach (['linkPreview', 'thumbnail_url', 'og:image', 'json+oembed', 'providerOembedUrl'] as $required) {
+        if (!str_contains($remote, $required)) {
+            throw new RuntimeException('Remote preview discovery is incomplete: ' . $required);
+        }
+    }
+
+    foreach (['storePreview', 'imagecreatefromstring', 'imagecopyresampled', 'imagewebp', "'preview'"] as $required) {
+        if (!str_contains($uploads, $required)) {
+            throw new RuntimeException('WebP preview generation is incomplete: ' . $required);
+        }
+    }
+
+    foreach (['refreshLinkPreview', 'link_preview', 'previewStorageNames', 'deletePreviewAttachments'] as $required) {
+        if (!str_contains($service . $repository, $required)) {
+            throw new RuntimeException('Preview persistence or replacement is incomplete: ' . $required);
+        }
+    }
+
+    if (!str_contains($detail, "=== 'preview'") || !str_contains($detail, "=== 'source'")) {
+        throw new RuntimeException('Generated previews are not separated from user attachments');
+    }
+
+    foreach (['link-preview-image', 'link-preview-title', 'link-preview-description'] as $required) {
+        if (!str_contains($preview, $required)) {
+            throw new RuntimeException('Link preview card is incomplete: ' . $required);
+        }
+    }
+
+    $temporaryPath = sys_get_temp_dir() . '/catch-preview-' . bin2hex(random_bytes(6));
+    mkdir($temporaryPath, 0700, true);
+    $image = imagecreatetruecolor(1600, 900);
+    if ($image === false) {
+        throw new RuntimeException('The preview conversion fixture could not be created');
+    }
+    imagefill($image, 0, 0, imagecolorallocate($image, 244, 166, 0));
+    ob_start();
+    imagepng($image);
+    $png = ob_get_clean();
+    imagedestroy($image);
+
+    try {
+        $uploadService = new Catch\Services\UploadService(
+            Catch\Core\Config::load($root),
+            $temporaryPath,
+        );
+        $attachment = $uploadService->storePreview(
+            is_string($png) ? $png : '',
+            '00000000-0000-4000-8000-000000000000',
+        );
+        $storedPath = $temporaryPath . '/' . $attachment['storage_name'];
+
+        if (
+            $attachment['kind'] !== 'preview'
+            || $attachment['mime_type'] !== 'image/webp'
+            || $attachment['width'] !== 800
+            || $attachment['height'] !== 450
+            || (new finfo(FILEINFO_MIME_TYPE))->file($storedPath) !== 'image/webp'
+        ) {
+            throw new RuntimeException('Preview conversion did not produce the bounded WebP attachment');
+        }
+
+        $uploadService->remove($attachment['storage_name']);
+        @rmdir(dirname($storedPath));
+        @rmdir(dirname(dirname($storedPath)));
+    } finally {
+        @rmdir($temporaryPath);
+    }
+
+    if (in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        $database = new PDO('sqlite::memory:');
+        $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $database->sqliteCreateFunction(
+            'UTC_TIMESTAMP',
+            static fn (): string => '2026-08-12 12:00:00.000000',
+            -1,
+        );
+        $database->exec('PRAGMA foreign_keys = ON');
+        $database->exec(<<<'SQL'
+            CREATE TABLE catch_captures (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                metadata_json TEXT,
+                updated_at TEXT
+            );
+            CREATE TABLE catch_attachments (
+                id TEXT PRIMARY KEY,
+                capture_id TEXT NOT NULL,
+                kind TEXT NOT NULL DEFAULT 'source',
+                original_name TEXT NOT NULL,
+                storage_name TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                width INTEGER,
+                height INTEGER,
+                checksum TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (capture_id) REFERENCES catch_captures(id) ON DELETE CASCADE
+            );
+            SQL);
+        $database->exec("INSERT INTO catch_captures VALUES ('capture-1','user-1','{}',NULL)");
+        $database->exec(<<<'SQL'
+            INSERT INTO catch_attachments VALUES
+                ('source-1','capture-1','source','recording.m4a','source-file','audio/mp4',12,NULL,NULL,'source-checksum','2026-08-12'),
+                ('preview-old','capture-1','preview','link-preview.webp','preview-old-file','image/webp',12,640,360,'old-checksum','2026-08-12')
+            SQL);
+
+        $captureRepository = new Catch\Repositories\CaptureRepository($database);
+        if ($captureRepository->previewStorageNames('capture-1', 'user-1') !== ['preview-old-file']) {
+            throw new RuntimeException('Preview lookup is not scoped to its capture owner');
+        }
+
+        $database->beginTransaction();
+        $captureRepository->deletePreviewAttachments('capture-1', 'user-1');
+        $database->rollBack();
+        if ($captureRepository->previewStorageNames('capture-1', 'user-1') !== ['preview-old-file']) {
+            throw new RuntimeException('A failed preview replacement did not preserve the old preview');
+        }
+
+        $captureRepository->deletePreviewAttachments('capture-1', 'user-1');
+        $captureRepository->addAttachment([
+            'id' => 'preview-new',
+            'capture_id' => 'capture-1',
+            'kind' => 'preview',
+            'original_name' => 'link-preview.webp',
+            'storage_name' => 'preview-new-file',
+            'mime_type' => 'image/webp',
+            'size_bytes' => 10,
+            'width' => 800,
+            'height' => 450,
+            'checksum' => 'new-checksum',
+        ]);
+        if ($captureRepository->previewStorageNames('capture-1', 'user-1') !== ['preview-new-file']) {
+            throw new RuntimeException('Preview replacement did not store exactly one new preview');
+        }
+        if ((int) $database->query("SELECT COUNT(*) FROM catch_attachments WHERE kind='source'")->fetchColumn() !== 1) {
+            throw new RuntimeException('Preview replacement modified a user source attachment');
+        }
+
+        $database->exec("DELETE FROM catch_captures WHERE id='capture-1'");
+        if ((int) $database->query('SELECT COUNT(*) FROM catch_attachments')->fetchColumn() !== 0) {
+            throw new RuntimeException('Capture deletion did not cascade to source and preview attachments');
         }
     }
 });

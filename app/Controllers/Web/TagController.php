@@ -7,13 +7,14 @@ namespace Catch\Controllers\Web;
 use Catch\Core\View;
 use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
+use Catch\Repositories\ListRepository;
 use Catch\Repositories\TagRepository;
 use Catch\Services\AuthService;
 use Catch\Services\Csrf;
 
 final class TagController
 {
-    public function __construct(private readonly View $view, private readonly AuthService $auth, private readonly TagRepository $tags, private readonly CaptureRepository $captures, private readonly Csrf $csrf)
+    public function __construct(private readonly View $view, private readonly AuthService $auth, private readonly TagRepository $tags, private readonly ListRepository $lists, private readonly CaptureRepository $captures, private readonly Csrf $csrf)
     {
     }
     private function user(): array
@@ -73,7 +74,7 @@ final class TagController
             $this->view->render('errors/404', ['title' => 'Not found','user' => $u], 404);
             return;
         }$s = in_array(($r = (string)($_GET['status'] ?? 'inbox')), ['inbox','archived'], true) ? $r : 'inbox';
-        $this->view->render('tags/captures', ['title' => $tag['name'],'user' => $u,'tag' => $tag,'captures' => $this->captures->listByTag($u['id'], $tag['id'], $s),'status' => $s,'csrf' => $this->csrf->token()]);
+        $this->view->render('tags/captures', ['title' => $tag['name'],'user' => $u,'tag' => $tag,'captures' => $this->captures->listByTag($u['id'], $tag['id'], $s),'status' => $s,'availableLists' => $this->lists->list($u['id']),'enableListDialog' => true,'enableCaptureActionMenu' => true,'csrf' => $this->csrf->token()]);
     }
     public function assign(\Base $f, array $p): never
     {

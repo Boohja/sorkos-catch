@@ -72,7 +72,7 @@ final class ListController
         if (!$list) {
             $this->view->render('errors/404', ['title' => 'Not found','user' => $user], 404);
             return;
-        }$this->view->render('lists/captures', ['title' => $list['title'],'user' => $user,'list' => $list,'captures' => $this->captures->listByList($user['id'], $list['id']),'status' => 'archived','csrf' => $this->csrf->token()]);
+        }$this->view->render('lists/captures', ['title' => $list['title'],'user' => $user,'list' => $list,'captures' => $this->captures->listByList($user['id'], $list['id']),'status' => 'archived','availableLists' => $this->lists->list($user['id']),'enableListDialog' => true,'enableCaptureActionMenu' => true,'csrf' => $this->csrf->token()]);
     }
     public function assign(\Base $f3, array $params): never
     {
@@ -102,6 +102,18 @@ final class ListController
         if ($result === null) {
             Response::json(['error' => 'Capture or list not found.'], 404);
         }Response::json($result);
+    }
+    public function bulkAssign(): never
+    {
+        $user = $this->user();
+        $this->guard(true);
+        $captureIds = is_array($_POST['capture_ids'] ?? null) ? $_POST['capture_ids'] : [];
+        $listIds = is_array($_POST['list_ids'] ?? null) ? $_POST['list_ids'] : [];
+        $assigned = $this->lists->assignMany($user['id'], $captureIds, $listIds);
+        if ($assigned === null) {
+            Response::json(['error' => 'A selected capture or list could not be found.'], 404);
+        }
+        Response::json(['assigned' => $assigned, 'capture_status' => 'archived']);
     }
     private function get(array $params, string $userId): ?array
     {
