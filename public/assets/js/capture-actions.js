@@ -13,6 +13,31 @@ export function initCaptureActions() {
     trigger = null;
   };
 
+  const submitAction = async (form) => {
+    if (!trigger) return;
+    const captureId = trigger.dataset.captureId;
+    const button = form.querySelector('button[type="submit"]');
+    if (button) button.disabled = true;
+
+    try {
+      const response = await fetch(form.action, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+        body: new FormData(form),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'The capture could not be updated.');
+      close();
+      await window.Catch?.captureCollection?.transition([captureId], {
+        status: result.capture_status,
+      });
+    } catch (error) {
+      window.Catch?.notify?.(error.message || 'The capture could not be updated.', true);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  };
+
   const position = () => {
     if (!trigger) return;
     const triggerRect = trigger.getBoundingClientRect();
@@ -59,6 +84,13 @@ export function initCaptureActions() {
     const captureIds = [trigger.dataset.captureId];
     close();
     window.Catch?.openListDialog?.({ captureIds, assignedListIds, mode: 'single' });
+  });
+
+  [archiveForm, trashForm].forEach((form) => {
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitAction(form);
+    });
   });
 
   document.addEventListener('keydown', (event) => {

@@ -38,7 +38,8 @@ export function initCaptureLists() {
     title.textContent = context.mode === 'bulk' ? 'Add captures to lists' : 'Add to lists';
     description.textContent = context.mode === 'bulk'
       ? `${context.captureIds.length} ${context.captureIds.length === 1 ? 'capture' : 'captures'} will be added to the selected lists and archived.`
-      : 'Choose every list this capture should belong to.';
+      : '';
+    description.hidden = description.textContent === '';
     if (save) save.textContent = context.mode === 'bulk' ? 'Add to lists' : 'Save lists';
     setStatus('');
     if (typeof dialog.showModal === 'function') dialog.showModal();
@@ -95,7 +96,20 @@ export function initCaptureLists() {
         if (archiveAction) archiveAction.hidden = json.capture_status !== 'inbox';
         dialog.close();
       } else {
-        window.location.reload();
+        const listIds = (json.lists || []).map((list) => list.id);
+        if (context.mode === 'single') {
+          const item = document.querySelector(
+            `[data-capture-id="${CSS.escape(context.captureIds[0])}"]`,
+          );
+          const trigger = item?.querySelector('[data-capture-actions]');
+          if (trigger) trigger.dataset.listIds = JSON.stringify(listIds);
+        }
+        dialog.close();
+        await window.Catch?.captureCollection?.transition(context.captureIds, {
+          status: json.capture_status,
+          listIds: context.mode === 'single' ? listIds : undefined,
+        });
+        window.Catch?.clearCaptureSelection?.();
       }
     } catch (error) {
       setStatus(error.message, true);

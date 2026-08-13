@@ -91,6 +91,10 @@ $test('Unknown captures resolve content and reject unsafe attachments', function
         file_put_contents($tinyRoot . '/config/config.ini', "[uploads]\nmax_bytes=10\nallowed_mime=\"image/png,application/pdf\"\n");
         try {
             $tinyUploads = new Catch\Services\UploadService(Catch\Core\Config::load($tinyRoot), sys_get_temp_dir());
+            $allowedProperty = (new ReflectionClass($tinyUploads))->getProperty('allowed');
+            if (!in_array('audio/x-m4a', $allowedProperty->getValue($tinyUploads), true)) {
+                throw new RuntimeException('Apple M4A audio was removed by a configured MIME override');
+            }
             try {
                 $tinyUploads->inspectUnknownAttachment($imageFile['attachment']);
                 throw new RuntimeException('Oversized attachment was accepted');
@@ -376,6 +380,7 @@ $test('Inbox bulk delete is confirmed and permanently removes related data', fun
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $view = (string)file_get_contents($root . '/app/Views/captures/index.php');
     $list = (string)file_get_contents($root . '/app/Views/captures/_list.php');
+    $item = (string)file_get_contents($root . '/app/Views/captures/_item.php');
     $script = (string)file_get_contents($root . '/public/assets/js/capture-bulk.js');
     $style = (string)file_get_contents($root . '/public/assets/css/capture-bulk.css');
     foreach (['POST /captures/bulk-delete','bulkDelete'] as $required) {
@@ -395,10 +400,10 @@ $test('Inbox bulk delete is confirmed and permanently removes related data', fun
             throw new RuntimeException('Bulk confirmation UI is missing ' . $required);
         }
     }foreach (['name="capture_ids[]"','form="<?=htmlspecialchars($bulkFormId)?>"'] as $required) {
-        if (!str_contains($list, $required)) {
+        if (!str_contains($list . $item, $required)) {
             throw new RuntimeException('Capture selections are not associated with the bulk form');
         }
-    }foreach (['showModal','form.hidden=total===0','requestSubmit'] as $required) {
+    }foreach (['showModal','form.hidden = total === 0','requestSubmit'] as $required) {
         if (!str_contains($script, $required)) {
             throw new RuntimeException('Bulk visibility or confirmation behavior is missing ' . $required);
         }
@@ -499,7 +504,7 @@ $test('Capture detail supports quiet in-place editing and global request progres
         if (!str_contains($view, $required)) {
             throw new RuntimeException('Editable detail field is missing: ' . $required);
         }
-    }foreach (["event.key==='Enter'",'addEventListener(\'blur\'','fetch(`/captures/','setValue(element,before)'] as $required) {
+    }foreach (["event.key === 'Enter'",'addEventListener(\'blur\'','fetch(`/captures/','setValue(element, before)'] as $required) {
         if (!str_contains($editing, $required)) {
             throw new RuntimeException('In-place save behavior is incomplete: ' . $required);
         }
@@ -532,7 +537,8 @@ $test('Devices expose capture counts, last use time, and capture history', funct
     $devices = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $captures = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
-    $index = (string)file_get_contents($root . '/app/Views/devices/index.php');
+    $index = (string)file_get_contents($root . '/app/Views/devices/index.php')
+        . (string)file_get_contents($root . '/app/Views/devices/_table.php');
     $detail = (string)file_get_contents($root . '/app/Views/devices/show.php');
     foreach (['capture_count','capture_last_used_at','MAX(c.created_at)'] as $required) {
         if (!str_contains($devices, $required)) {
@@ -552,7 +558,8 @@ $test('Device types drive icons and remain editable', function () use ($root) {
     $migration = (string)file_get_contents($root . '/database/migrations/008_device_types.sql') . (string)file_get_contents($root . '/database/migrations/009_refine_device_type_guesses.sql');
     $repository = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
-    $index = (string)file_get_contents($root . '/app/Views/devices/index.php');
+    $index = (string)file_get_contents($root . '/app/Views/devices/index.php')
+        . (string)file_get_contents($root . '/app/Views/devices/_table.php');
     $detail = (string)file_get_contents($root . '/app/Views/devices/show.php');
     foreach (["ENUM('laptop','phone','pc','tablet')","DEFAULT 'pc'",'%iphone%',"'%ipad%'"] as $required) {
         if (!str_contains($migration, $required)) {
@@ -566,7 +573,7 @@ $test('Device types drive icons and remain editable', function () use ($root) {
     }if (!str_contains($controller, "\$_POST['device_type']")) {
         throw new RuntimeException('Device type is not accepted by the rename action');
     }
-    foreach (['glyph-<?= htmlspecialchars($deviceType) ?>','Last used:','capture_count'] as $required) {
+    foreach (['glyph-<?=htmlspecialchars($deviceType)?>','Last used:','capture_count'] as $required) {
         if (!str_contains($index, $required)) {
             throw new RuntimeException('Device list type or usage UI is incomplete: ' . $required);
         }
@@ -651,16 +658,17 @@ $test('Debug capture logging is bounded, redacted, and device scoped', function 
 $test('Capture collections share responsive list and grid presentations', function () use ($root) {
     $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $view = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $item = (string) file_get_contents($root . '/app/Views/captures/_item.php');
     $device = (string) file_get_contents($root . '/app/Views/devices/show.php');
     $style = (string) file_get_contents($root . '/public/assets/css/capture-collection.css');
     $script = (string) file_get_contents($root . '/public/assets/js/capture-view.js');
 
-    if (substr_count($repository, 'visual_attachment_id') !== 4) {
+    if (substr_count($repository, 'visual_attachment_id') < 6) {
         throw new RuntimeException('Every visual capture collection query must expose its best image');
     }
 
     foreach (['data-capture-collection', 'capture-visual-fallback', 'loading="lazy"', 'capture-item-footer'] as $required) {
-        if (!str_contains($view, $required)) {
+        if (!str_contains($view . $item, $required)) {
             throw new RuntimeException('Shared capture collection markup is missing ' . $required);
         }
     }
@@ -699,6 +707,7 @@ $test('Relative capture times update globally and expose full local tooltips', f
     }
 
     $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
     $script = (string) file_get_contents($root . '/public/assets/js/relative-time.js');
     foreach (['data-relative-time', 'relativeTime', 'setInterval', '60_000', 'element.title'] as $required) {
         if (!str_contains($collection . $script, $required)) {
@@ -711,6 +720,7 @@ $test('Capture menus and bulk actions share list assignment controls', function 
     $captureRepository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $listRepository = (string) file_get_contents($root . '/app/Repositories/ListRepository.php');
     $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
     $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.php');
     $dialog = (string) file_get_contents($root . '/app/Views/captures/_list_dialog.php');
     $bulk = (string) file_get_contents($root . '/app/Views/captures/index.php');
@@ -724,7 +734,7 @@ $test('Capture menus and bulk actions share list assignment controls', function 
         throw new RuntimeException('Bulk archive or list assignment persistence is missing');
     }
     foreach (['data-capture-actions', 'data-capture-action-menu', 'data-list-dialog', 'data-open-bulk-lists', 'glyph-archive', 'glyph-trash'] as $required) {
-        if (!str_contains($collection . $menu . $dialog . $bulk, $required)) {
+        if (!str_contains($collection . $collectionItem . $menu . $dialog . $bulk, $required)) {
             throw new RuntimeException('Capture action interface is missing ' . $required);
         }
     }
@@ -744,7 +754,7 @@ $test('URL captures store immutable WebP preview attachments', function () use (
         }
     }
 
-    foreach (['linkPreview', 'thumbnail_url', 'og:image', 'json+oembed', 'providerOembedUrl'] as $required) {
+    foreach (['linkPreview', 'thumbnail_url', 'og:image', 'json+oembed', 'previewProvider'] as $required) {
         if (!str_contains($remote, $required)) {
             throw new RuntimeException('Remote preview discovery is incomplete: ' . $required);
         }
@@ -896,6 +906,7 @@ $test('Link previews are deferred, bounded, and use the social preview identity'
     $client = (string) file_get_contents($root . '/public/assets/js/capture-preview.js');
     $devices = (string) file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
 
     foreach (['link_preview_fetch', "'status' => 'pending'", 'previewFetchIsDue', 'failedPreviewFetchState'] as $required) {
         if (!str_contains($service, $required)) {
@@ -914,8 +925,116 @@ $test('Link previews are deferred, bounded, and use the social preview identity'
         throw new RuntimeException('Devices are not sorted by last use');
     }
     foreach (['glyph-dots-vertical', 'glyph-table', 'glyph-grid'] as $required) {
-        if (!str_contains($collection, $required)) {
+        if (!str_contains($collection . $collectionItem, $required)) {
             throw new RuntimeException('Capture collection icon is missing: ' . $required);
+        }
+    }
+});
+$test('Capture task backlog enhancements remain integrated', function () use ($root) {
+    $deviceMigration = (string) file_get_contents($root . '/database/migrations/013_device_client_icons.sql');
+    $devices = (string) file_get_contents($root . '/app/Repositories/DeviceRepository.php');
+    $cli = (string) file_get_contents($root . '/app/Repositories/CliAuthRepository.php');
+    $deviceDetail = (string) file_get_contents($root . '/app/Views/devices/show.php');
+    foreach (["'extension','cli'", "'extension' => 'Extension'", "'cli' => 'CLI'"] as $required) {
+        if (!str_contains($deviceMigration . $deviceDetail, $required)) {
+            throw new RuntimeException('CLI or extension device icon support is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($devices, 'suggestedClientName') || !str_contains($cli, 'suggestedDeviceName')) {
+        throw new RuntimeException('Client-aware suggested device names are missing');
+    }
+
+    $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
+    $previewClient = (string) file_get_contents($root . '/public/assets/js/capture-preview.js');
+    $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
+    $appStoreProvider = (string) file_get_contents($root . '/app/Services/LinkPreview/AppStoreProvider.php');
+    if (substr_count($repository, "a.kind IN ('preview', 'source')") < 6) {
+        throw new RuntimeException('Source images are not available to every capture collection');
+    }
+    foreach (['data-preview-fetch-due', 'MAX_COLLECTION_FETCHES', 'IntersectionObserver'] as $required) {
+        if (!str_contains($collection . $collectionItem . $previewClient, $required)) {
+            throw new RuntimeException('Bounded collection preview fetching is incomplete: ' . $required);
+        }
+    }
+    foreach (['itunes.apple.com/lookup', 'providerPreview', 'artworkUrl512'] as $required) {
+        if (!str_contains($remote . $appStoreProvider, $required)) {
+            throw new RuntimeException('App Store preview lookup is incomplete: ' . $required);
+        }
+    }
+
+    $captureController = (string) file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
+    $captureIndex = (string) file_get_contents($root . '/app/Views/captures/index.php');
+    $captureCreate = (string) file_get_contents($root . '/public/assets/js/capture-create.js');
+    foreach (['Request::wantsJson()', "Response::redirect('/inbox')", 'data-capture-form-status', 'new FormData(form)', 'captureCollection?.insert'] as $required) {
+        if (!str_contains($captureController . $captureIndex . $captureCreate, $required)) {
+            throw new RuntimeException('In-place web capture submission is incomplete: ' . $required);
+        }
+    }
+    $captureActions = (string) file_get_contents($root . '/public/assets/js/capture-actions.js');
+    $captureBulk = (string) file_get_contents($root . '/public/assets/js/capture-bulk.js');
+    $captureLists = (string) file_get_contents($root . '/public/assets/js/capture-lists.js');
+    $captureCollection = (string) file_get_contents($root . '/public/assets/js/capture-collection.js');
+    foreach (['captureCollection?.transition', "Accept: 'application/json'", 'animateRemoval'] as $required) {
+        if (!str_contains($captureActions . $captureBulk . $captureLists . $captureCollection, $required)) {
+            throw new RuntimeException('Async capture collection actions are incomplete: ' . $required);
+        }
+    }
+
+    $debug = (string) file_get_contents($root . '/app/Services/CaptureDebugService.php');
+    $captureDetail = (string) file_get_contents($root . '/app/Views/captures/show.php');
+    if (!str_contains($debug, 'forCapture') || !str_contains($captureDetail, 'Related debug request')) {
+        throw new RuntimeException('Capture detail does not expose its related debug request');
+    }
+
+    $editing = (string) file_get_contents($root . '/public/assets/js/capture-edit.js');
+    foreach (['data-markup', 'appendInlineMarkup', 'renderMarkup', "document.createElement('ul')"] as $required) {
+        if (!str_contains($captureDetail . $editing, $required)) {
+            throw new RuntimeException('Safe inline-editable markup is incomplete: ' . $required);
+        }
+    }
+});
+$test('Account settings and provider adapters remain decoupled', function () use ($root) {
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $layout = (string) file_get_contents($root . '/app/Views/layout.php');
+    $settings = (string) file_get_contents($root . '/app/Views/account/settings.php');
+    $deviceTable = (string) file_get_contents($root . '/app/Views/devices/_table.php');
+    $capture = (string) file_get_contents($root . '/app/Views/captures/show.php');
+    $listDialog = (string) file_get_contents($root . '/public/assets/js/capture-lists.js');
+    $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
+    $registry = (string) file_get_contents($root . '/app/Services/LinkPreview/ProviderRegistry.php');
+
+    foreach (['GET /profile', 'GET /settings', 'GET /settings/devices'] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('Account route is missing: ' . $required);
+        }
+    }
+    foreach (['data-user-menu', 'Profile', 'Settings', 'Log out'] as $required) {
+        if (!str_contains($layout, $required)) {
+            throw new RuntimeException('Account menu is incomplete: ' . $required);
+        }
+    }
+    foreach (['data-theme-select', 'data-capture-view-setting', "settingsTab === 'devices'"] as $required) {
+        if (!str_contains($settings, $required)) {
+            throw new RuntimeException('Settings interface is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($deviceTable, 'data-relative-suffix=" ago"')) {
+        throw new RuntimeException('Device use time is not relative');
+    }
+    if (str_contains($capture, '<h2>Content</h2>')
+        || str_contains($listDialog, 'Choose every list this capture should belong to.')) {
+        throw new RuntimeException('Removed capture detail copy has returned');
+    }
+    foreach (['tiktok.com', 'apps.apple.com', 'itunes.apple.com'] as $providerDetail) {
+        if (str_contains($remote, $providerDetail)) {
+            throw new RuntimeException('Provider detail leaked into the generic preview service: ' . $providerDetail);
+        }
+    }
+    foreach (['TikTokProvider', 'AppStoreProvider'] as $provider) {
+        if (!str_contains($registry, $provider)) {
+            throw new RuntimeException('Preview provider is not registered: ' . $provider);
         }
     }
 });

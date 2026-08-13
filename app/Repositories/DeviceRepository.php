@@ -188,7 +188,7 @@ final class DeviceRepository
     {
         $this->deleteExpiredExtensionPairingRequests();
         $requestId = bin2hex(random_bytes(24));
-        $name = mb_substr(trim($name), 0, 120);
+        $name = $this->suggestedClientName($name, 'extension');
         $platform = mb_substr(trim($platform), 0, 32);
         $query = $this->db->prepare('INSERT INTO catch_extension_pairing_requests (request_id,code_challenge,device_name,platform,user_agent,status,expires_at,created_at) VALUES (:request,:challenge,:name,:platform,:user_agent,\'pending\',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL ' . self::EXTENSION_PAIRING_TTL_MINUTES . ' MINUTE),UTC_TIMESTAMP(6))');
         $query->execute(['request' => $requestId,'challenge' => $challenge,'name' => $name,'platform' => $platform,'user_agent' => $userAgent]);
@@ -223,7 +223,13 @@ final class DeviceRepository
             $deviceId = Id::uuid();
             $tokenId = Id::uuid();
             $token = 'catch_device_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,device_type,client_type,platform,user_agent,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',\'pc\',\'extension\',:platform,:user_agent,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute(['id' => $deviceId,'user' => $userId,'name' => $pairing['device_name'],'platform' => $pairing['platform'],'user_agent' => $userAgent ?: $pairing['user_agent']]);
+            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,device_type,client_type,platform,user_agent,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',\'extension\',\'extension\',:platform,:user_agent,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute([
+                'id' => $deviceId,
+                'user' => $userId,
+                'name' => $this->suggestedClientName((string) $pairing['device_name'], 'extension'),
+                'platform' => $pairing['platform'],
+                'user_agent' => $userAgent ?: $pairing['user_agent'],
+            ]);
             $this->db->prepare('INSERT INTO catch_device_tokens (id,device_id,token_hash,token_scope,created_at) VALUES (:id,:device,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id' => $tokenId,'device' => $deviceId,'hash' => hash('sha256', $token)]);
             $this->db->prepare('UPDATE catch_extension_pairing_requests SET status=\'approved\',user_id=:user,device_id=:device,token_encrypted=:token,approved_at=UTC_TIMESTAMP(6) WHERE request_id=:request')->execute(['user' => $userId,'device' => $deviceId,'token' => $this->secrets->encrypt($token),'request' => $requestId]);
             $this->db->commit();
@@ -378,7 +384,7 @@ final class DeviceRepository
     public function rename(string $deviceId, string $userId, string $name, string $deviceType): bool
     {
         $name = mb_substr(trim($name), 0, 120);
-        if ($name === '' || !in_array($deviceType, ['laptop', 'phone', 'pc', 'tablet'], true)) {
+        if ($name === '' || !in_array($deviceType, ['laptop', 'phone', 'pc', 'tablet', 'extension', 'cli'], true)) {
             return false;
         }
 
@@ -399,7 +405,11 @@ final class DeviceRepository
     public function refreshExtensionInfo(string $deviceId, string $name, string $userAgent): void
     {
         $query = $this->db->prepare("UPDATE catch_devices SET user_agent=:user_agent,name=CASE WHEN name IN ('Firefox extension','Chrome extension','Chromium browser extension','Browser extension') THEN :name ELSE name END WHERE id=:id AND client_type='extension'");
-        $query->execute(['user_agent' => mb_substr($userAgent, 0, 500),'name' => mb_substr(trim($name), 0, 120),'id' => $deviceId]);
+        $query->execute([
+            'user_agent' => mb_substr($userAgent, 0, 500),
+            'name' => $this->suggestedClientName($name, 'extension'),
+            'id' => $deviceId,
+        ]);
     }
 
     private function newCode(): array
@@ -426,7 +436,7 @@ final class DeviceRepository
         string $platform,
         ?string $userAgent,
     ): string {
-        if (in_array($requested, ['laptop', 'phone', 'pc', 'tablet'], true)) {
+        if (in_array($requested, ['laptop', 'phone', 'pc', 'tablet', 'extension', 'cli'], true)) {
             return $requested;
         }
 
@@ -444,6 +454,24 @@ final class DeviceRepository
         }
 
         return 'pc';
+    }
+
+    private function suggestedClientName(string $name, string $clientType): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return $clientType === 'cli' ? 'Catch CLI' : 'Browser Extension';
+        }
+
+        if (preg_match('/\b' . preg_quote($clientType, '/') . '\b/i', $name) === 1) {
+            return mb_substr($name, 0, 120);
+        }
+
+        $suggested = $clientType === 'cli'
+            ? 'Catch CLI on ' . $name
+            : $name . ' Extension';
+
+        return mb_substr($suggested, 0, 120);
     }
 
     private function deleteExpiredPairingCode(string $deviceId, string $userId): void

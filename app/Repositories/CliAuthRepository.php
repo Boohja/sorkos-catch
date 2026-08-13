@@ -19,7 +19,7 @@ final class CliAuthRepository
     {
         $this->deleteExpired();
         $loginId = bin2hex(random_bytes(24));
-        $deviceName = mb_substr(trim($deviceName), 0, 120);
+        $deviceName = $this->suggestedDeviceName($deviceName);
         $platform = mb_substr(trim($platform), 0, 32);
         $query = $this->db->prepare('INSERT INTO catch_cli_auth_requests (login_id,code_challenge,device_name,platform,status,expires_at,created_at) VALUES (:login,:challenge,:name,:platform,\'pending\',DATE_ADD(UTC_TIMESTAMP(6),INTERVAL ' . self::AUTH_TTL_MINUTES . ' MINUTE),UTC_TIMESTAMP(6))');
         $query->execute(['login' => $loginId, 'challenge' => $challenge, 'name' => $deviceName, 'platform' => $platform]);
@@ -54,7 +54,12 @@ final class CliAuthRepository
                 return null;
             }
             $deviceId = Id::uuid();
-            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,device_type,client_type,platform,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',\'pc\',\'cli\',:platform,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute(['id' => $deviceId, 'user' => $userId, 'name' => $request['device_name'], 'platform' => $request['platform']]);
+            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,device_type,client_type,platform,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',\'cli\',\'cli\',:platform,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute([
+                'id' => $deviceId,
+                'user' => $userId,
+                'name' => $this->suggestedDeviceName((string) $request['device_name']),
+                'platform' => $request['platform'],
+            ]);
             $this->db->prepare('UPDATE catch_cli_auth_requests SET status=\'approved\',user_id=:user,device_id=:device,approved_at=UTC_TIMESTAMP(6) WHERE login_id=:login')->execute(['user' => $userId, 'device' => $deviceId, 'login' => $loginId]);
             $this->db->commit();
 
@@ -116,6 +121,19 @@ final class CliAuthRepository
     private function validId(string $loginId): bool
     {
         return preg_match('/^[0-9a-f]{48}$/', $loginId) === 1;
+    }
+
+    private function suggestedDeviceName(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return 'Catch CLI';
+        }
+        if (preg_match('/\bcli\b/i', $name) === 1) {
+            return mb_substr($name, 0, 120);
+        }
+
+        return mb_substr('Catch CLI on ' . $name, 0, 120);
     }
 
     private function deleteExpired(): void

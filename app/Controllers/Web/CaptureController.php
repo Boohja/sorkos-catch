@@ -6,11 +6,13 @@ namespace Catch\Controllers\Web;
 
 use Catch\Core\Id;
 use Catch\Core\View;
+use Catch\Http\Request;
 use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\ListRepository;
 use Catch\Repositories\TagRepository;
 use Catch\Services\AuthService;
+use Catch\Services\CaptureDebugService;
 use Catch\Services\CaptureService;
 use Catch\Services\Csrf;
 use InvalidArgumentException;
@@ -26,6 +28,7 @@ final class CaptureController
         private readonly TagRepository $tags,
         private readonly ListRepository $lists,
         private readonly CaptureService $service,
+        private readonly CaptureDebugService $debug,
         private readonly Csrf $csrf,
         private readonly string $uploadsPath,
         private readonly ?string $webDeviceId = null,
@@ -88,6 +91,9 @@ final class CaptureController
     {
         $user = $this->user();
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Refresh and try again.'], 419);
+            }
             Response::redirect('/inbox?error=csrf');
         }
 
@@ -101,11 +107,34 @@ final class CaptureController
 
         try {
             $result = $this->service->create($user['id'], $_POST, $_FILES, $this->webDeviceId);
-            Response::redirect('/captures/' . $result['capture']['id']);
+            if (Request::wantsJson()) {
+                $capture = $this->captures->findCollectionItem($result['capture']['id'], $user['id']);
+                Response::json([
+                    'capture' => $result['capture'],
+                    'created' => $result['created'],
+                    'url' => '/captures/' . $result['capture']['id'],
+                    'html' => $result['created'] && $capture
+                        ? $this->view->partial('captures/_item', [
+                            'capture' => $capture,
+                            'captureCollectionVariant' => 'switchable',
+                            'captureShowActions' => true,
+                            'bulkFormId' => 'capture-bulk-form',
+                            'csrf' => $this->csrf->token(),
+                        ])
+                        : null,
+                ], $result['created'] ? 201 : 200);
+            }
+            Response::redirect('/inbox');
         } catch (Throwable $error) {
-            $_SESSION['flash_error'] = $error instanceof InvalidArgumentException
+            $message = $error instanceof InvalidArgumentException
                 ? $this->validationMessage($error)
                 : 'The capture could not be saved.';
+            if (Request::wantsJson()) {
+                Response::json([
+                    'error' => $message,
+                ], $error instanceof InvalidArgumentException ? 422 : 500);
+            }
+            $_SESSION['flash_error'] = $message;
             Response::redirect('/inbox');
         }
     }
@@ -137,6 +166,8 @@ final class CaptureController
             'availableTags' => $this->tags->list($user['id']),
             'availableLists' => $this->lists->list($user['id']),
             'enableListDialog' => empty($capture['deleted_at']),
+            'debugEnabled' => $this->debug->enabled(),
+            'debugRequests' => $this->debug->forCapture($user['id'], $capture['id']),
             'csrf' => $this->csrf->token(),
         ]);
     }
@@ -236,7 +267,21 @@ final class CaptureController
                 (string) $params['id'],
                 $user['id'],
             );
-            Response::json(['updated' => $updated]);
+            $collectionCapture = $updated
+                ? $this->captures->findCollectionItem((string) $params['id'], $user['id'])
+                : null;
+            Response::json([
+                'updated' => $updated,
+                'html' => $collectionCapture
+                    ? $this->view->partial('captures/_item', [
+                        'capture' => $collectionCapture,
+                        'captureCollectionVariant' => 'switchable',
+                        'captureShowActions' => true,
+                        'bulkFormId' => 'capture-bulk-form',
+                        'csrf' => $this->csrf->token(),
+                    ])
+                    : null,
+            ]);
         } catch (Throwable) {
             Response::json(['updated' => false]);
         }
@@ -245,8 +290,16 @@ final class CaptureController
     public function archive(\Base $f3, array $params): never
     {
         $user = $this->user();
-        if ($this->csrf->valid($_POST['_csrf'] ?? null)) {
-            $this->captures->setStatus((string) $params['id'], $user['id'], 'archived');
+        if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Refresh and try again.'], 419);
+            }
+            Response::redirect('/inbox');
+        }
+
+        $updated = $this->captures->setStatus((string) $params['id'], $user['id'], 'archived');
+        if (Request::wantsJson()) {
+            Response::json(['updated' => $updated, 'capture_status' => 'archived']);
         }
 
         Response::redirect('/inbox');
@@ -255,8 +308,16 @@ final class CaptureController
     public function restore(\Base $f3, array $params): never
     {
         $user = $this->user();
-        if ($this->csrf->valid($_POST['_csrf'] ?? null)) {
-            $this->captures->restore((string) $params['id'], $user['id']);
+        if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Refresh and try again.'], 419);
+            }
+            Response::redirect('/trash');
+        }
+
+        $restored = $this->captures->restore((string) $params['id'], $user['id']);
+        if (Request::wantsJson()) {
+            Response::json(['updated' => $restored, 'capture_status' => 'inbox']);
         }
 
         Response::redirect('/trash');
@@ -266,22 +327,34 @@ final class CaptureController
     {
         $user = $this->user();
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Refresh and try again.'], 419);
+            }
             Response::redirect('/inbox');
         }
 
         $id = (string) $params['id'];
         $capture = $this->captures->find($id, $user['id']);
         if (!$capture) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Capture not found.'], 404);
+            }
             Response::redirect('/inbox');
         }
 
         if (empty($capture['deleted_at'])) {
             $this->captures->trash($id, $user['id']);
+            if (Request::wantsJson()) {
+                Response::json(['deleted' => 1, 'capture_status' => 'trash']);
+            }
             $_SESSION['flash_success'] = 'Capture moved to Trash. You can restore it for 30 days.';
             Response::redirect('/inbox');
         }
 
-        $this->purgeCaptures($user['id'], [$id]);
+        $deleted = $this->purgeCaptures($user['id'], [$id]);
+        if (Request::wantsJson()) {
+            Response::json(['deleted' => $deleted, 'capture_status' => 'deleted']);
+        }
         Response::redirect('/trash');
     }
 
@@ -299,6 +372,9 @@ final class CaptureController
         };
 
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Select the captures and try again.'], 419);
+            }
             $_SESSION['flash_error'] = 'Your session expired. Select the captures and try again.';
             Response::redirect($redirect);
         }
@@ -306,17 +382,23 @@ final class CaptureController
         $ids = $this->selectedCaptureIds();
 
         if (!$ids) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Select at least one capture to delete.'], 422);
+            }
             $_SESSION['flash_error'] = 'Select at least one capture to delete.';
             Response::redirect($redirect);
         }
 
         try {
+            $changed = 0;
             if ($status !== 'trash') {
                 $trashed = $this->captures->trashMany($user['id'], $ids);
+                $changed = $trashed;
                 $noun = $trashed === 1 ? 'capture was' : 'captures were';
                 $_SESSION['flash_success'] = $trashed . ' ' . $noun . ' moved to Trash.';
             } else {
                 $deleted = $this->purgeCaptures($user['id'], $ids);
+                $changed = $deleted;
                 if ($deleted) {
                     $noun = $deleted === 1 ? 'capture' : 'captures';
                     $_SESSION['flash_success'] = $deleted . ' ' . $noun . ' permanently deleted.';
@@ -325,9 +407,24 @@ final class CaptureController
                 }
             }
         } catch (Throwable) {
+            if (Request::wantsJson()) {
+                Response::json([
+                    'error' => $status === 'trash'
+                        ? 'The selected captures could not be permanently deleted. Nothing was changed.'
+                        : 'The selected captures could not be moved to Trash.',
+                ], 500);
+            }
             $_SESSION['flash_error'] = $status === 'trash'
                 ? 'The selected captures could not be permanently deleted. Nothing was changed.'
                 : 'The selected captures could not be moved to Trash.';
+        }
+
+        if (Request::wantsJson()) {
+            Response::json([
+                'changed' => $changed,
+                'capture_ids' => $ids,
+                'capture_status' => $status === 'trash' ? 'deleted' : 'trash',
+            ]);
         }
 
         Response::redirect($redirect);
@@ -339,17 +436,30 @@ final class CaptureController
         $redirect = (string) ($_POST['view'] ?? '') === 'archived' ? '/archive' : '/inbox';
 
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Select the captures and try again.'], 419);
+            }
             $_SESSION['flash_error'] = 'Your session expired. Select the captures and try again.';
             Response::redirect($redirect);
         }
 
         $ids = $this->selectedCaptureIds();
         if (!$ids) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Select at least one capture to archive.'], 422);
+            }
             $_SESSION['flash_error'] = 'Select at least one capture to archive.';
             Response::redirect($redirect);
         }
 
         $archived = $this->captures->archiveMany($user['id'], $ids);
+        if (Request::wantsJson()) {
+            Response::json([
+                'changed' => $archived,
+                'capture_ids' => $ids,
+                'capture_status' => 'archived',
+            ]);
+        }
         $noun = $archived === 1 ? 'capture was' : 'captures were';
         $_SESSION['flash_success'] = $archived . ' ' . $noun . ' archived.';
         Response::redirect($redirect);

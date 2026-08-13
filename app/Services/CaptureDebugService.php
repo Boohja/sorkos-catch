@@ -123,6 +123,33 @@ final class CaptureDebugService
         ]);
         $requests = $query->fetchAll();
 
+        return $this->prepareRequests($requests);
+    }
+
+    public function forCapture(string $userId, string $captureId, int $limit = 10): array
+    {
+        if (!$this->enabled()) {
+            return [];
+        }
+
+        $limit = max(1, min($limit, 25));
+        $query = $this->db->prepare(<<<SQL
+            SELECT *
+            FROM catch_capture_debug_requests
+            WHERE user_id = :user AND capture_id = :capture
+            ORDER BY created_at DESC
+            LIMIT {$limit}
+            SQL);
+        $query->execute([
+            'user' => $userId,
+            'capture' => $captureId,
+        ]);
+
+        return $this->prepareRequests($query->fetchAll());
+    }
+
+    private function prepareRequests(array $requests): array
+    {
         foreach ($requests as &$request) {
             $request['parameters_pretty'] = $this->prettyJson((string) $request['parameters_json']);
             $request['files_pretty'] = $request['files_json'] === null

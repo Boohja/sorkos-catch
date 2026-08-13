@@ -14,6 +14,11 @@ final class UploadService
     private const MAX_PREVIEW_BYTES = 8_388_608;
     private const MAX_PREVIEW_PIXELS = 8_000_000;
 
+    /** MIME aliases emitted by Apple platforms that Catch always supports. */
+    private const REQUIRED_APPLE_AUDIO_MIME = [
+        'audio/x-m4a',
+    ];
+
     private const DEFAULT_ALLOWED_MIME = [
         'image/jpeg',
         'image/png',
@@ -46,7 +51,11 @@ final class UploadService
             'uploads.allowed_mime',
             implode(',', self::DEFAULT_ALLOWED_MIME),
         );
-        $this->allowed = array_filter(array_map('trim', explode(',', $configured)));
+        $configuredMime = array_filter(array_map('trim', explode(',', $configured)));
+        $this->allowed = array_values(array_unique([
+            ...$configuredMime,
+            ...self::REQUIRED_APPLE_AUDIO_MIME,
+        ]));
     }
 
     public function store(array $file, string $captureId): array

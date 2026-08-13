@@ -19,7 +19,24 @@ function saveView(view) {
 }
 
 export function initCaptureView() {
+  const setting = document.querySelector('[data-capture-view-setting]');
+  if (setting) {
+    setting.value = savedView();
+    setting.addEventListener('change', () => {
+      if (!VIEWS.has(setting.value)) return;
+      saveView(setting.value);
+      document.querySelector('[data-preference-status]')?.replaceChildren('Saved on this device.');
+    });
+  }
+
   document.querySelectorAll('.capture-visual-image img').forEach((image) => {
+    const markUnavailable = () => image.closest('.capture-visual-image')?.classList.add('is-unavailable');
+    image.addEventListener('error', markUnavailable, { once: true });
+    if (image.complete && image.naturalWidth === 0) markUnavailable();
+  });
+  document.addEventListener('capture:collection-inserted', (event) => {
+    const image = event.detail.item.querySelector('.capture-visual-image img');
+    if (!image) return;
     const markUnavailable = () => image.closest('.capture-visual-image')?.classList.add('is-unavailable');
     image.addEventListener('error', markUnavailable, { once: true });
     if (image.complete && image.naturalWidth === 0) markUnavailable();

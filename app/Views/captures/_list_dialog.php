@@ -2,7 +2,7 @@
   <form method="post" data-list-form>
     <input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>">
     <h2 id="list-dialog-title" data-list-dialog-title>Add to lists</h2>
-    <p class="list-dialog-description" data-list-dialog-description></p>
+    <p class="list-dialog-description" data-list-dialog-description hidden></p>
     <?php if ($availableLists): ?>
       <div class="list-checklist">
         <?php foreach ($availableLists as $list): ?>

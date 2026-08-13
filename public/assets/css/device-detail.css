@@ -110,6 +110,27 @@
   padding-top: 42px;
 }
 
+.detail .device-debug-requests-card {
+  margin-top: 28px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.device-debug-requests.device-debug-requests-card > header {
+  padding-bottom: 10px;
+  border-bottom: 0;
+}
+
+.device-debug-requests-card .debug-request {
+  border-bottom: 0;
+}
+
+.device-debug-requests-card .debug-request > summary {
+  padding-bottom: 6px;
+}
+
 .device-debug-requests > header {
   display: flex;
   align-items: end;

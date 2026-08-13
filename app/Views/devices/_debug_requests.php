@@ -1,8 +1,11 @@
-<section class="device-debug-requests">
+<?php
+$debugRequestHeading = $debugRequestHeading ?? 'Incoming capture requests';
+?>
+<section class="device-debug-requests<?=!empty($debugRequestCard) ? ' device-debug-requests-card' : ''?>">
   <header>
     <div>
       <p class="debug-label">Debug mode</p>
-      <h2>Incoming capture requests</h2>
+      <h2><?=htmlspecialchars($debugRequestHeading)?></h2>
     </div>
     <p><?= count($debugRequests) ?> recent <?= count($debugRequests) === 1 ? 'request' : 'requests' ?></p>
   </header>

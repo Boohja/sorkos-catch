@@ -8,6 +8,7 @@ use Catch\Controllers\Api\CaptureController as ApiCaptures;
 use Catch\Controllers\Api\CliController as ApiCli;
 use Catch\Controllers\Api\ExtensionController as ApiExtension;
 use Catch\Controllers\Api\ShortcutController as ApiShortcut;
+use Catch\Controllers\Web\AccountController;
 use Catch\Controllers\Web\AuthController;
 use Catch\Controllers\Web\CaptureController as WebCaptures;
 use Catch\Controllers\Web\CliAuthController;
@@ -83,8 +84,9 @@ final class Application
             \Catch\Http\Response::redirect('/coming-soon');
         }
         $authController = new AuthController($view, $auth, $csrf, $access);
+        $accountController = new AccountController($view, $auth, $devices, $csrf);
         $comingSoon = new ComingSoonController($view, $auth, $csrf);
-        $web = new WebCaptures($view, $auth, $captures, $tags, $lists, $service, $csrf, $this->root . '/storage/uploads', $webDeviceId);
+        $web = new WebCaptures($view, $auth, $captures, $tags, $lists, $service, $captureDebug, $csrf, $this->root . '/storage/uploads', $webDeviceId);
         $tagController = new TagController($view, $auth, $tags, $lists, $captures, $csrf);
         $listController = new ListController($view, $auth, $lists, $captures, $csrf);
         $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config, $captureDebug);
@@ -102,6 +104,9 @@ final class Application
         $f3->route('GET /auth/start', [$authController,'start']);
         $f3->route('GET /auth/callback', [$authController,'callback']);
         $f3->route('POST /logout', [$authController,'logout']);
+        $f3->route('GET /profile', [$accountController, 'profile']);
+        $f3->route('GET /settings', [$accountController, 'settings']);
+        $f3->route('GET /settings/devices', [$accountController, 'devices']);
         $f3->route('GET /inbox', [$web,'index']);
         $f3->route('GET /archive', [$web,'archiveIndex']);
         $f3->route('GET /trash', [$web,'trashIndex']);

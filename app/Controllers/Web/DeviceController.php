@@ -104,7 +104,7 @@ final class DeviceController
         $user = $this->user();
         $device = $this->devices->find($this->id((string) $params['device']), $user['id']);
         if (!$device) {
-            Response::redirect('/devices');
+            Response::redirect('/settings/devices');
         }
 
         $appUrl = rtrim((string) $this->config->get('app.url'), '/');
@@ -131,12 +131,12 @@ final class DeviceController
         $user = $this->user();
         $id = $this->id((string) $params['device']);
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
-            Response::redirect('/devices');
+            Response::redirect('/settings/devices');
         }
 
         $device = $this->devices->find($id, $user['id']);
         if (!$device) {
-            Response::redirect('/devices');
+            Response::redirect('/settings/devices');
         }
 
         $this->devices->createPairingCode($id, $user['id']);
@@ -148,7 +148,7 @@ final class DeviceController
         $user = $this->user();
         $id = $this->id((string) $params['device']);
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
-            Response::redirect('/devices');
+            Response::redirect('/settings/devices');
         }
 
         $name = trim((string) ($_POST['name'] ?? ''));
@@ -156,7 +156,7 @@ final class DeviceController
         $this->devices->rename($id, $user['id'], $name, $deviceType);
 
         $device = $this->devices->find($id, $user['id']);
-        Response::redirect($device ? $this->url($device) : '/devices');
+        Response::redirect($device ? $this->url($device) : '/settings/devices');
     }
 
     public function status(\Base $f3, array $params): never
@@ -179,7 +179,7 @@ final class DeviceController
     {
         $user = $this->user();
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
-            Response::redirect('/devices');
+            Response::redirect('/settings/devices');
         }
 
         $id = $this->id((string) $params['device']);
@@ -190,6 +190,6 @@ final class DeviceController
             Response::redirect('/login');
         }
 
-        Response::redirect('/devices');
+        Response::redirect('/settings/devices');
     }
 }

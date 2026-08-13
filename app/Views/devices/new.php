@@ -1,4 +1,4 @@
-<a class="back-link" href="/devices">← Back to devices</a>
+<a class="back-link" href="/settings/devices">← Back to devices</a>
 <header class="flow-heading"><h1>Add a device</h1><p>Choose where you want to use Catch. We’ll show only the steps you need.</p></header>
 <?php if (!empty($error)): ?><p class="form-error" role="alert"><?=htmlspecialchars($error)?></p><?php endif; ?>
 

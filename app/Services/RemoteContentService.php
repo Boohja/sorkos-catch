@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Catch\Services;
 
+use Catch\Services\LinkPreview\Provider;
+use Catch\Services\LinkPreview\ProviderRegistry;
 use DOMDocument;
 use DOMXPath;
 
@@ -13,9 +15,15 @@ final class RemoteContentService
     private const LINK_PREVIEW_USER_AGENT = 'Discordbot/2.0';
     private ?string $lastError = null;
     private ?string $lastResolvedUrl = null;
+    /** @var list<Provider> */
+    private array $previewProviders;
 
-    public function __construct(private readonly int $imageLimit = 15728640)
-    {
+    /** @param list<Provider>|null $previewProviders */
+    public function __construct(
+        private readonly int $imageLimit = 15728640,
+        ?array $previewProviders = null,
+    ) {
+        $this->previewProviders = $previewProviders ?? ProviderRegistry::defaults();
     }
 
     public function pageTitle(string $url): ?string
@@ -50,23 +58,37 @@ final class RemoteContentService
         );
         $canonicalUrl = $page['url'] ?? $this->lastResolvedUrl ?? $url;
         $document = $page ? $this->documentMetadata($page['body'], $canonicalUrl) : [];
-        $canonicalUrl = $this->canonicalPreviewUrl($document['canonical_url'] ?? $canonicalUrl);
-        $embedUrl = $document['oembed_url'] ?? $this->providerOembedUrl($canonicalUrl);
+        $canonicalUrl = $document['canonical_url'] ?? $canonicalUrl;
+        $providerAdapter = $this->previewProvider($canonicalUrl);
+        $canonicalUrl = $providerAdapter?->canonicalUrl($canonicalUrl) ?? $canonicalUrl;
+        $embedUrl = $document['oembed_url'] ?? $providerAdapter?->oembedUrl($canonicalUrl);
         $embed = $embedUrl ? $this->oembed($embedUrl) : [];
+        $providerPreview = $this->providerPreview($providerAdapter, $canonicalUrl);
 
-        $title = $this->firstText($embed['title'] ?? null, $document['title'] ?? null);
+        $title = $this->firstText(
+            $embed['title'] ?? null,
+            $providerPreview['title'] ?? null,
+            $document['title'] ?? null,
+        );
         $description = $this->firstText(
+            $providerPreview['description'] ?? null,
             $document['description'] ?? null,
             $embed['author_name'] ?? null,
         );
         $provider = $this->firstText(
             $embed['provider_name'] ?? null,
+            $providerPreview['provider_name'] ?? null,
             $document['provider_name'] ?? null,
             $this->providerName($canonicalUrl),
         );
-        $author = $this->firstText($embed['author_name'] ?? null, $document['author'] ?? null);
+        $author = $this->firstText(
+            $embed['author_name'] ?? null,
+            $providerPreview['author_name'] ?? null,
+            $document['author'] ?? null,
+        );
         $imageUrl = $this->firstUrl(
             $embed['thumbnail_url'] ?? null,
+            $providerPreview['image_url'] ?? null,
             $document['image_url'] ?? null,
         );
         $image = $imageUrl ? $this->image($imageUrl) : null;
@@ -334,13 +356,41 @@ final class RemoteContentService
         return is_array($decoded) ? $decoded : [];
     }
 
-    private function providerOembedUrl(string $url): ?string
+    private function previewProvider(string $url): ?Provider
     {
-        $host = strtolower((string) (parse_url($url, PHP_URL_HOST) ?? ''));
+        foreach ($this->previewProviders as $provider) {
+            if ($provider->supports($url)) {
+                return $provider;
+            }
+        }
 
-        return $host === 'tiktok.com' || str_ends_with($host, '.tiktok.com')
-            ? 'https://www.tiktok.com/oembed?url=' . rawurlencode($url)
-            : null;
+        return null;
+    }
+
+    /** @return array<string, string> */
+    private function providerPreview(?Provider $provider, string $url): array
+    {
+        $lookupUrl = $provider?->lookupUrl($url);
+        if ($lookupUrl === null) {
+            return [];
+        }
+
+        $resource = $this->request(
+            $lookupUrl,
+            262144,
+            ['application/json', 'text/javascript'],
+        );
+        if (!$resource) {
+            return [];
+        }
+
+        try {
+            $payload = json_decode($resource['body'], true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        return $provider->mapLookup($payload);
     }
 
     private function providerName(string $url): ?string
@@ -349,22 +399,6 @@ final class RemoteContentService
         $host = preg_replace('/^www\./', '', $host) ?? $host;
 
         return $host === '' ? null : $host;
-    }
-
-    private function canonicalPreviewUrl(string $url): string
-    {
-        $parts = parse_url($url);
-        if (!is_array($parts)) {
-            return $url;
-        }
-
-        $host = strtolower((string) ($parts['host'] ?? ''));
-        if (($host === 'tiktok.com' || str_ends_with($host, '.tiktok.com'))
-            && preg_match('~^/@[^/]+/video/\d+~', (string) ($parts['path'] ?? ''))) {
-            return (string) $parts['scheme'] . '://' . $host . $parts['path'];
-        }
-
-        return $url;
     }
 
     private function firstText(mixed ...$values): ?string

@@ -8,8 +8,8 @@ function relativeTime(date, now = Date.now()) {
   return `${Math.floor(seconds / 31_536_000)}y`;
 }
 
-export function initRelativeTime() {
-  const elements = Array.from(document.querySelectorAll('[data-relative-time]'));
+export function hydrateRelativeTimes(root = document) {
+  const elements = Array.from(root.querySelectorAll('[data-relative-time]'));
   if (!elements.length) return;
 
   const formatter = new Intl.DateTimeFormat(undefined, {
@@ -21,11 +21,20 @@ export function initRelativeTime() {
     elements.forEach((element) => {
       const date = new Date(element.dateTime);
       if (Number.isNaN(date.getTime())) return;
-      element.textContent = relativeTime(date, now);
+      element.textContent = relativeTime(date, now) + (element.dataset.relativeSuffix || '');
       element.title = formatter.format(date);
     });
   };
 
   update();
-  window.setInterval(update, 60_000);
+  return true;
+}
+
+export function initRelativeTime() {
+  if (!hydrateRelativeTimes()) return;
+
+  window.setInterval(() => hydrateRelativeTimes(), 60_000);
+  document.addEventListener('capture:collection-inserted', (event) => {
+    hydrateRelativeTimes(event.detail.item);
+  });
 }

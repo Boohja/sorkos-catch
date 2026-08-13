@@ -1,12 +1,12 @@
 <?php
 $utc = static fn (?string $value): string => $value ? str_replace(' ', 'T', substr($value, 0, 19)) . 'Z' : '';
 $info = \Catch\Services\BrowserInfo::fromUserAgent((string)($device['user_agent'] ?? ''));
-$typeLabel = ['web' => 'Web session','extension' => 'Browser extension','shortcut' => 'Shortcut','api' => 'API client'][$device['client_type'] ?? 'shortcut'] ?? 'Device';
+$typeLabel = ['web' => 'Web session','extension' => 'Browser extension','shortcut' => 'Shortcut','api' => 'API client','cli' => 'CLI client'][$device['client_type'] ?? 'shortcut'] ?? 'Device';
 $platformLabel = $device['user_agent'] ? $info['browser'] . ' on ' . $info['os'] : (['ios' => 'iOS','ipados' => 'iPadOS'][$device['platform']] ?? ucfirst($device['platform']));
-$deviceTypes = ['laptop' => 'Laptop','phone' => 'Phone','pc' => 'PC','tablet' => 'Tablet'];
+$deviceTypes = ['laptop' => 'Laptop','phone' => 'Phone','pc' => 'PC','tablet' => 'Tablet','extension' => 'Extension','cli' => 'CLI'];
 $deviceType = array_key_exists($device['device_type'] ?? '', $deviceTypes) ? $device['device_type'] : 'pc';
 ?>
-<a class="back-link" href="/devices">&larr; All devices</a>
+<a class="back-link" href="/settings/devices">&larr; All devices</a>
 <header class="device-detail-heading"><div><span class="connection-status connection-status-<?=htmlspecialchars($device['status'])?>"><span aria-hidden="true"></span><?=$device['status'] === 'connected' ? 'Connected' : ($device['status'] === 'revoked' ? 'Access removed' : 'Setup pending')?></span><h1><?=htmlspecialchars($device['name'])?></h1><p><?=htmlspecialchars($platformLabel)?> &middot; <?=htmlspecialchars($typeLabel)?></p></div><?php if ($device['status'] !== 'revoked'): ?><form method="post" action="<?=htmlspecialchars($deviceUrl)?>/delete" onsubmit="return confirm('Remove this device and revoke its access?')"><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><button class="button button-danger-outline" type="submit">Remove device</button></form><?php endif; ?></header>
 
 <?php if ($device['status'] === 'revoked'): ?>

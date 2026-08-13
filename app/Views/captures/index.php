@@ -1,16 +1,12 @@
 <?php $heading = match($status) {
     'archived' => 'Archived','trash' => 'Trash',default => 'Inbox'
 }; ?>
-<header class="page-heading"><div><h1><?=$heading?></h1><p><?php if ($status === 'trash'): ?>Captures stay here for 30 days before permanent deletion.<?php else: ?><?=count($captures)?> <?=count($captures) === 1 ? 'item' : 'items'?><?php endif; ?></p></div><div class="sync-summary" data-sync-summary>Everything synced</div></header>
-<?php if (!empty($_SESSION['flash_error'])): ?><div class="alert alert-error" role="alert"><?=htmlspecialchars($_SESSION['flash_error']);
-    unset($_SESSION['flash_error']);?></div><?php endif; ?><?php if (!empty($_SESSION['flash_success'])): ?><div class="alert alert-success" role="status"><?=htmlspecialchars($_SESSION['flash_success']);
-        unset($_SESSION['flash_success']);?></div><?php endif; ?>
-<?php if ($status === 'inbox'): ?><section class="capture-composer" aria-labelledby="capture-title"><form method="post" action="/captures" enctype="multipart/form-data" data-capture-form><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><input type="hidden" name="client_capture_id" value=""><input type="hidden" name="type" value="text"><h2 id="capture-title">What do you want to capture?</h2><label class="sr-only" for="capture-text">Text or URL</label><textarea id="capture-text" name="text" rows="3" placeholder="Thought, task, or link…"></textarea><div class="composer-actions"><label class="file-button"><input type="file" name="attachments[]" multiple accept="image/*,.pdf,.txt,audio/*"><span>Add file</span></label><button class="button button-primary" type="submit">Save</button></div></form></section><?php endif; ?>
+<header class="page-heading"><div><h1><?=$heading?></h1><p><?php if ($status === 'trash'): ?>Captures stay here for 30 days before permanent deletion.<?php else: ?><span data-capture-count data-singular="item" data-plural="items"><?=count($captures)?> <?=count($captures) === 1 ? 'item' : 'items'?></span><?php endif; ?></p></div><div class="sync-summary" data-sync-summary>Everything synced</div></header>
+<?php if ($status === 'inbox'): ?><section class="capture-composer" aria-labelledby="capture-title"><form method="post" action="/captures" enctype="multipart/form-data" data-capture-form><input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>"><input type="hidden" name="client_capture_id" value=""><input type="hidden" name="type" value="text"><h2 id="capture-title">What do you want to capture?</h2><label class="sr-only" for="capture-text">Text or URL</label><textarea id="capture-text" name="text" rows="3" placeholder="Thought, task, or link…"></textarea><p class="composer-status" data-capture-form-status role="status" aria-live="polite"></p><div class="composer-actions"><label class="file-button"><input type="file" name="attachments[]" multiple accept="image/*,.pdf,.txt,audio/*"><span>Add file</span></label><button class="button button-primary" type="submit">Save</button></div></form></section><?php endif; ?>
 <nav class="filter-tabs" aria-label="Capture views"><a href="/inbox" <?=$status === 'inbox' ? 'aria-current="page"' : ''?>><i class="glyph glyph-inbox" aria-hidden="true"></i>Inbox</a><a href="/archive" <?=$status === 'archived' ? 'aria-current="page"' : ''?>><i class="glyph glyph-archive" aria-hidden="true"></i>Archived</a><a href="/trash" <?=$status === 'trash' ? 'aria-current="page"' : ''?>><i class="glyph glyph-trash" aria-hidden="true"></i>Trash</a></nav>
 <?php $bulkFormId = 'capture-bulk-form';
 require __DIR__ . '/_list.php'; ?>
-<?php if ($captures): ?>
-  <?php $permanent = $status === 'trash'; ?>
+<?php $permanent = $status === 'trash'; ?>
   <form
     id="capture-bulk-form"
     class="bulk-actions"
@@ -48,5 +44,4 @@ require __DIR__ . '/_list.php'; ?>
         </button>
       </div>
     </form>
-  </dialog>
-<?php endif; ?>
+</dialog>

@@ -24,6 +24,15 @@ final class View
         require $this->path . '/layout.php';
     }
 
+    public function partial(string $template, array $data = []): string
+    {
+        extract($data, EXTR_SKIP);
+        ob_start();
+        require $this->path . '/' . $template . '.php';
+
+        return (string) ob_get_clean();
+    }
+
     public function relativeTime(?string $value, ?DateTimeImmutable $now = null): string
     {
         if (!$value) {
