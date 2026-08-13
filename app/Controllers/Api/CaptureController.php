@@ -37,14 +37,20 @@ final class CaptureController
 
     public function index(): never
     {
-        $user = $this->user();
+        $user = $this->user('capture:read');
         $status = (string) ($_GET['status'] ?? 'inbox');
+        $limit = max(1, min((int) ($_GET['limit'] ?? 100), 200));
+        $query = trim((string) ($_GET['query'] ?? ''));
 
-        if ($status === 'trash') {
-            $captures = $this->captures->listTrash($user['id']);
+        if (!in_array($status, ['inbox', 'archived', 'trash'], true)) {
+            Response::json(['error' => ['code' => 'validation_failed', 'message' => 'Status must be inbox, archived, or trash.']], 422);
+        }
+        if ($query !== '') {
+            $captures = $this->captures->search($user['id'], $query, $status === 'trash' ? 'deleted' : $status, $limit);
+        } elseif ($status === 'trash') {
+            $captures = $this->captures->listTrash($user['id'], $limit);
         } else {
-            $status = in_array($status, ['inbox', 'archived'], true) ? $status : 'inbox';
-            $captures = $this->captures->list($user['id'], $status);
+            $captures = $this->captures->list($user['id'], $status, $limit);
         }
 
         Response::json(['data' => $captures]);
@@ -136,8 +142,8 @@ final class CaptureController
 
     public function show(\Base $f3, array $params): never
     {
-        $user = $this->user();
-        $capture = $this->captures->find((string) $params['id'], $user['id']);
+        $user = $this->user('capture:read');
+        $capture = $this->captures->findByReference((string) $params['id'], $user['id']);
         if (!$capture) {
             Response::json(['error' => ['code' => 'not_found', 'message' => 'Capture not found.']], 404);
         }

@@ -282,31 +282,40 @@ final class DeviceRepository
         }
     }
 
-    public function revokeForToken(string $token): bool
+    public function revokeForToken(string $token, ?string $clientType = null): bool
     {
-        if (!str_starts_with($token, 'catch_device_')) {
+        if (!str_starts_with($token, 'catch_device_') && !str_starts_with($token, 'catch_cli_')) {
             return false;
         }
-        $query = $this->db->prepare('SELECT device_id FROM catch_device_tokens WHERE token_hash=:hash LIMIT 1');
-        $query->execute(['hash' => hash('sha256', $token)]);
+        $sql = 'SELECT t.device_id FROM catch_device_tokens t JOIN catch_devices d ON d.id=t.device_id WHERE t.token_hash=:hash AND t.revoked_at IS NULL';
+        if ($clientType !== null) {
+            $sql .= ' AND d.client_type=:client_type';
+        }
+        $sql .= ' LIMIT 1';
+        $query = $this->db->prepare($sql);
+        $parameters = ['hash' => hash('sha256', $token)];
+        if ($clientType !== null) {
+            $parameters['client_type'] = $clientType;
+        }
+        $query->execute($parameters);
         $deviceId = $query->fetchColumn();
         if (!$deviceId) {
             return false;
         }
-        $this->db->prepare('DELETE FROM catch_device_tokens WHERE device_id=:device')->execute(['device' => $deviceId]);
+        $this->db->prepare('UPDATE catch_device_tokens SET revoked_at=UTC_TIMESTAMP(6) WHERE device_id=:device')->execute(['device' => $deviceId]);
         $this->db->prepare('UPDATE catch_devices SET status=\'revoked\' WHERE id=:device')->execute(['device' => $deviceId]);
         return true;
     }
 
     public function userForToken(string $token, string $requiredScope = 'capture:write'): ?array
     {
-        if (!str_starts_with($token, 'catch_device_')) {
+        if (!str_starts_with($token, 'catch_device_') && !str_starts_with($token, 'catch_cli_')) {
             return null;
         }
-        $query = $this->db->prepare('SELECT u.id,u.email,u.display_name,d.id device_id,d.name device_name,d.platform,d.client_type,t.id token_id,t.token_scope FROM catch_device_tokens t JOIN catch_devices d ON d.id=t.device_id AND d.status=\'connected\' JOIN catch_users u ON u.id=d.user_id WHERE t.token_hash=:hash LIMIT 1');
+        $query = $this->db->prepare('SELECT u.id,u.email,u.display_name,d.id device_id,d.name device_name,d.platform,d.client_type,t.id token_id,t.token_scope FROM catch_device_tokens t JOIN catch_devices d ON d.id=t.device_id AND d.status=\'connected\' JOIN catch_users u ON u.id=d.user_id WHERE t.token_hash=:hash AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at>UTC_TIMESTAMP(6)) LIMIT 1');
         $query->execute(['hash' => hash('sha256', $token)]);
         $user = $query->fetch() ?: null;
-        if ($user && $requiredScope === 'full' && $user['token_scope'] !== 'full') {
+        if ($user && !$this->scopeAllows((string) $user['token_scope'], $requiredScope)) {
             return null;
         }
         if ($user) {
@@ -314,6 +323,16 @@ final class DeviceRepository
             $this->db->prepare('UPDATE catch_devices SET last_seen_at=UTC_TIMESTAMP(6) WHERE id=:device')->execute(['device' => $user['device_id']]);
         }
         return $user;
+    }
+
+    private function scopeAllows(string $granted, string $required): bool
+    {
+        if ($granted === 'full') {
+            return true;
+        }
+        $scopes = preg_split('/[\s,]+/', trim($granted)) ?: [];
+
+        return in_array($required, $scopes, true);
     }
 
     public function ensureWebDevice(string $userId, ?string $deviceId, string $userAgent): array

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Catch\Core;
 
 use Catch\Controllers\Api\CaptureController as ApiCaptures;
+use Catch\Controllers\Api\CliController as ApiCli;
 use Catch\Controllers\Api\ExtensionController as ApiExtension;
 use Catch\Controllers\Api\ShortcutController as ApiShortcut;
 use Catch\Controllers\Web\AuthController;
 use Catch\Controllers\Web\CaptureController as WebCaptures;
+use Catch\Controllers\Web\CliAuthController;
 use Catch\Controllers\Web\ComingSoonController;
 use Catch\Controllers\Web\DeviceController;
 use Catch\Controllers\Web\HelpController;
@@ -16,6 +18,7 @@ use Catch\Controllers\Web\ListController;
 use Catch\Controllers\Web\PairController;
 use Catch\Controllers\Web\TagController;
 use Catch\Repositories\CaptureRepository;
+use Catch\Repositories\CliAuthRepository;
 use Catch\Repositories\DeviceRepository;
 use Catch\Repositories\ListRepository;
 use Catch\Repositories\TagRepository;
@@ -74,7 +77,7 @@ final class Application
             $_SESSION['catch_web_device_id'] = $webDevice['id'];
             $webDeviceId = $webDevice['id'];
         }$path = (string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
-        $publicPaths = ['/coming-soon','/login','/auth/start','/auth/callback','/logout','/health','/pair'];
+        $publicPaths = ['/coming-soon','/login','/auth/start','/auth/callback','/logout','/health','/pair','/cli/authorize'];
         $isApi = $path === '/api' || str_starts_with($path, '/api/');
         if ($access->isPrerelease() && !$currentUser && !$isApi && !in_array($path, $publicPaths, true)) {
             \Catch\Http\Response::redirect('/coming-soon');
@@ -86,10 +89,13 @@ final class Application
         $listController = new ListController($view, $auth, $lists, $captures, $csrf);
         $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config, $captureDebug);
         $pairController = new PairController($view, $auth, $devices, $csrf);
+        $cliAuth = new CliAuthRepository($pdo);
+        $cliAuthController = new CliAuthController($view, $auth, $cliAuth, $csrf);
         $help = new HelpController($view, $auth, $config);
         $api = new ApiCaptures($devices, $captures, $service, $captureDebug);
         $apiShortcut = new ApiShortcut($devices, $config);
         $apiExtension = new ApiExtension($devices, $config);
+        $apiCli = new ApiCli($cliAuth, $devices, $config);
         $f3->route('GET /', fn () => \Catch\Http\Response::redirect($auth->user() ? '/inbox' : ($access->isPrerelease() ? '/coming-soon' : '/login')));
         $f3->route('GET /coming-soon', [$comingSoon,'show']);
         $f3->route('GET /login', [$authController,'show']);
@@ -138,6 +144,8 @@ final class Application
         $f3->route('GET /help', [$help,'show']);
         $f3->route('GET /pair', [$pairController,'show']);
         $f3->route('POST /pair', [$pairController,'approve']);
+        $f3->route('GET /cli/authorize', [$cliAuthController,'show']);
+        $f3->route('POST /cli/authorize', [$cliAuthController,'approve']);
         $f3->route('POST /api/devices/pair', [$apiShortcut,'pairDevice']);
         $f3->route('POST /api/shortcut/pair', [$apiShortcut,'pairShortcut']);
         $f3->route('POST /api/shortcut/captures', [$api,'createShortcut']);
@@ -145,6 +153,10 @@ final class Application
         $f3->route('POST /api/extension/pairing-requests/@request/exchange', [$apiExtension,'exchangePairing']);
         $f3->route('GET /api/extension/connection', [$apiExtension,'connection']);
         $f3->route('POST /api/extension/disconnect', [$apiExtension,'disconnect']);
+        $f3->route('POST /api/cli/auth/start', [$apiCli,'start']);
+        $f3->route('POST /api/cli/auth/status/@login', [$apiCli,'status']);
+        $f3->route('GET /api/cli/whoami', [$apiCli,'whoami']);
+        $f3->route('POST /api/cli/logout', [$apiCli,'logout']);
         $f3->route('GET /api/v1/captures', [$api,'index']);
         $f3->route('POST /api/v1/captures', [$api,'create']);
         $f3->route('GET /api/v1/captures/@id', [$api,'show']);

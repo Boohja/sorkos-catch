@@ -18,6 +18,9 @@ final class CaptureRepository
     public function list(string $userId, string $status = 'inbox', int $limit = 100): array
     {
         $limit = max(1, min($limit, 200));
+        $statusClause = $status === 'deleted'
+            ? 'c.deleted_at IS NOT NULL'
+            : 'c.status=:status AND c.deleted_at IS NULL';
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
                 (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
@@ -186,6 +189,54 @@ final class CaptureRepository
         $capture['lists'] = $this->listsForCapture($id, $userId);
 
         return $capture;
+    }
+
+    public function findByReference(string $reference, string $userId): ?array
+    {
+        if (preg_match('/^[1-9]\d*$/', $reference)) {
+            $query = $this->db->prepare('SELECT id FROM catch_captures WHERE catch_number=:number AND user_id=:user LIMIT 1');
+            $query->execute(['number' => (int) $reference, 'user' => $userId]);
+            $id = $query->fetchColumn();
+            if (!$id) {
+                return null;
+            }
+            return $this->find((string) $id, $userId);
+        }
+
+        return $this->find($reference, $userId);
+    }
+
+    public function search(string $userId, string $term, string $status = 'inbox', int $limit = 100): array
+    {
+        $limit = max(1, min($limit, 200));
+        $term = mb_substr(trim($term), 0, 500);
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id AND a.kind='source') attachment_count,
+                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id) FROM catch_capture_lists cl WHERE cl.capture_id=c.id) assigned_list_ids
+            FROM catch_captures c
+            LEFT JOIN catch_devices d ON d.id=c.device_id
+            WHERE c.user_id=:user AND {$statusClause}
+                AND (:term='' OR c.title LIKE :title_pattern OR c.text LIKE :text_pattern OR c.url LIKE :url_pattern OR c.extracted_text LIKE :extracted_pattern OR CAST(c.catch_number AS CHAR)=:number_term)
+            ORDER BY c.created_at DESC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $parameters = [
+            'user' => $userId,
+            'term' => $term,
+            'number_term' => $term,
+            'title_pattern' => '%' . $term . '%',
+            'text_pattern' => '%' . $term . '%',
+            'url_pattern' => '%' . $term . '%',
+            'extracted_pattern' => '%' . $term . '%',
+        ];
+        if ($status !== 'deleted') {
+            $parameters['status'] = $status;
+        }
+        $query->execute($parameters);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
     }
 
     public function findByClientId(string $clientId, string $userId): ?array

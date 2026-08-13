@@ -29,6 +29,10 @@
       "description": "Versioned, client-neutral capture API."
     },
     {
+      "name": "CLI",
+      "description": "Browser-approved, read-only access for the Catch command-line client."
+    },
+    {
       "name": "Reserved full access",
       "description": "Implemented capture-management routes that require a `full` token. No such token is currently issued through the public pairing flow."
     },
@@ -182,6 +186,60 @@
         }
       }
     },
+    "/api/cli/auth/start": {
+      "post": {
+        "tags": ["CLI"],
+        "summary": "Start CLI device authorization",
+        "operationId": "startCliAuthorization",
+        "description": "Creates a short-lived verifier-protected authorization request and returns a browser URL. The URL contains no bearer credential.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["code_challenge", "device_name", "platform"], "properties": { "code_challenge": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" }, "device_name": { "type": "string", "maxLength": 120 }, "platform": { "type": "string", "enum": ["windows", "linux"] } } } } } },
+        "responses": {
+          "201": { "description": "Authorization request created." },
+          "422": { "$ref": "#/components/responses/ValidationFailed" }
+        }
+      }
+    },
+    "/api/cli/auth/status/{login}": {
+      "post": {
+        "tags": ["CLI"],
+        "summary": "Poll or complete CLI authorization",
+        "operationId": "completeCliAuthorization",
+        "description": "Returns 202 until browser approval. After approval, returns the only plaintext copy of a long-lived read-only CLI token and consumes the request.",
+        "parameters": [{ "name": "login", "in": "path", "required": true, "schema": { "type": "string", "pattern": "^[0-9a-f]{48}$" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["code_verifier"], "properties": { "code_verifier": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" } } } } } },
+        "responses": {
+          "200": { "description": "CLI authorized; the response contains the one-time plaintext token." },
+          "202": { "description": "Waiting for browser approval." },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "description": "Authorization request not found." },
+          "410": { "description": "Authorization request expired." }
+        }
+      }
+    },
+    "/api/cli/whoami": {
+      "get": {
+        "tags": ["CLI"],
+        "summary": "Show the CLI account and device",
+        "operationId": "getCliIdentity",
+        "security": [{ "cliToken": [] }],
+        "responses": {
+          "200": { "description": "Authenticated account and CLI device metadata." },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/cli/logout": {
+      "post": {
+        "tags": ["CLI"],
+        "summary": "Revoke the current CLI token",
+        "operationId": "logoutCli",
+        "security": [{ "cliToken": [] }],
+        "responses": {
+          "200": { "description": "CLI token revoked." },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
     "/api/shortcut/captures": {
       "post": {
         "tags": ["Shortcut"],
@@ -219,22 +277,24 @@
     },
     "/api/v1/captures": {
       "get": {
-        "tags": ["Reserved full access"],
-        "summary": "List captures (reserved)",
+        "tags": ["Captures"],
+        "summary": "List or search captures",
         "operationId": "listCaptures",
-        "description": "Requires a `full` token. Pairing currently issues only `capture:write`, so this route is not presently usable by paired public clients.",
-        "security": [{ "fullDeviceToken": [] }],
+        "description": "Requires `capture:read`. CLI authorization issues this read-only scope.",
+        "security": [{ "cliToken": [] }],
         "parameters": [
           {
             "name": "status",
             "in": "query",
             "description": "Capture state to list. Trash is selected by the presence of `deleted_at`, not by the stored status.",
             "schema": { "type": "string", "enum": ["inbox", "archived", "trash"], "default": "inbox" }
-          }
+          },
+          { "name": "query", "in": "query", "description": "Case-insensitive text, URL, title, extracted text, or exact catch-number search.", "schema": { "type": "string", "maxLength": 500 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 200, "default": 100 } }
         ],
         "responses": {
           "200": {
-            "description": "Captures in descending creation order, limited to 100 by the current implementation.",
+            "description": "Matching captures in descending creation order.",
             "content": {
               "application/json": {
                 "schema": {
@@ -283,11 +343,11 @@
     },
     "/api/v1/captures/{id}": {
       "get": {
-        "tags": ["Reserved full access"],
-        "summary": "Get one capture (reserved)",
+        "tags": ["Captures"],
+        "summary": "Get one capture",
         "operationId": "getCapture",
-        "description": "Requires a `full` token, which the public pairing flow does not currently issue.",
-        "security": [{ "fullDeviceToken": [] }],
+        "description": "Accepts either a per-user catch number or capture UUID and requires `capture:read`.",
+        "security": [{ "cliToken": [] }],
         "parameters": [{ "$ref": "#/components/parameters/CaptureId" }],
         "responses": {
           "200": {
@@ -360,6 +420,12 @@
         "bearerFormat": "catch_device_…",
         "description": "Device token returned once by a successful pairing request. The issued `capture:write` scope can submit captures."
       },
+      "cliToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "catch_cli_...",
+        "description": "Long-lived, read-only token issued once by CLI browser authorization and stored by the client in the native OS credential service."
+      },
       "fullDeviceToken": {
         "type": "http",
         "scheme": "bearer",
@@ -372,8 +438,8 @@
         "name": "id",
         "in": "path",
         "required": true,
-        "description": "Server-generated capture UUID.",
-        "schema": { "type": "string", "format": "uuid" }
+        "description": "Per-user catch number or server-generated capture UUID.",
+        "schema": { "type": "string" }
       },
       "IdempotencyKey": {
         "name": "Idempotency-Key",

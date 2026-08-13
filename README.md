@@ -33,6 +33,10 @@ composer cs:check
 composer cs:fix
 ```
 
+## Command-line client
+
+The read-only Go client lives in [`cli/`](cli/README.md). It supports browser-based device authorization, native OS credential storage, catch-number lookup, search, list, and machine-readable JSON output.
+
 `GET /health` reports application and database availability without exposing credentials.
 
 ## Public API reference

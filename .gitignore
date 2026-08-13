@@ -15,3 +15,7 @@
 /.php-cs-fixer.cache
 /docs
 /extension/build/
+/cli/.toolchain/
+/cli/go-toolchain.zip
+/cli/dist/
+/cli/.cache/

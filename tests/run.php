@@ -213,6 +213,30 @@ $test('Extension pairing keeps tokens out of approval URLs', function () use ($r
         throw new RuntimeException('Extension verifier or extension storage is missing');
     }
 });
+$test('CLI authorization issues hash-only read tokens', function () use ($root) {
+    $migration = (string) file_get_contents($root . '/database/migrations/012_cli_tokens.sql');
+    foreach (["'cli'", 'expires_at DATETIME(6)', 'revoked_at DATETIME(6)', 'code_challenge CHAR(43)'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('CLI token migration is missing ' . $required);
+        }
+    }
+    if (str_contains($migration, 'token_encrypted')) {
+        throw new RuntimeException('CLI bearer tokens must not be stored reversibly');
+    }
+    $repository = (string) file_get_contents($root . '/app/Repositories/CliAuthRepository.php');
+    foreach (["'catch_cli_'", "hash('sha256', \$token)", 'capture:read'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('CLI authorization repository is missing ' . $required);
+        }
+    }
+    if (str_contains($repository, 'SecretBox') || str_contains($repository, 'token_encrypted')) {
+        throw new RuntimeException('CLI bearer token is stored reversibly');
+    }
+    $controller = (string) file_get_contents($root . '/app/Controllers/Api/CliController.php');
+    if (!str_contains($controller, "http_build_query(['login' => \$request['login_id']]") || str_contains($controller, "http_build_query(['token' =>")) {
+        throw new RuntimeException('CLI approval URL may expose more than the temporary login ID');
+    }
+});
 $test('OpenAPI documents every public machine route', function () use ($root) {
     $source = (string)file_get_contents($root . '/app/Core/Application.php');
     preg_match_all("/\\\$f3->route\\('([A-Z]+) ([^']+)'/", $source, $matches, PREG_SET_ORDER);
