@@ -80,7 +80,14 @@ final class TagController
     {
         $u = $this->user();
         $this->guard(true);
-        $tag = $this->tags->assign((string)$p['id'], (string)($_POST['tag_id'] ?? ''), $u['id']);
+        try {
+            $name = trim((string)($_POST['name'] ?? ''));
+            $tag = $name !== ''
+                ? $this->tags->assignByName((string)$p['id'], $name, $u['id'])
+                : $this->tags->assign((string)$p['id'], (string)($_POST['tag_id'] ?? ''), $u['id']);
+        } catch (\InvalidArgumentException $e) {
+            Response::json(['error' => $e->getMessage()], 422);
+        }
         if (!$tag) {
             Response::json(['error' => 'Capture or tag not found.'], 404);
         }Response::json(['tag' => $tag]);

@@ -84,6 +84,13 @@ export function initCaptureEditing() {
     status.classList.toggle('is-error', error);
   };
   const valueOf = (element) => element.innerText.replace(/\r/g, '').trim();
+  const initialValueOf = (element) => {
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll('br').forEach((breakElement) => {
+      breakElement.replaceWith('\n');
+    });
+    return clone.textContent.replace(/\r/g, '').trim();
+  };
 
   const setValue = (element, value) => {
     element.dataset.raw = value;
@@ -150,7 +157,7 @@ export function initCaptureEditing() {
   };
 
   fields.forEach((element) => {
-    const initialValue = valueOf(element);
+    const initialValue = initialValueOf(element);
     setValue(element, initialValue);
     element.addEventListener('focus', () => {
       if (element.dataset.markup !== undefined) {

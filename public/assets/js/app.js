@@ -1,9 +1,9 @@
 import { initTheme } from './theme.js?v=2';
 import { onSync, syncOutbox } from './sync-manager.js';
 import { initRequestProgress } from './request-progress.js?v=1';
-import { initCaptureEditing } from './capture-edit.js?v=4';
+import { initCaptureEditing } from './capture-edit.js?v=5';
 import { initDevices } from './devices.js?v=2';
-import { initCaptureTags } from './capture-tags.js?v=1';
+import { initCaptureTags } from './capture-tags.js?v=4';
 import { initCaptureLists } from './capture-lists.js?v=9';
 import { initCaptureBulk } from './capture-bulk.js?v=6';
 import { initCaptureView } from './capture-view.js?v=3';
@@ -12,7 +12,7 @@ import { initCaptureActions } from './capture-actions.js?v=2';
 import { initCapturePreview } from './capture-preview.js?v=2';
 import { initCaptureCreate } from './capture-create.js?v=1';
 import { initCaptureCollection } from './capture-collection.js?v=3';
-import { initUserMenu } from './user-menu.js?v=1';
+import { initUserMenu } from './user-menu.js?v=2';
 
 initTheme();
 initRequestProgress();

@@ -460,6 +460,87 @@ $test('Audio attachments retain transcripts and report rejected MIME details', f
         throw new RuntimeException('Audio detail playback or transcript rendering is missing');
     }
 });
+$test('Capture detail keeps extracted text compact and manages tags in a modal', function () use ($root) {
+    $detail = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $dialog = (string)file_get_contents($root . '/app/Views/captures/_tag_dialog.php');
+    $layout = (string)file_get_contents($root . '/app/Views/layout.php');
+    $script = (string)file_get_contents($root . '/public/assets/js/capture-tags.js');
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/TagController.php');
+    $repository = (string)file_get_contents($root . '/app/Repositories/TagRepository.php');
+    $style = (string)file_get_contents($root . '/public/assets/css/capture-detail.css');
+
+    foreach (['<details class="extracted-text-card">','data-capture-field="extracted_text"','data-open-tag-dialog','glyph-tag','data-heading-tags','data-heading-tag-id'] as $required) {
+        if (!str_contains($detail, $required)) {
+            throw new RuntimeException('Capture detail refinement is incomplete: ' . $required);
+        }
+    }
+    if (str_contains($detail, 'capture-tags-panel')) {
+        throw new RuntimeException('The old inline tag panel remains');
+    }
+    foreach (['data-tag-dialog','data-tag-input','<datalist','data-assigned-tags','data-remove-tag'] as $required) {
+        if (!str_contains($dialog, $required)) {
+            throw new RuntimeException('Tag dialog is incomplete: ' . $required);
+        }
+    }
+    if (str_contains($dialog, 'data-tag-status')) {
+        throw new RuntimeException('Tag feedback still renders inline instead of using toasts');
+    }
+    foreach (['enableTagDialog','_tag_dialog.php'] as $required) {
+        if (!str_contains($detail . $layout, $required)) {
+            throw new RuntimeException('Tag dialog is not enabled: ' . $required);
+        }
+    }
+    foreach (['dialog.showModal()', "input.value = ''", 'input.focus()', 'renderTag(json.tag)', 'pill.remove()', 'window.Catch?.notify', 'data-heading-tag-id', "event.key !== 'Enter'", 'form?.requestSubmit()'] as $required) {
+        if (!str_contains($script, $required)) {
+            throw new RuntimeException('Tag dialog behavior is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($controller, 'assignByName') || !str_contains($repository, 'function assignByName')) {
+        throw new RuntimeException('Tag names cannot be created and assigned in one action');
+    }
+    foreach (['.extracted-text-card','.tag-dialog-field','.tag-dialog-assigned'] as $required) {
+        if (!str_contains($style, $required)) {
+            throw new RuntimeException('Capture detail styling is incomplete: ' . $required);
+        }
+    }
+});
+$test('Attachment playback supports byte ranges and bypasses the service worker', function () use ($root) {
+    $cases = [
+        ['bytes=0-1', 100, ['start' => 0, 'end' => 1, 'length' => 2]],
+        ['bytes=10-', 100, ['start' => 10, 'end' => 99, 'length' => 90]],
+        ['bytes=-10', 100, ['start' => 90, 'end' => 99, 'length' => 10]],
+        ['bytes=0-999', 100, ['start' => 0, 'end' => 99, 'length' => 100]],
+    ];
+    foreach ($cases as [$header, $size, $expected]) {
+        if (Catch\Http\ByteRange::parse($header, $size) !== $expected) {
+            throw new RuntimeException('Byte range was parsed incorrectly: ' . $header);
+        }
+    }
+    if (Catch\Http\ByteRange::parse(null, 100) !== null) {
+        throw new RuntimeException('A missing Range header should request the full file');
+    }
+    foreach (['bytes=100-101', 'bytes=20-10', 'bytes=0-1,5-6', 'bytes=-0'] as $header) {
+        try {
+            Catch\Http\ByteRange::parse($header, 100);
+            throw new RuntimeException('Invalid byte range was accepted: ' . $header);
+        } catch (InvalidArgumentException) {
+            // Expected.
+        }
+    }
+
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
+    foreach (['Accept-Ranges: bytes', 'Content-Range: bytes */', 'http_response_code(206)', "'audio/mp4'"] as $required) {
+        if (!str_contains($controller, $required)) {
+            throw new RuntimeException('Attachment streaming is incomplete: ' . $required);
+        }
+    }
+    $worker = (string)file_get_contents($root . '/public/service-worker.js');
+    foreach (["url.pathname.startsWith('/attachments/')", "request.destination==='audio'", "request.destination==='video'"] as $required) {
+        if (!str_contains($worker, $required)) {
+            throw new RuntimeException('Media requests are still intercepted: ' . $required);
+        }
+    }
+});
 $test('Trash is timestamp-based, recoverable, and expires after 30 days', function () use ($root) {
     $migration = (string)file_get_contents($root . '/database/migrations/006_capture_trash.sql');
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
@@ -507,6 +588,10 @@ $test('Capture detail supports quiet in-place editing and global request progres
     }foreach (["event.key === 'Enter'",'addEventListener(\'blur\'','fetch(`/captures/','setValue(element, before)'] as $required) {
         if (!str_contains($editing, $required)) {
             throw new RuntimeException('In-place save behavior is incomplete: ' . $required);
+        }
+    }foreach (['initialValueOf', "clone.querySelectorAll('br')", 'clone.textContent'] as $required) {
+        if (!str_contains($editing, $required)) {
+            throw new RuntimeException('Hidden editable fields lose their initial value: ' . $required);
         }
     }if (!str_contains($progress, 'window.fetch=async') || !str_contains($style, 'position:fixed;inset:0 0 auto') || !str_contains($style, 'height:4px')) {
         throw new RuntimeException('Global async progress indicator is incomplete');
@@ -1010,7 +1095,7 @@ $test('Account settings and provider adapters remain decoupled', function () use
             throw new RuntimeException('Account route is missing: ' . $required);
         }
     }
-    foreach (['data-user-menu', 'Profile', 'Settings', 'Log out'] as $required) {
+    foreach (['data-user-menu', 'Profile', 'Settings', 'data-reload-app', 'Refresh', 'Log out'] as $required) {
         if (!str_contains($layout, $required)) {
             throw new RuntimeException('Account menu is incomplete: ' . $required);
         }

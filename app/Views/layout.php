@@ -30,12 +30,12 @@ if (!empty($_SESSION['flash_success'])) {
   <link rel="apple-touch-icon" href="/assets/favicon/apple-touch-icon.png" sizes="180x180">
   <link rel="stylesheet" href="https://glyph.sorkos.net/cdn/fonts/a588550d09ff860a08cf6a3dceac2747.css">
   <link rel="stylesheet" href="/assets/css/app.css?v=4">
-  <link rel="stylesheet" href="/assets/css/components.css?v=3">
+  <link rel="stylesheet" href="/assets/css/components.css?v=4">
   <link rel="stylesheet" href="/assets/css/auth.css?v=2">
   <link rel="stylesheet" href="/assets/css/devices.css?v=5">
   <link rel="stylesheet" href="/assets/css/device-detail.css?v=5">
   <link rel="stylesheet" href="/assets/css/device-provenance.css?v=1">
-  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=10">
+  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=12">
   <link rel="stylesheet" href="/assets/css/capture-collection.css?v=5">
   <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=2">
   <link rel="stylesheet" href="/assets/css/tags.css?v=1">
@@ -84,6 +84,7 @@ if (!empty($_SESSION['flash_success'])) {
             </div>
             <a href="/profile" role="menuitem">Profile</a>
             <a href="/settings" role="menuitem">Settings</a>
+            <button type="button" role="menuitem" data-reload-app>Refresh</button>
             <hr>
             <form method="post" action="/logout" role="none">
               <input type="hidden" name="_csrf" value="<?=htmlspecialchars($layoutCsrf)?>">
@@ -116,6 +117,7 @@ if (!empty($_SESSION['flash_success'])) {
   <div class="request-progress" data-request-progress role="progressbar" aria-label="Saving changes" hidden></div>
   <?php if (!empty($enableCaptureActionMenu)): ?><?php require __DIR__ . '/captures/_action_menu.php'; ?><?php endif; ?>
   <?php if (!empty($enableListDialog)): ?><?php require __DIR__ . '/captures/_list_dialog.php'; ?><?php endif; ?>
-  <script type="module" src="/assets/js/app.js?v=27"></script>
+  <?php if (!empty($enableTagDialog)): ?><?php require __DIR__ . '/captures/_tag_dialog.php'; ?><?php endif; ?>
+  <script type="module" src="/assets/js/app.js?v=32"></script>
 </body>
 </html>

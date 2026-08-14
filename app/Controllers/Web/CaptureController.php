@@ -6,6 +6,7 @@ namespace Catch\Controllers\Web;
 
 use Catch\Core\Id;
 use Catch\Core\View;
+use Catch\Http\ByteRange;
 use Catch\Http\Request;
 use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
@@ -166,6 +167,7 @@ final class CaptureController
             'availableTags' => $this->tags->list($user['id']),
             'availableLists' => $this->lists->list($user['id']),
             'enableListDialog' => empty($capture['deleted_at']),
+            'enableTagDialog' => empty($capture['deleted_at']),
             'debugEnabled' => $this->debug->enabled(),
             'debugRequests' => $this->debug->forCapture($user['id'], $capture['id']),
             'csrf' => $this->csrf->token(),
@@ -195,19 +197,66 @@ final class CaptureController
             exit;
         }
 
-        header('Content-Type: ' . $attachment['mime_type']);
-        header('Content-Length: ' . filesize($path));
+        $size = filesize($path);
+        if ($size === false) {
+            http_response_code(500);
+            exit;
+        }
+
+        $storedMime = (string) $attachment['mime_type'];
+        $mime = in_array($storedMime, ['audio/m4a', 'audio/x-m4a'], true)
+            ? 'audio/mp4'
+            : $storedMime;
+
+        header('Content-Type: ' . $mime);
+        header('Accept-Ranges: bytes');
         header('X-Content-Type-Options: nosniff');
         header('Cache-Control: private, max-age=3600');
 
-        $mime = (string) $attachment['mime_type'];
         $disposition = str_starts_with($mime, 'image/') || str_starts_with($mime, 'audio/')
             ? 'inline'
             : 'attachment';
         $filename = addcslashes((string) $attachment['original_name'], '"\\');
 
         header('Content-Disposition: ' . $disposition . '; filename="' . $filename . '"');
-        readfile($path);
+
+        try {
+            $range = ByteRange::parse($_SERVER['HTTP_RANGE'] ?? null, $size);
+        } catch (InvalidArgumentException) {
+            http_response_code(416);
+            header('Content-Range: bytes */' . $size);
+            header('Content-Length: 0');
+            exit;
+        }
+
+        $start = $range['start'] ?? 0;
+        $end = $range['end'] ?? ($size - 1);
+        $length = $range['length'] ?? $size;
+        if ($range !== null) {
+            http_response_code(206);
+            header(sprintf('Content-Range: bytes %d-%d/%d', $start, $end, $size));
+        }
+        header('Content-Length: ' . $length);
+
+        $handle = fopen($path, 'rb');
+        if ($handle === false || fseek($handle, $start) !== 0) {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+            http_response_code(500);
+            exit;
+        }
+
+        $remaining = $length;
+        while ($remaining > 0 && !feof($handle)) {
+            $chunk = fread($handle, min(8192, $remaining));
+            if ($chunk === false || $chunk === '') {
+                break;
+            }
+            echo $chunk;
+            $remaining -= strlen($chunk);
+        }
+        fclose($handle);
         exit;
     }
 

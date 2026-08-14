@@ -68,6 +68,25 @@ final class TagRepository
         $q->execute(['capture' => $captureId,'tag' => $tagId]);
         return $tag;
     }
+    public function assignByName(string $captureId, string $name, string $userId): ?array
+    {
+        if (!$this->ownsCapture($captureId, $userId)) {
+            return null;
+        }
+        $name = $this->name($name);
+        $tag = $this->findByName($name, $userId);
+        if (!$tag) {
+            try {
+                $tag = $this->create($userId, $name);
+            } catch (\InvalidArgumentException) {
+                $tag = $this->findByName($name, $userId);
+                if (!$tag) {
+                    throw new \InvalidArgumentException('The tag could not be created.');
+                }
+            }
+        }
+        return $this->assign($captureId, (string)$tag['id'], $userId);
+    }
     public function unassign(string $captureId, string $tagId, string $userId): ?array
     {
         $tag = $this->find($tagId, $userId);
@@ -97,6 +116,13 @@ final class TagRepository
         $q = $this->db->prepare('SELECT 1 FROM catch_captures WHERE id=:id AND user_id=:user');
         $q->execute(['id' => $id,'user' => $userId]);
         return (bool)$q->fetchColumn();
+    }
+    private function findByName(string $name, string $userId): ?array
+    {
+        $q = $this->db->prepare('SELECT t.*,(SELECT COUNT(*) FROM catch_capture_tags ct JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.tag_id=t.id AND c.deleted_at IS NULL) capture_count FROM catch_tags t WHERE t.name=:name AND t.user_id=:user LIMIT 1');
+        $q->execute(['name' => $name,'user' => $userId]);
+        $tag = $q->fetch();
+        return $tag ? $this->hydrate($tag) : null;
     }
     private function name(string $name): string
     {

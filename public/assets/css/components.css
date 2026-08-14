@@ -37,7 +37,15 @@
 }
 
 .button > .glyph {
-  font-size: 1.05em;
+  inline-size: 1.1em;
+  block-size: 1.1em;
+  font-size: 1em;
+  line-height: 1.1;
+}
+
+.button > .glyph::before {
+  inline-size: 1.1em;
+  line-height: 1.1;
 }
 
 .filter-tabs a {
