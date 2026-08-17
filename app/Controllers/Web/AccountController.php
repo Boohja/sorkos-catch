@@ -7,6 +7,7 @@ namespace Catch\Controllers\Web;
 use Catch\Core\View;
 use Catch\Http\Response;
 use Catch\Repositories\DeviceRepository;
+use Catch\Repositories\EmailInboxRepository;
 use Catch\Services\AuthService;
 use Catch\Services\Csrf;
 
@@ -16,6 +17,7 @@ final class AccountController
         private readonly View $view,
         private readonly AuthService $auth,
         private readonly DeviceRepository $devices,
+        private readonly EmailInboxRepository $emailInboxes,
         private readonly Csrf $csrf,
     ) {
     }
@@ -58,6 +60,40 @@ final class AccountController
             'devices' => $devices,
             'csrf' => $this->csrf->token(),
         ]);
+    }
+
+    public function email(): void
+    {
+        $user = $this->user();
+        $inboxes = $this->emailInboxes->all($user['id']);
+
+        $this->view->render('account/settings', [
+            'title' => 'Settings · Email',
+            'user' => $user,
+            'settingsTab' => 'email',
+            'emailInboxes' => $inboxes,
+            'csrf' => $this->csrf->token(),
+        ]);
+    }
+
+    public function createEmail(): never
+    {
+        $user = $this->user();
+        if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            Response::redirect('/settings/email');
+        }
+
+        $this->emailInboxes->create($user['id']);
+        Response::redirect('/settings/email');
+    }
+
+    public function revokeEmail(\Base $f3, array $params): never
+    {
+        $user = $this->user();
+        if ($this->csrf->valid($_POST['_csrf'] ?? null)) {
+            $this->emailInboxes->revoke((string) ($params['inbox'] ?? ''), $user['id']);
+        }
+        Response::redirect('/settings/email');
     }
 
     private function user(): array

@@ -33,6 +33,20 @@ composer cs:check
 composer cs:fix
 ```
 
+## Email-to-Catch importer
+
+Configure the `[mail]` values in `config/config.ini` (or the corresponding `MAIL_*` environment variables), then run the migration. Catch only opens `mail.imap_folder`; the normal inbox is never scanned. Processed messages move to `mail.imap_processed_folder`, valid-address failures move to `mail.imap_failed_folder`, and unknown or revoked addresses are silently deleted.
+
+Run the importer from the project root:
+
+```text
+php cli/import-mail.php
+```
+
+On ALL-INKL, schedule that command every five minutes. The command uses a non-blocking lock, so overlapping cron invocations exit without processing the same mailbox concurrently. PHP's IMAP and DOM extensions are required. Keep the IMAP password in `config/config.ini` or the host's environment; both `config/config.ini` and `.env` are excluded from source control.
+
+Users create, copy, and revoke private inbound addresses under **Settings → Email**. Catch stores the generated address directly. Its 16-character lowercase Base32 token contains 80 random bits, which keeps addresses compact while remaining impractical to guess through email delivery. Unknown addresses receive no response.
+
 ## Command-line client
 
 The read-only Go client lives in [`cli/`](cli/README.md). It supports browser-based device authorization, native OS credential storage, catch-number lookup, search, list, and machine-readable JSON output.

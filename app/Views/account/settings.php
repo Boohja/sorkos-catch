@@ -8,6 +8,7 @@
 <nav class="filter-tabs settings-tabs" aria-label="Settings sections">
   <a href="/settings" <?=$settingsTab === 'general' ? 'aria-current="page"' : ''?>>General</a>
   <a href="/settings/devices" <?=$settingsTab === 'devices' ? 'aria-current="page"' : ''?>>Devices</a>
+  <a href="/settings/email" <?=$settingsTab === 'email' ? 'aria-current="page"' : ''?>>Email</a>
 </nav>
 
 <?php if ($settingsTab === 'devices'): ?>
@@ -19,6 +20,46 @@
     <a class="button button-primary" href="/devices/new">Add device</a>
   </header>
   <?php require dirname(__DIR__) . '/devices/_table.php'; ?>
+<?php elseif ($settingsTab === 'email'): ?>
+  <header class="settings-section-heading">
+    <div>
+      <h2>Email addresses</h2>
+      <p>Forward an email to a private address to create a Catch.</p>
+    </div>
+    <form method="post" action="/settings/email">
+      <input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>">
+      <button class="button button-primary" type="submit">Create address</button>
+    </form>
+  </header>
+
+  <?php if (empty($emailInboxes)): ?>
+    <section class="email-inbox-empty">
+      <h3>No email addresses yet</h3>
+      <p>Create an address, then save it in your contacts or forwarding rules.</p>
+    </section>
+  <?php else: ?>
+    <div class="email-inboxes" role="list">
+      <?php foreach ($emailInboxes as $inbox): ?>
+        <?php $active = empty($inbox['revoked_at']); ?>
+        <article class="email-inbox-row" role="listitem">
+          <div class="email-inbox-main">
+            <div class="email-address-row" data-copy-row>
+              <code data-copy-source><?=htmlspecialchars((string) $inbox['address'])?></code>
+              <?php if ($active): ?><button class="button button-secondary" type="button" data-copy-button>Copy</button><?php endif; ?>
+            </div>
+            <small>Created <?=htmlspecialchars((string) $inbox['created_at'])?></small>
+          </div>
+          <span class="email-inbox-status <?=$active ? 'is-active' : ''?>"><?=$active ? 'Active' : 'Revoked'?></span>
+          <?php if ($active): ?>
+            <form method="post" action="/settings/email/<?=htmlspecialchars((string) $inbox['id'])?>/revoke">
+              <input type="hidden" name="_csrf" value="<?=htmlspecialchars($csrf)?>">
+              <button class="button button-secondary" type="submit">Revoke</button>
+            </form>
+          <?php endif; ?>
+        </article>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
 <?php else: ?>
   <form class="preference-settings" data-preference-settings>
     <fieldset>

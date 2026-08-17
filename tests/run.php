@@ -1123,6 +1123,123 @@ $test('Account settings and provider adapters remain decoupled', function () use
         }
     }
 });
+$test('Email recipients and HTML content are normalized safely', function () {
+    $sanitizer = new Catch\Services\EmailContentSanitizer();
+    $reader = new Catch\Services\EmailMessageReader($sanitizer);
+    $headers = "Delivered-To: ibx-abcdefghijklmnop@catch.sorkos.net\r\n"
+        . "To: ibx-abcdefghijklmnopqrstuvwxyz@catch.sorkos.net\r\n"
+        . "Cc: ibx-234567abcdefghij@catch.sorkos.net\r\n";
+    $addresses = $reader->recipientAddresses($headers, 'catch.sorkos.net');
+    if ($addresses !== [
+        'ibx-abcdefghijklmnop@catch.sorkos.net',
+        'ibx-234567abcdefghij@catch.sorkos.net',
+    ]) {
+        throw new RuntimeException('Catch recipients were not extracted from delivery headers');
+    }
+
+    $text = $sanitizer->htmlToText(<<<'HTML'
+        <h2 id="tracked">Hello</h2>
+        <p onclick="steal()"><strong>Safe</strong> <a href="https://example.com/path">link</a>
+        <a href="javascript:alert(1)">bad link</a></p>
+        <ul><li>First</li><li><em>Second</em></li></ul>
+        <img src="https://tracker.test/pixel.gif"><script>alert(1)</script>
+        HTML);
+    foreach (['## Hello', '**Safe**', '[link](https://example.com/path)', '- First', '*Second*'] as $expected) {
+        if (!str_contains($text, $expected)) {
+            throw new RuntimeException('Sanitized email content lost allowed structure: ' . $expected);
+        }
+    }
+    foreach (['javascript:', 'tracker.test', 'alert(1)', 'onclick', '<img'] as $unsafe) {
+        if (str_contains($text, $unsafe)) {
+            throw new RuntimeException('Sanitized email content retained unsafe input: ' . $unsafe);
+        }
+    }
+});
+$test('Email inbox addresses are compact and stored for repeated use', function () use ($root) {
+    if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        return;
+    }
+    $database = new PDO('sqlite::memory:');
+    $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $database->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => '2026-08-17 12:00:00.000000', -1);
+    $database->exec(<<<'SQL'
+        CREATE TABLE catch_email_inboxes (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            address TEXT NOT NULL UNIQUE,
+            created_at TEXT NOT NULL,
+            revoked_at TEXT NULL
+        )
+        SQL);
+    $repository = new Catch\Repositories\EmailInboxRepository($database, Catch\Core\Config::load($root));
+    $first = $repository->create('user-1');
+    $second = $repository->create('user-1');
+    if (!preg_match('/^ibx-[a-z2-7]{16}@catch\.sorkos\.net$/', $first['address']) || $first['address'] === $second['address']) {
+        throw new RuntimeException('Inbox addresses do not contain independent 80-bit Base32 tokens');
+    }
+    $storedQuery = $database->prepare('SELECT address FROM catch_email_inboxes WHERE id=:id');
+    $storedQuery->execute(['id' => $first['id']]);
+    $stored = (string) $storedQuery->fetchColumn();
+    if ($stored !== $first['address']) {
+        throw new RuntimeException('The generated inbox address was not stored directly');
+    }
+    $resolved = $repository->findActiveByAddress($first['address']);
+    if (($resolved['user_id'] ?? null) !== 'user-1') {
+        throw new RuntimeException('An active inbox address did not resolve');
+    }
+    $listed = $repository->all('user-1');
+    $listedFirst = array_values(array_filter(
+        $listed,
+        static fn (array $inbox): bool => $inbox['id'] === $first['id'],
+    ))[0] ?? null;
+    if (($listedFirst['address'] ?? null) !== $first['address']) {
+        throw new RuntimeException('The active inbox address cannot be displayed again');
+    }
+    $repository->revoke($first['id'], 'user-1');
+    if ($repository->findActiveByAddress($first['address']) !== null) {
+        throw new RuntimeException('A revoked inbox address still resolved');
+    }
+});
+$test('Email importer remains folder-scoped and cron-safe', function () use ($root) {
+    $migration = (string) file_get_contents($root . '/database/migrations/014_email_inboxes.sql')
+        . (string) file_get_contents($root . '/database/migrations/015_email_inbox_raw_addresses.sql');
+    $importer = (string) file_get_contents($root . '/app/Services/EmailImporter.php');
+    $cli = (string) file_get_contents($root . '/cli/import-mail.php');
+    $settings = (string) file_get_contents($root . '/app/Views/account/settings.php');
+    $account = (string) file_get_contents($root . '/app/Controllers/Web/AccountController.php');
+    foreach (['catch_email_inboxes', 'address VARCHAR(254)', 'catch_email_imports', 'message_key_hash'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Email migration is missing ' . $required);
+        }
+    }
+    foreach (['DROP COLUMN token_hash', 'ADD COLUMN address VARCHAR(254)'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('The one-way raw-address migration is missing ' . $required);
+        }
+    }
+    foreach (['mail.imap_folder', 'imap_search', 'imap_mail_move', 'imap_delete', "'source' => 'email'", 'client_capture_id'] as $required) {
+        if (!str_contains($importer, $required)) {
+            throw new RuntimeException('Email importer is missing ' . $required);
+        }
+    }
+    if (str_contains($importer, 'imap_fetchheader($connection, $uid, FT_UID | FT_PEEK)')) {
+        throw new RuntimeException('The header fetch uses body-only FT_PEEK flags');
+    }
+    if (!str_contains($cli, 'LOCK_EX | LOCK_NB')) {
+        throw new RuntimeException('Concurrent cron imports are not locked');
+    }
+    foreach (['email-address-row', 'data-copy-row', "'address'", 'EmailInboxRepository'] as $required) {
+        if (!str_contains($settings . $account . $cli, $required)) {
+            throw new RuntimeException('Reusable email address UX is missing ' . $required);
+        }
+    }
+    $editing = (string) file_get_contents($root . '/public/assets/js/capture-edit.js');
+    foreach (['document.createElement(`h', "document.createElement('ol')", "document.createElement('pre')"] as $required) {
+        if (!str_contains($editing, $required)) {
+            throw new RuntimeException('Imported email structure is not rendered safely: ' . $required);
+        }
+    }
+});
 $test('Swagger UI is fully local', function () use ($root) {
     $index = (string)file_get_contents($root . '/public/docs/api/index.html');
     foreach (['swagger-ui.css','swagger-ui-bundle.js','swagger-ui-standalone-preset.js','LICENSE'] as $asset) {

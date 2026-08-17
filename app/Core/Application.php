@@ -21,6 +21,7 @@ use Catch\Controllers\Web\TagController;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\CliAuthRepository;
 use Catch\Repositories\DeviceRepository;
+use Catch\Repositories\EmailInboxRepository;
 use Catch\Repositories\ListRepository;
 use Catch\Repositories\TagRepository;
 use Catch\Repositories\UserRepository;
@@ -84,7 +85,13 @@ final class Application
             \Catch\Http\Response::redirect('/coming-soon');
         }
         $authController = new AuthController($view, $auth, $csrf, $access);
-        $accountController = new AccountController($view, $auth, $devices, $csrf);
+        $accountController = new AccountController(
+            $view,
+            $auth,
+            $devices,
+            new EmailInboxRepository($pdo, $config),
+            $csrf,
+        );
         $comingSoon = new ComingSoonController($view, $auth, $csrf);
         $web = new WebCaptures($view, $auth, $captures, $tags, $lists, $service, $captureDebug, $csrf, $this->root . '/storage/uploads', $webDeviceId);
         $tagController = new TagController($view, $auth, $tags, $lists, $captures, $csrf);
@@ -107,6 +114,9 @@ final class Application
         $f3->route('GET /profile', [$accountController, 'profile']);
         $f3->route('GET /settings', [$accountController, 'settings']);
         $f3->route('GET /settings/devices', [$accountController, 'devices']);
+        $f3->route('GET /settings/email', [$accountController, 'email']);
+        $f3->route('POST /settings/email', [$accountController, 'createEmail']);
+        $f3->route('POST /settings/email/@inbox/revoke', [$accountController, 'revokeEmail']);
         $f3->route('GET /inbox', [$web,'index']);
         $f3->route('GET /archive', [$web,'archiveIndex']);
         $f3->route('GET /trash', [$web,'trashIndex']);

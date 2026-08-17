@@ -38,11 +38,41 @@ function renderMarkup(element, raw) {
       continue;
     }
 
-    if (/^[-*]\s+/.test(lines[index])) {
-      const list = document.createElement('ul');
-      while (index < lines.length && /^[-*]\s+/.test(lines[index])) {
+    if (lines[index].trim() === '```') {
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      index += 1;
+      const codeLines = [];
+      while (index < lines.length && lines[index].trim() !== '```') {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      if (index < lines.length) index += 1;
+      code.textContent = codeLines.join('\n');
+      pre.append(code);
+      element.append(pre);
+      continue;
+    }
+
+    const heading = lines[index].match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const block = document.createElement(`h${heading[1].length}`);
+      appendInlineMarkup(block, heading[2]);
+      element.append(block);
+      index += 1;
+      continue;
+    }
+
+    const unordered = /^[-*]\s+/.test(lines[index]);
+    const ordered = /^\d+\.\s+/.test(lines[index]);
+    if (unordered || ordered) {
+      const pattern = ordered ? /^\d+\.\s+/ : /^[-*]\s+/;
+      const list = ordered
+        ? document.createElement('ol')
+        : document.createElement('ul');
+      while (index < lines.length && pattern.test(lines[index])) {
         const item = document.createElement('li');
-        appendInlineMarkup(item, lines[index].replace(/^[-*]\s+/, ''));
+        appendInlineMarkup(item, lines[index].replace(pattern, ''));
         list.append(item);
         index += 1;
       }
@@ -57,6 +87,9 @@ function renderMarkup(element, raw) {
       index < lines.length
       && lines[index].trim() !== ''
       && !/^[-*]\s+/.test(lines[index])
+      && !/^\d+\.\s+/.test(lines[index])
+      && !/^#{1,6}\s+/.test(lines[index])
+      && lines[index].trim() !== '```'
       && lines[index].startsWith('> ') === blockquote
     ) {
       if (!firstLine) block.append(document.createElement('br'));

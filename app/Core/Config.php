@@ -33,6 +33,13 @@ final class Config
             'SORKOS_POST_LOGOUT_REDIRECT_URI' => 'sorkos.post_logout_redirect_uri',
             'SORKOS_SCOPE' => 'sorkos.scope', 'SORKOS_LANGUAGE' => 'sorkos.language',
             'SORKOS_TLS_VERIFY' => 'sorkos.tls_verify',
+            'MAIL_IMAP_HOST' => 'mail.host', 'MAIL_IMAP_PORT' => 'mail.port',
+            'MAIL_IMAP_SECURITY' => 'mail.security', 'MAIL_IMAP_VALIDATE_CERT' => 'mail.validate_cert',
+            'MAIL_IMAP_USERNAME' => 'mail.username', 'MAIL_IMAP_PASSWORD' => 'mail.password',
+            'MAIL_IMAP_FOLDER' => 'mail.imap_folder',
+            'MAIL_IMAP_PROCESSED_FOLDER' => 'mail.imap_processed_folder',
+            'MAIL_IMAP_FAILED_FOLDER' => 'mail.imap_failed_folder',
+            'MAIL_ADDRESS_DOMAIN' => 'mail.address_domain', 'MAIL_MAX_BYTES' => 'mail.max_bytes',
         ];
         foreach ($map as $environment => $key) {
             $value = getenv($environment);

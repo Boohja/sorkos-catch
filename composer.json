@@ -8,7 +8,9 @@
     "ext-json": "*",
     "ext-fileinfo": "*",
     "ext-curl": "*",
+    "ext-dom": "*",
     "ext-gd": "*",
+    "ext-imap": "*",
     "ext-sodium": "*"
   },
   "scripts": {

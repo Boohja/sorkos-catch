@@ -43,7 +43,7 @@ if (!empty($_SESSION['flash_success'])) {
   <link rel="stylesheet" href="/assets/css/pair.css?v=1">
   <link rel="stylesheet" href="/assets/css/coming-soon.css?v=2">
   <link rel="stylesheet" href="/assets/css/shell.css?v=3">
-  <link rel="stylesheet" href="/assets/css/account.css?v=1">
+  <link rel="stylesheet" href="/assets/css/account.css?v=2">
   <link rel="stylesheet" href="/assets/css/layout-compat.css?v=1">
   <script>try{const t=localStorage.getItem('catch-theme');if(t&&t!=='system')document.documentElement.dataset.theme=t}catch(e){}</script>
   <title><?=htmlspecialchars($title ?? 'Catch')?> | Catch</title>
