@@ -1,11 +1,60 @@
-<article class="capture-item capture-item-{{ @capture.type }}" data-capture-id="{{ @capture.id }}"<check if="{{ @capture.view.previewFetchDue }}"> data-preview-fetch-due</check>>
-  <a class="capture-visual {{ @capture.visual_attachment_id ? 'capture-visual-image' : 'capture-visual-empty' }}" href="{{ @capture.view.url }}" aria-label="Open {{ @capture.view.title }}">
-    <check if="{{ @capture.visual_attachment_id }}"><true><img src="/attachments/{{ urlencode(@capture.visual_attachment_id) }}" alt="" width="640" height="360" loading="lazy" decoding="async"><span class="capture-visual-fallback capture-media-fallback"><i class="glyph glyph-{{ @capture.view.icon }}" aria-hidden="true"></i><span>{{ @capture.view.excerpt }}</span></span></true><false>
-      <check if="{{ @capture.type=='url' }}"><true><span class="capture-visual-fallback capture-url-fallback"><strong>{{ @capture.view.host }}</strong><span>{{ @capture.url }}</span></span></true><false><span class="capture-visual-fallback capture-text-fallback">{{ @capture.view.excerptHtml | raw }}</span></false></check>
-    </false></check>
+<article class="capture-item capture-item-{{ @capture.type }}" data-capture-id="{{ @capture.id }}" <check
+  if="{{ @capture.view.previewFetchDue }}"> data-preview-fetch-due</check>> <a
+    class="capture-visual {{ @capture.visual_attachment_id ? 'capture-visual-image' : 'capture-visual-empty' }}"
+    href="{{ @capture.view.url }}" aria-label="Open {{ @capture.view.title }}">
+    <check if="{{ @capture.visual_attachment_id }}">
+      <true><img src="/attachments/{{ urlencode(@capture.visual_attachment_id) }}" alt="" width="640" height="360"
+          loading="lazy" decoding="async"><span class="capture-visual-fallback capture-media-fallback"><i
+            class="glyph glyph-{{ @capture.view.icon }}"
+            aria-hidden="true"></i><span>{{ @capture.view.excerpt }}</span></span></true>
+      <false>
+        <check if="{{ @capture.type=='url' }}">
+          <true><span
+              class="capture-visual-fallback capture-url-fallback"><strong>{{ @capture.view.host }}</strong><span>{{ @capture.url }}</span></span>
+          </true>
+          <false><span
+              class="capture-visual-fallback capture-text-fallback">{{ @capture.view.excerptHtml | raw }}</span></false>
+        </check>
+      </false>
+    </check>
   </a>
-  <div class="capture-item-body"><span class="type-icon" aria-hidden="true"><i class="glyph glyph-{{ @capture.view.icon }}"></i></span><div class="capture-copy"><a class="capture-title-link" href="{{ @capture.view.url }}"><strong>{{ @capture.view.title }}</strong></a><check if="{{ @capture.tags }}"><span class="capture-row-tags"><repeat group="{{ @capture.tags }}" value="{{ @tag }}"><a class="tag-link" href="{{ @tag.url }}">{{ @tag.name }}</a></repeat></span></check></div></div>
-  <footer class="capture-item-footer"><check if="{{ @bulkFormId }}"><input class="capture-select" type="checkbox" name="capture_ids[]" value="{{ @capture.id }}" form="{{ @bulkFormId }}" aria-label="Select capture #{{ (int)@capture.catch_number }}"></check><span class="capture-meta"><span class="capture-number">#{{ (int)@capture.catch_number }}</span><span aria-hidden="true"> · </span><time datetime="{{ @capture.view.utcTimeValue }}" data-relative-time title="UTC {{ @capture.view.timeValue }}">{{ @capture.view.relativeTime }}</time><check if="{{ @captureCollectionVariant=='compact' }}"><true><span aria-hidden="true"> · </span>{{ @capture.view.statusLabel }}</true><false><check if="{{ @capture.view.status=='trash' }}"><span aria-hidden="true"> · </span>in Trash</check></false></check></span>
-    <check if="{{ @captureShowActions }}"><check if="{{ @capture.view.status=='trash' }}"><true><form method="post" action="/captures/{{ urlencode(@capture.id) }}/restore" data-capture-collection-action><input type="hidden" name="_csrf" value="{{ @csrf }}"><button class="button button-quiet" type="submit">Restore</button></form></true><false><button class="capture-menu-trigger" type="button" aria-label="Capture actions" aria-haspopup="menu" aria-expanded="false" data-capture-actions data-capture-id="{{ @capture.id }}" data-capture-status="{{ @capture.view.status }}" data-list-ids="{{ @capture.view.assignedListIdsJson }}"><i class="glyph glyph-dots-vertical" aria-hidden="true"></i></button></false></check></check>
+  <div class="capture-item-body"><span class="type-icon" aria-hidden="true"><i
+        class="glyph glyph-{{ @capture.view.icon }}"></i></span>
+    <div class="capture-copy"><a class="capture-title-link"
+        href="{{ @capture.view.url }}"><strong>{{ @capture.view.title }}</strong></a>
+      <check if="{{ @capture.tags }}"><span class="capture-row-tags">
+          <repeat group="{{ @capture.tags }}" value="{{ @tag }}"><a class="tag-link"
+              href="{{ @tag.url }}">{{ @tag.name }}</a></repeat>
+        </span></check>
+    </div>
+  </div>
+  <footer class="capture-item-footer">
+    <check if="{{ @bulkFormId }}"><input class="capture-select" type="checkbox" name="capture_ids[]"
+        value="{{ @capture.id }}" form="{{ @bulkFormId }}"
+        aria-label="Select capture #{{ (int)@capture.catch_number }}"></check><span class="capture-meta"><span
+        class="capture-number">#{{ (int)@capture.catch_number }}</span><span aria-hidden="true"> · </span><time
+        datetime="{{ @capture.view.utcTimeValue }}" data-relative-time
+        title="UTC {{ @capture.view.timeValue }}">{{ @capture.view.relativeTime }}</time>
+      <check if="{{ @captureCollectionVariant=='compact' }}">
+        <true><span aria-hidden="true"> · </span>{{ @capture.view.statusLabel }}</true>
+        <false>
+          <check if="{{ @capture.view.status=='trash' }}"><span aria-hidden="true"> · </span>in Trash</check>
+        </false>
+      </check>
+    </span>
+    <check if="{{ @captureShowActions }}">
+      <check if="{{ @capture.view.status=='trash' }}">
+        <true>
+          <form method="post" action="/captures/{{ urlencode(@capture.id) }}/restore" data-capture-collection-action>
+            <input type="hidden" name="_csrf" value="{{ @csrf }}"><button class="button button-quiet"
+              type="submit">Restore</button>
+          </form>
+        </true>
+        <false><button class="capture-menu-trigger" type="button" aria-label="Capture actions" aria-haspopup="menu"
+            aria-expanded="false" data-capture-actions data-capture-id="{{ @capture.id }}"
+            data-capture-status="{{ @capture.view.status }}" data-list-ids="{{ @capture.view.assignedListIdsJson }}"><i
+              class="glyph glyph-dots-vertical" aria-hidden="true"></i></button></false>
+      </check>
+    </check>
   </footer>
 </article>

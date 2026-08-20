@@ -1,1 +1,24 @@
-<dialog class="confirm-dialog list-dialog" data-list-dialog aria-labelledby="list-dialog-title"><form method="post" data-list-form><input type="hidden" name="_csrf" value="{{ @csrf }}"><h2 id="list-dialog-title" data-list-dialog-title>Add to lists</h2><p class="list-dialog-description" data-list-dialog-description hidden></p><check if="{{ @availableLists }}"><true><div class="list-checklist"><repeat group="{{ @availableLists }}" value="{{ @availableList }}"><label><input type="checkbox" name="list_ids[]" value="{{ @availableList.id }}"><span>{{ @availableList.title }}</span></label></repeat></div></true><false><p>No lists yet. <a href="/lists">Create one first</a>.</p></false></check><p class="list-status" data-list-status role="status" aria-live="polite"></p><div class="confirm-dialog-actions"><button class="button button-secondary" type="button" data-close-list-dialog>Cancel</button><check if="{{ @availableLists }}"><button class="button button-primary" type="submit" data-save-lists>Save lists</button></check></div></form></dialog>
+<dialog class="confirm-dialog list-dialog" data-list-dialog aria-labelledby="list-dialog-title">
+  <form method="post" data-list-form><input type="hidden" name="_csrf" value="{{ @csrf }}">
+    <h2 id="list-dialog-title" data-list-dialog-title>Add to lists</h2>
+    <p class="list-dialog-description" data-list-dialog-description hidden></p>
+    <check if="{{ @availableLists }}">
+      <true>
+        <div class="list-checklist">
+          <repeat group="{{ @availableLists }}" value="{{ @availableList }}"><label><input type="checkbox"
+                name="list_ids[]" value="{{ @availableList.id }}"><span>{{ @availableList.title }}</span></label>
+          </repeat>
+        </div>
+      </true>
+      <false>
+        <p>No lists yet. <a href="/lists">Create one first</a>.</p>
+      </false>
+    </check>
+    <p class="list-status" data-list-status role="status" aria-live="polite"></p>
+    <div class="confirm-dialog-actions"><button class="button button-secondary" type="button"
+        data-close-list-dialog>Cancel</button>
+      <check if="{{ @availableLists }}"><button class="button button-primary" type="submit" data-save-lists>Save
+          lists</button></check>
+    </div>
+  </form>
+</dialog>

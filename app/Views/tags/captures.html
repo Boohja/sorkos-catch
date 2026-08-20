@@ -1,1 +1,14 @@
-<a class="back-link" href="/tags">&larr; All tags</a><header class="page-heading"><div><p class="kicker">Tagged</p><h1>{{ @tag.name }}</h1><p data-capture-count data-singular="capture" data-plural="captures">{{ count(@captures) }} {{ count(@captures)===1 ? 'capture' : 'captures' }}</p></div></header><nav class="filter-tabs" aria-label="Status"><a href="{{ @tag.url }}"<check if="{{ @status=='inbox' }}"> aria-current="page"</check>>Current</a><a href="{{ @tag.url }}?status=archived"<check if="{{ @status=='archived' }}"> aria-current="page"</check>>Archived</a></nav><include href="captures/_list.html" />
+<a class="back-link" href="/tags">&larr; All tags</a>
+<header class="page-heading">
+  <div>
+    <p class="kicker">Tagged</p>
+    <h1>{{ @tag.name }}</h1>
+    <p data-capture-count data-singular="capture" data-plural="captures">{{ count(@captures) }}
+      {{ count(@captures)===1 ? 'capture' : 'captures' }}
+    </p>
+  </div>
+</header>
+<nav class="filter-tabs" aria-label="Status"><a href="{{ @tag.url }}" <check if="{{ @status=='inbox' }}">
+    aria-current="page"</check>>Current</a><a href="{{ @tag.url }}?status=archived" <check
+    if="{{ @status=='archived' }}"> aria-current="page"</check>>Archived</a></nav>
+<include href="captures/_list.html" />

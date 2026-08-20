@@ -31,7 +31,11 @@ php bin/migrate.php
 composer test
 composer cs:check
 composer cs:fix
+npm run lint:views
+npm run format:views
 ```
+
+`lint:views` fails when a Fat-Free HTML template is not consistently formatted. Use `format:views` to format every template under `app/Views`.
 
 ## Email-to-Catch importer
 

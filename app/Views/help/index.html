@@ -1,28 +1,94 @@
-<check if="{{ !@user }}"><header class="public-header"><a class="brand brand-nav" href="/"><img src="/assets/logo/landscape_dark_small.png" alt="Catch" width="104" height="37"></a><a class="button button-secondary" href="/login">Log in</a></header></check>
+<check if="{{ !@user }}">
+  <header class="public-header"><a class="brand brand-nav" href="/"><img src="/assets/logo/landscape_dark_small.png"
+        alt="Catch" width="104" height="37"></a><a class="button button-secondary" href="/login">Log in</a></header>
+</check>
 <article class="help-doc">
-  <header><p class="kicker">iOS Shortcut</p><h1>Use Catch with Shortcuts</h1><p>The shared shortcut accepts content from the Share Sheet, stores it locally when needed, and sends it securely to your personal Catch inbox.</p><check if="{{ @user }}"><a class="button button-primary" href="/devices/new">Add device</a></check></header>
-
-  <nav class="doc-index" aria-label="On this page"><a href="#setup">Setup</a><a href="#pairing">Pairing</a><a href="#capture">Send captures</a><a href="#inputs">Inputs</a><a href="#offline">Offline outbox</a></nav>
-
-  <section id="setup"><h2>Set up the shortcut</h2><ol class="instruction-list"><li><strong>Create a device</strong><span>Sign in to Catch, open “Devices,” and add your iPhone or iPad.</span></li><li><strong>Download Catch Setup</strong><span>Download the <a href="{{ @appUrl }}/assets/shortcuts/Catch%20Setup.shortcut" download>shortcut file</a> from the device page or scan its QR code.</span></li><li><strong>Create a pairing code</strong><span>Create the code when Catch Setup asks for it, then enter it in the shortcut.</span></li><li><strong>Complete the connection</strong><span>Catch Setup exchanges the code for a device token and stores it centrally for other Catch shortcuts.</span></li></ol></section>
-
-  <section id="pairing"><h2>Pairing endpoint</h2><p>The 10-digit pairing code belongs to the device you created and expires after 15 minutes. It is deleted after a successful exchange. The returned token remains valid until the device is removed.</p><div class="endpoint"><span>POST</span><code>{{ @appUrl }}/api/shortcut/pair</code></div><pre><code>{
+  <header>
+    <p class="kicker">iOS Shortcut</p>
+    <h1>Use Catch with Shortcuts</h1>
+    <p>The shared shortcut accepts content from the Share Sheet, stores it locally when needed, and sends it securely to
+      your personal Catch inbox.</p>
+    <check if="{{ @user }}"><a class="button button-primary" href="/devices/new">Add device</a></check>
+  </header>
+  <nav class="doc-index" aria-label="On this page"><a href="#setup">Setup</a><a href="#pairing">Pairing</a><a
+      href="#capture">Send captures</a><a href="#inputs">Inputs</a><a href="#offline">Offline outbox</a></nav>
+  <section id="setup">
+    <h2>Set up the shortcut</h2>
+    <ol class="instruction-list">
+      <li><strong>Create a device</strong><span>Sign in to Catch, open “Devices,” and add your iPhone or iPad.</span>
+      </li>
+      <li><strong>Download Catch Setup</strong><span>Download the <a
+            href="{{ @appUrl }}/assets/shortcuts/Catch%20Setup.shortcut" download>shortcut file</a> from the device page
+          or scan its QR code.</span></li>
+      <li><strong>Create a pairing code</strong><span>Create the code when Catch Setup asks for it, then enter it in the
+          shortcut.</span></li>
+      <li><strong>Complete the connection</strong><span>Catch Setup exchanges the code for a device token and stores it
+          centrally for other Catch shortcuts.</span></li>
+    </ol>
+  </section>
+  <section id="pairing">
+    <h2>Pairing endpoint</h2>
+    <p>The 10-digit pairing code belongs to the device you created and expires after 15 minutes. It is deleted after a
+      successful exchange. The returned token remains valid until the device is removed.</p>
+    <div class="endpoint"><span>POST</span><code>{{ @appUrl }}/api/shortcut/pair</code></div>
+    <pre><code>{
   "pairing_code": "12345 67890"
-}</code></pre><p>Success response:</p><pre><code>{
+}</code></pre>
+    <p>Success response:</p>
+    <pre><code>{
   "result": "catch_device_..."
-}</code></pre><p>Catch Setup stores <code>result</code> as the device token locally, for example at <code>Shortcuts/Catch/device.json</code>. Other shortcuts on the same device read this file. Catch never displays the token value in the web interface.</p><p>Every Shortcut API response contains exactly one string field. If <code>error</code> exists, show it and stop the shortcut; otherwise read <code>result</code>.</p><pre><code>{
+}</code></pre>
+    <p>Catch Setup stores <code>result</code> as the device token locally, for example at
+      <code>Shortcuts/Catch/device.json</code>. Other shortcuts on the same device read this file. Catch never displays
+      the token value in the web interface.</p>
+    <p>Every Shortcut API response contains exactly one string field. If <code>error</code> exists, show it and stop the
+      shortcut; otherwise read <code>result</code>.</p>
+    <pre><code>{
   "error": "The pairing code is invalid."
-}</code></pre></section>
-
-  <section id="capture"><h2>Capture endpoint</h2><div class="endpoint"><span>POST</span><code>{{ @appUrl }}/api/shortcut/captures</code></div><pre><code>Authorization: Bearer catch_device_...
-Content-Type: multipart/form-data</code></pre><pre><code>type: text
+}</code></pre>
+  </section>
+  <section id="capture">
+    <h2>Capture endpoint</h2>
+    <div class="endpoint"><span>POST</span><code>{{ @appUrl }}/api/shortcut/captures</code></div>
+    <pre><code>Authorization: Bearer catch_device_...
+Content-Type: multipart/form-data</code></pre>
+    <pre><code>type: text
 text: Review proposal
 source: ios-shortcut
-client_capture_id: optional-stable-id</code></pre><p>The device token belongs only in the <code>Authorization</code> header. <code>client_capture_id</code> is optional: a supplied value is preserved for idempotent retries; otherwise Catch generates a random value. Success returns the per-user catch number:</p><pre><code>{
+client_capture_id: optional-stable-id</code></pre>
+    <p>The device token belongs only in the <code>Authorization</code> header. <code>client_capture_id</code> is
+      optional: a supplied value is preserved for idempotent retries; otherwise Catch generates a random value. Success
+      returns the per-user catch number:</p>
+    <pre><code>{
   "result": "334"
-}</code></pre><p>For an image or PDF, send one iOS Shortcuts <strong>File</strong> (<strong>Datei</strong>) value in the singular multipart field <code>attachment</code>. The Shortcut endpoint rejects multiple files. Repeated requests with the same explicit <code>client_capture_id</code> do not create duplicate captures.</p></section>
-
-  <section id="inputs"><h2>Supported inputs</h2><div class="input-matrix"><div><strong>Unknown</strong><code>type=unknown</code><span>Share Sheet input that Catch inspects; accepts configured image and audio formats plus PDF</span></div><div><strong>Text</strong><code>type=text</code><span>Notes, dictation, and selected text</span></div><div><strong>URL</strong><code>type=url</code><span>Link, page title, and optional context</span></div><div><strong>Image</strong><code>type=image</code><span>Original image with optional OCR text</span></div><div><strong>Audio</strong><code>type=audio</code><span>Original recording with an optional transcript in extracted text</span></div><div><strong>File</strong><code>type=file</code><span>Documents and other permitted file types</span></div><div><strong>Mixed</strong><code>type=mixed</code><span>Multiple types of content in one capture</span></div></div><p>For <code>unknown</code>, Catch detects the final stored type. A lone URL in <code>text</code> becomes a URL capture and Catch attempts a safe page-title lookup. OCR and transcripts stay in <code>extracted_text</code> when an image or audio attachment is the source. Rejection messages include the detected MIME type and file extension.</p></section>
-
-  <section id="offline"><h2>Offline storage and processing</h2><p>Before every upload, the shortcut writes the capture to its local Catch directory. Local files are removed only after the server confirms receipt. On the next run, the shortcut tries to sync pending items first.</p><p>The server uses the device token to associate the request with a Catch account, validates the content and files, and stores the original. A later release will evaluate matching rules and enqueue optional webhook jobs.</p></section>
+}</code></pre>
+    <p>For an image or PDF, send one iOS Shortcuts <strong>File</strong> (<strong>Datei</strong>) value in the singular
+      multipart field <code>attachment</code>. The Shortcut endpoint rejects multiple files. Repeated requests with the
+      same explicit <code>client_capture_id</code> do not create duplicate captures.</p>
+  </section>
+  <section id="inputs">
+    <h2>Supported inputs</h2>
+    <div class="input-matrix">
+      <div><strong>Unknown</strong><code>type=unknown</code><span>Share Sheet input that Catch inspects; accepts
+          configured image and audio formats plus PDF</span></div>
+      <div><strong>Text</strong><code>type=text</code><span>Notes, dictation, and selected text</span></div>
+      <div><strong>URL</strong><code>type=url</code><span>Link, page title, and optional context</span></div>
+      <div><strong>Image</strong><code>type=image</code><span>Original image with optional OCR text</span></div>
+      <div><strong>Audio</strong><code>type=audio</code><span>Original recording with an optional transcript in
+          extracted text</span></div>
+      <div><strong>File</strong><code>type=file</code><span>Documents and other permitted file types</span></div>
+      <div><strong>Mixed</strong><code>type=mixed</code><span>Multiple types of content in one capture</span></div>
+    </div>
+    <p>For <code>unknown</code>, Catch detects the final stored type. A lone URL in <code>text</code> becomes a URL
+      capture and Catch attempts a safe page-title lookup. OCR and transcripts stay in <code>extracted_text</code> when
+      an image or audio attachment is the source. Rejection messages include the detected MIME type and file extension.
+    </p>
+  </section>
+  <section id="offline">
+    <h2>Offline storage and processing</h2>
+    <p>Before every upload, the shortcut writes the capture to its local Catch directory. Local files are removed only
+      after the server confirms receipt. On the next run, the shortcut tries to sync pending items first.</p>
+    <p>The server uses the device token to associate the request with a Catch account, validates the content and files,
+      and stores the original. A later release will evaluate matching rules and enqueue optional webhook jobs.</p>
+  </section>
 </article>

@@ -1,1 +1,33 @@
-<header class="page-heading"><div><h1>Lists</h1><p>Keep related captures together.</p></div></header><section class="list-create"><form class="inline-form" method="post" action="/lists"><input type="hidden" name="_csrf" value="{{ @csrf }}"><label>New list<input name="title" maxlength="160" required autocomplete="off" placeholder="Reading list"></label><button class="button button-primary">Create list</button></form></section><section class="list-grid" aria-label="Lists"><check if="{{ !@lists }}"><div class="empty-state"><h2>No lists yet</h2><p>Create a list, then add captures from their detail view.</p></div></check><repeat group="{{ @lists }}" value="{{ @list }}"><article class="list-card"><a class="list-card-main" href="{{ @list.url }}"><span class="list-card-count">{{ (int)@list.capture_count }} {{ (int)@list.capture_count===1 ? 'item' : 'items' }}</span><h2>{{ @list.title }}</h2><p>{{ mb_strimwidth((string)(@list.top_capture_title?:'No captures yet'),0,90,'…') }}</p></a><div class="list-card-actions"><a href="/lists/{{ rawurlencode(@list.id.'-'.@list.slug) }}/edit">Edit</a><form method="post" action="/lists/{{ rawurlencode(@list.id.'-'.@list.slug) }}/delete" onsubmit="return confirm('Delete this list? Captures will be kept.')"><input type="hidden" name="_csrf" value="{{ @csrf }}"><button class="button button-danger-outline">Delete</button></form></div></article></repeat></section>
+<header class="page-heading">
+  <div>
+    <h1>Lists</h1>
+    <p>Keep related captures together.</p>
+  </div>
+</header>
+<section class="list-create">
+  <form class="inline-form" method="post" action="/lists"><input type="hidden" name="_csrf"
+      value="{{ @csrf }}"><label>New list<input name="title" maxlength="160" required autocomplete="off"
+        placeholder="Reading list"></label><button class="button button-primary">Create list</button></form>
+</section>
+<section class="list-grid" aria-label="Lists">
+  <check if="{{ !@lists }}">
+    <div class="empty-state">
+      <h2>No lists yet</h2>
+      <p>Create a list, then add captures from their detail view.</p>
+    </div>
+  </check>
+  <repeat group="{{ @lists }}" value="{{ @list }}">
+    <article class="list-card"><a class="list-card-main" href="{{ @list.url }}"><span
+          class="list-card-count">{{ (int)@list.capture_count }}
+          {{ (int)@list.capture_count===1 ? 'item' : 'items' }}</span>
+        <h2>{{ @list.title }}</h2>
+        <p>{{ mb_strimwidth((string)(@list.top_capture_title?:'No captures yet'),0,90,'…') }}</p>
+      </a>
+      <div class="list-card-actions"><a href="/lists/{{ rawurlencode(@list.id.'-'.@list.slug) }}/edit">Edit</a>
+        <form method="post" action="/lists/{{ rawurlencode(@list.id.'-'.@list.slug) }}/delete"
+          onsubmit="return confirm('Delete this list? Captures will be kept.')"><input type="hidden" name="_csrf"
+            value="{{ @csrf }}"><button class="button button-danger-outline">Delete</button></form>
+      </div>
+    </article>
+  </repeat>
+</section>

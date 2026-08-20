@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "npm run lint:views",
+    "format:views": "node scripts/format-views.mjs --write",
+    "lint:views": "node scripts/format-views.mjs --check"
+  },
+  "devDependencies": {
+    "js-beautify": "^1.15.4"
+  }
+}

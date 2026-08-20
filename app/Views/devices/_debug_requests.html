@@ -1,1 +1,81 @@
-<section class="device-debug-requests<check if="{{ @debugRequestCard }}"> device-debug-requests-card</check>"><header><div><p class="debug-label">Debug mode</p><h2>{{ @debugRequestHeading }}</h2></div><p>{{ count(@debugRequests) }} recent {{ count(@debugRequests)===1 ? 'request' : 'requests' }}</p></header><check if="{{ !@debugRequests }}"><true><p class="muted">No capture requests have been recorded for this device.</p></true><false><div class="debug-request-list"><repeat group="{{ @debugRequests }}" value="{{ @debugRequest }}"><details class="debug-request"><summary><span><strong>{{ @debugRequest.endpoint }}</strong><small><time datetime="{{ @debugRequest.utcCreatedAt }}" data-local-time data-date-style="medium" data-time-style="medium">UTC {{ @debugRequest.created_at }}</time> &middot; {{ @debugRequest.remote_ip?:'unknown IP' }}</small></span><em class="debug-verdict debug-verdict-{{ @debugRequest.verdict }}">Server verdict: {{ @debugRequest.verdictLabel }}<check if="{{ @debugRequest.http_status!==null }}"> ({{ (int)@debugRequest.http_status }})</check></em></summary><dl class="debug-request-context"><div><dt>Method</dt><dd>{{ @debugRequest.method }}</dd></div><div><dt>Content type</dt><dd>{{ @debugRequest.content_type?:'not sent' }}</dd></div><div><dt>Content length</dt><dd>{{ @debugRequest.contentLengthLabel }}</dd></div><div><dt>Token ID</dt><dd><code>{{ @debugRequest.token_id }}</code></dd></div><div><dt>Token scope</dt><dd>{{ @debugRequest.token_scope }}</dd></div><div><dt>Capture ID</dt><dd><check if="{{ @debugRequest.capture_id===null }}"><true>none</true><false><code>{{ @debugRequest.capture_id }}</code></false></check></dd></div><check if="{{ @debugRequest.idempotency_key!==null }}"><div><dt>Idempotency key</dt><dd><code>{{ @debugRequest.idempotency_key }}</code></dd></div></check><check if="{{ @debugRequest.user_agent!==null }}"><div class="debug-context-wide"><dt>User agent</dt><dd>{{ @debugRequest.user_agent }}</dd></div></check></dl><check if="{{ @debugRequest.error_message!==null }}"><p class="debug-error">{{ @debugRequest.error_message }}</p></check><h3>Parameters</h3><pre><code>{{ @debugRequest.parameters_pretty }}</code></pre><check if="{{ @debugRequest.files_pretty!==null }}"><h3>Uploaded files</h3><pre><code>{{ @debugRequest.files_pretty }}</code></pre></check></details></repeat></div></false></check></section>
+<section class="device-debug-requests<check if=" {{ @debugRequestCard }}"> device-debug-requests-card</check>"><header>
+    <div>
+      <p class="debug-label">Debug mode</p>
+      <h2>{{ @debugRequestHeading }}</h2>
+    </div>
+    <p>{{ count(@debugRequests) }} recent {{ count(@debugRequests)===1 ? 'request' : 'requests' }}</p>
+  </header>
+  <check if="{{ !@debugRequests }}">
+    <true>
+      <p class="muted">No capture requests have been recorded for this device.</p>
+    </true>
+    <false>
+      <div class="debug-request-list">
+        <repeat group="{{ @debugRequests }}" value="{{ @debugRequest }}">
+          <details class="debug-request">
+            <summary><span><strong>{{ @debugRequest.endpoint }}</strong><small><time
+                    datetime="{{ @debugRequest.utcCreatedAt }}" data-local-time data-date-style="medium"
+                    data-time-style="medium">UTC {{ @debugRequest.created_at }}</time> &middot;
+                  {{ @debugRequest.remote_ip?:'unknown IP' }}</small></span><em
+                class="debug-verdict debug-verdict-{{ @debugRequest.verdict }}">Server verdict:
+                {{ @debugRequest.verdictLabel }}
+                <check if="{{ @debugRequest.http_status!==null }}"> ({{ (int)@debugRequest.http_status }})</check>
+              </em></summary>
+            <dl class="debug-request-context">
+              <div>
+                <dt>Method</dt>
+                <dd>{{ @debugRequest.method }}</dd>
+              </div>
+              <div>
+                <dt>Content type</dt>
+                <dd>{{ @debugRequest.content_type?:'not sent' }}</dd>
+              </div>
+              <div>
+                <dt>Content length</dt>
+                <dd>{{ @debugRequest.contentLengthLabel }}</dd>
+              </div>
+              <div>
+                <dt>Token ID</dt>
+                <dd><code>{{ @debugRequest.token_id }}</code></dd>
+              </div>
+              <div>
+                <dt>Token scope</dt>
+                <dd>{{ @debugRequest.token_scope }}</dd>
+              </div>
+              <div>
+                <dt>Capture ID</dt>
+                <dd>
+                  <check if="{{ @debugRequest.capture_id===null }}">
+                    <true>none</true>
+                    <false><code>{{ @debugRequest.capture_id }}</code></false>
+                  </check>
+                </dd>
+              </div>
+              <check if="{{ @debugRequest.idempotency_key!==null }}">
+                <div>
+                  <dt>Idempotency key</dt>
+                  <dd><code>{{ @debugRequest.idempotency_key }}</code></dd>
+                </div>
+              </check>
+              <check if="{{ @debugRequest.user_agent!==null }}">
+                <div class="debug-context-wide">
+                  <dt>User agent</dt>
+                  <dd>{{ @debugRequest.user_agent }}</dd>
+                </div>
+              </check>
+            </dl>
+            <check if="{{ @debugRequest.error_message!==null }}">
+              <p class="debug-error">{{ @debugRequest.error_message }}</p>
+            </check>
+            <h3>Parameters</h3>
+            <pre><code>{{ @debugRequest.parameters_pretty }}</code></pre>
+            <check if="{{ @debugRequest.files_pretty!==null }}">
+              <h3>Uploaded files</h3>
+              <pre><code>{{ @debugRequest.files_pretty }}</code></pre>
+            </check>
+          </details>
+        </repeat>
+      </div>
+    </false>
+  </check>
+</section>

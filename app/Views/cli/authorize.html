@@ -1,1 +1,42 @@
-<section class="browser-pair"><picture><source media="(prefers-color-scheme: dark)" srcset="/assets/logo/landscape_dark.png"><img src="/assets/logo/landscape_light.png" alt="Catch" width="356" height="120"></picture><check if="{{ @connected }}"><true><div class="browser-pair-result" role="status"><span aria-hidden="true">✓</span><div><h1>CLI authorized</h1><p>You can return to the terminal. Catch CLI will finish signing in automatically.</p></div></div></true><false><check if="{{ @request && @request.status=='pending' }}"><true><p class="kicker">Catch CLI</p><h1>Authorize {{ @request.device_name }}</h1><p>This gives the CLI read-only access to your captures. It cannot create, edit, archive, or delete them.</p><dl><div><dt>Platform</dt><dd>{{ ucfirst(@request.platform) }}</dd></div><div><dt>Access</dt><dd>Read only</dd></div></dl><form method="post" action="/cli/authorize"><input type="hidden" name="_csrf" value="{{ @csrf }}"><input type="hidden" name="login" value="{{ @login }}"><button class="button button-primary button-full" type="submit">Authorize CLI</button></form></true><false><h1>This authorization link is no longer active</h1><p>Return to the Catch CLI and start a new login.</p></false></check></false></check></section>
+<section class="browser-pair">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="/assets/logo/landscape_dark.png"><img
+      src="/assets/logo/landscape_light.png" alt="Catch" width="356" height="120">
+  </picture>
+  <check if="{{ @connected }}">
+    <true>
+      <div class="browser-pair-result" role="status"><span aria-hidden="true">✓</span>
+        <div>
+          <h1>CLI authorized</h1>
+          <p>You can return to the terminal. Catch CLI will finish signing in automatically.</p>
+        </div>
+      </div>
+    </true>
+    <false>
+      <check if="{{ @request && @request.status=='pending' }}">
+        <true>
+          <p class="kicker">Catch CLI</p>
+          <h1>Authorize {{ @request.device_name }}</h1>
+          <p>This gives the CLI read-only access to your captures. It cannot create, edit, archive, or delete them.</p>
+          <dl>
+            <div>
+              <dt>Platform</dt>
+              <dd>{{ ucfirst(@request.platform) }}</dd>
+            </div>
+            <div>
+              <dt>Access</dt>
+              <dd>Read only</dd>
+            </div>
+          </dl>
+          <form method="post" action="/cli/authorize"><input type="hidden" name="_csrf" value="{{ @csrf }}"><input
+              type="hidden" name="login" value="{{ @login }}"><button class="button button-primary button-full"
+              type="submit">Authorize CLI</button></form>
+        </true>
+        <false>
+          <h1>This authorization link is no longer active</h1>
+          <p>Return to the Catch CLI and start a new login.</p>
+        </false>
+      </check>
+    </false>
+  </check>
+</section>

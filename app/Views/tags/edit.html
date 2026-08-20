@@ -1,1 +1,11 @@
-<a class="back-link" href="/tags">&larr; Back to tags</a><section class="tag-edit"><header class="page-heading"><div><h1>Edit tag</h1></div></header><form class="inline-form" method="post" action="/tags/{{ rawurlencode(@tag.id.'-'.@tag.slug) }}/edit"><input type="hidden" name="_csrf" value="{{ @csrf }}"><label>Name<input name="name" value="{{ @tag.name }}" maxlength="100" required autofocus></label><button class="button button-primary">Save</button></form></section>
+<a class="back-link" href="/tags">&larr; Back to tags</a>
+<section class="tag-edit">
+  <header class="page-heading">
+    <div>
+      <h1>Edit tag</h1>
+    </div>
+  </header>
+  <form class="inline-form" method="post" action="/tags/{{ rawurlencode(@tag.id.'-'.@tag.slug) }}/edit"><input
+      type="hidden" name="_csrf" value="{{ @csrf }}"><label>Name<input name="name" value="{{ @tag.name }}"
+        maxlength="100" required autofocus></label><button class="button button-primary">Save</button></form>
+</section>
