@@ -378,9 +378,9 @@ $test('Inbox bulk delete is confirmed and permanently removes related data', fun
     $application = (string)file_get_contents($root . '/app/Core/Application.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $view = (string)file_get_contents($root . '/app/Views/captures/index.php');
-    $list = (string)file_get_contents($root . '/app/Views/captures/_list.php');
-    $item = (string)file_get_contents($root . '/app/Views/captures/_item.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/index.html');
+    $list = (string)file_get_contents($root . '/app/Views/captures/_list.html');
+    $item = (string)file_get_contents($root . '/app/Views/captures/_item.html');
     $script = (string)file_get_contents($root . '/public/assets/js/capture-bulk.js');
     $style = (string)file_get_contents($root . '/public/assets/css/capture-bulk.css');
     foreach (['POST /captures/bulk-delete','bulkDelete'] as $required) {
@@ -399,7 +399,7 @@ $test('Inbox bulk delete is confirmed and permanently removes related data', fun
         if (!str_contains($view, $required)) {
             throw new RuntimeException('Bulk confirmation UI is missing ' . $required);
         }
-    }foreach (['name="capture_ids[]"','form="<?=htmlspecialchars($bulkFormId)?>"'] as $required) {
+    }foreach (['name="capture_ids[]"','form="{{ @bulkFormId }}"'] as $required) {
         if (!str_contains($list . $item, $required)) {
             throw new RuntimeException('Capture selections are not associated with the bulk form');
         }
@@ -416,9 +416,9 @@ $test('Lists group captures many-to-many and appear in capture details', functio
     $application = (string)file_get_contents($root . '/app/Core/Application.php');
     $repository = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
     $captureRepository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $detail = (string)file_get_contents($root . '/app/Views/captures/show.php');
-    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.php');
-    $index = (string)file_get_contents($root . '/app/Views/lists/index.php');
+    $detail = (string)file_get_contents($root . '/app/Views/captures/show.html');
+    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.html');
+    $index = (string)file_get_contents($root . '/app/Views/lists/index.html');
     foreach (['catch_lists','catch_capture_lists','PRIMARY KEY (capture_id, list_id)','ON DELETE CASCADE'] as $required) {
         if (!str_contains($migration, $required)) {
             throw new RuntimeException('List migration is incomplete: ' . $required);
@@ -446,7 +446,7 @@ $test('Lists group captures many-to-many and appear in capture details', functio
 $test('Audio attachments retain transcripts and report rejected MIME details', function () use ($root) {
     $service = (string)file_get_contents($root . '/app/Services/CaptureService.php');
     $upload = (string)file_get_contents($root . '/app/Services/UploadService.php');
-    $detail = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $detail = (string)file_get_contents($root . '/app/Views/captures/show.html');
     foreach (['hasAudio','extracted_text','UnsupportedAttachmentException'] as $required) {
         if (!str_contains($service, $required)) {
             throw new RuntimeException('Audio capture behavior is incomplete: ' . $required);
@@ -461,9 +461,9 @@ $test('Audio attachments retain transcripts and report rejected MIME details', f
     }
 });
 $test('Capture detail keeps extracted text compact and manages tags in a modal', function () use ($root) {
-    $detail = (string)file_get_contents($root . '/app/Views/captures/show.php');
-    $dialog = (string)file_get_contents($root . '/app/Views/captures/_tag_dialog.php');
-    $layout = (string)file_get_contents($root . '/app/Views/layout.php');
+    $detail = (string)file_get_contents($root . '/app/Views/captures/show.html');
+    $dialog = (string)file_get_contents($root . '/app/Views/captures/_tag_dialog.html');
+    $layout = (string)file_get_contents($root . '/app/Views/layout.html');
     $script = (string)file_get_contents($root . '/public/assets/js/capture-tags.js');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/TagController.php');
     $repository = (string)file_get_contents($root . '/app/Repositories/TagRepository.php');
@@ -485,7 +485,7 @@ $test('Capture detail keeps extracted text compact and manages tags in a modal',
     if (str_contains($dialog, 'data-tag-status')) {
         throw new RuntimeException('Tag feedback still renders inline instead of using toasts');
     }
-    foreach (['enableTagDialog','_tag_dialog.php'] as $required) {
+    foreach (['enableTagDialog','_tag_dialog.html'] as $required) {
         if (!str_contains($detail . $layout, $required)) {
             throw new RuntimeException('Tag dialog is not enabled: ' . $required);
         }
@@ -545,7 +545,7 @@ $test('Trash is timestamp-based, recoverable, and expires after 30 days', functi
     $migration = (string)file_get_contents($root . '/database/migrations/006_capture_trash.sql');
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
-    $view = (string)file_get_contents($root . '/app/Views/captures/index.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/index.html');
     foreach (["status='archived'","ENUM('inbox','archived')",'idx_captures_user_deleted'] as $required) {
         if (!str_contains($migration, $required)) {
             throw new RuntimeException('Trash migration is incomplete: ' . $required);
@@ -575,7 +575,7 @@ $test('List membership controls the active capture state', function () use ($roo
 $test('Capture detail supports quiet in-place editing and global request progress', function () use ($root) {
     $application = (string)file_get_contents($root . '/app/Core/Application.php');
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $view = (string)file_get_contents($root . '/app/Views/captures/show.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/show.html');
     $editing = (string)file_get_contents($root . '/public/assets/js/capture-edit.js');
     $progress = (string)file_get_contents($root . '/public/assets/js/request-progress.js');
     $style = (string)file_get_contents($root . '/public/assets/css/capture-detail.css');
@@ -601,8 +601,8 @@ $test('Capture lists use membership truth and a batch assignment dialog', functi
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $lists = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/ListController.php');
-    $view = (string)file_get_contents($root . '/app/Views/captures/show.php');
-    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.php');
+    $view = (string)file_get_contents($root . '/app/Views/captures/show.html');
+    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.html');
     $script = (string)file_get_contents($root . '/public/assets/js/capture-lists.js');
     if (str_contains($repository, 'c.status=:status AND c.deleted_at IS NULL AND cl.list_id=:list')) {
         throw new RuntimeException('List detail still hides members by capture status');
@@ -622,9 +622,9 @@ $test('Devices expose capture counts, last use time, and capture history', funct
     $devices = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $captures = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
-    $index = (string)file_get_contents($root . '/app/Views/devices/index.php')
-        . (string)file_get_contents($root . '/app/Views/devices/_table.php');
-    $detail = (string)file_get_contents($root . '/app/Views/devices/show.php');
+    $index = (string)file_get_contents($root . '/app/Views/devices/index.html')
+        . (string)file_get_contents($root . '/app/Views/devices/_table.html');
+    $detail = (string)file_get_contents($root . '/app/Views/devices/show.html');
     foreach (['capture_count','capture_last_used_at','MAX(c.created_at)'] as $required) {
         if (!str_contains($devices, $required)) {
             throw new RuntimeException('Device summary query is incomplete: ' . $required);
@@ -643,9 +643,9 @@ $test('Device types drive icons and remain editable', function () use ($root) {
     $migration = (string)file_get_contents($root . '/database/migrations/008_device_types.sql') . (string)file_get_contents($root . '/database/migrations/009_refine_device_type_guesses.sql');
     $repository = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
-    $index = (string)file_get_contents($root . '/app/Views/devices/index.php')
-        . (string)file_get_contents($root . '/app/Views/devices/_table.php');
-    $detail = (string)file_get_contents($root . '/app/Views/devices/show.php');
+    $index = (string)file_get_contents($root . '/app/Views/devices/index.html')
+        . (string)file_get_contents($root . '/app/Views/devices/_table.html');
+    $detail = (string)file_get_contents($root . '/app/Views/devices/show.html');
     foreach (["ENUM('laptop','phone','pc','tablet')","DEFAULT 'pc'",'%iphone%',"'%ipad%'"] as $required) {
         if (!str_contains($migration, $required)) {
             throw new RuntimeException('Device type migration is incomplete: ' . $required);
@@ -658,7 +658,7 @@ $test('Device types drive icons and remain editable', function () use ($root) {
     }if (!str_contains($controller, "\$_POST['device_type']")) {
         throw new RuntimeException('Device type is not accepted by the rename action');
     }
-    foreach (['glyph-<?=htmlspecialchars($deviceType)?>','Last used:','capture_count'] as $required) {
+    foreach (['glyph-{{ @device.view.deviceType }}','Last used:','capture_count'] as $required) {
         if (!str_contains($index, $required)) {
             throw new RuntimeException('Device list type or usage UI is incomplete: ' . $required);
         }
@@ -669,11 +669,11 @@ $test('Device types drive icons and remain editable', function () use ($root) {
     }
 });
 $test('Requested interface icons and danger outline are used consistently', function () use ($root) {
-    $capture = (string)file_get_contents($root . '/app/Views/captures/show.php');
-    $inbox = (string)file_get_contents($root . '/app/Views/captures/index.php');
-    $list = (string)file_get_contents($root . '/app/Views/lists/captures.php');
+    $capture = (string)file_get_contents($root . '/app/Views/captures/show.html');
+    $inbox = (string)file_get_contents($root . '/app/Views/captures/index.html');
+    $list = (string)file_get_contents($root . '/app/Views/lists/captures.html');
     $views = '';
-    foreach (glob($root . '/app/Views/*/*.php') as $path) {
+    foreach (glob($root . '/app/Views/*/*.html') as $path) {
         $views .= (string)file_get_contents($path);
     }foreach (['glyph-capture','glyph-list','glyph-archive','glyph-trash'] as $required) {
         if (!str_contains($capture, $required)) {
@@ -690,7 +690,7 @@ $test('Requested interface icons and danger outline are used consistently', func
     }
 });
 $test('Scrolling remains browser-native and progress uses the primary color', function () use ($root) {
-    $layout = (string)file_get_contents($root . '/app/Views/layout.php');
+    $layout = (string)file_get_contents($root . '/app/Views/layout.html');
     $app = (string)file_get_contents($root . '/public/assets/js/app.js');
     $style = (string)file_get_contents($root . '/public/assets/css/capture-detail.css');
     if (str_contains($layout . $app, 'page-scrollbar')) {
@@ -705,12 +705,32 @@ $test('View data can expose capture status without colliding with the HTTP statu
         throw new RuntimeException('View status data is still shadowed by the response parameter');
     }
 });
+$test('Views use only Fat-Free HTML templates', function () use ($root) {
+    $renderer = (string) file_get_contents($root . '/app/Core/View.php');
+    if (!str_contains($renderer, "\\Template::instance()->render('layout.html'")
+        || str_contains($renderer, 'require $this->path')) {
+        throw new RuntimeException('The view renderer does not use the Fat-Free template engine');
+    }
+
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root . '/app/Views'));
+    foreach ($files as $file) {
+        if (!$file->isFile()) {
+            continue;
+        }
+        if ($file->getExtension() !== 'html') {
+            throw new RuntimeException('Non-HTML view remains: ' . $file->getFilename());
+        }
+        if (str_contains((string) file_get_contents($file->getPathname()), '<?')) {
+            throw new RuntimeException('PHP tag remains in view: ' . $file->getFilename());
+        }
+    }
+});
 $test('Debug capture logging is bounded, redacted, and device scoped', function () use ($root) {
     $migration = (string) file_get_contents($root . '/database/migrations/010_capture_debug_requests.sql');
     $service = (string) file_get_contents($root . '/app/Services/CaptureDebugService.php');
     $api = (string) file_get_contents($root . '/app/Controllers/Api/CaptureController.php');
     $device = (string) file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
-    $view = (string) file_get_contents($root . '/app/Views/devices/_debug_requests.php');
+    $view = (string) file_get_contents($root . '/app/Views/devices/_debug_requests.html');
 
     foreach (['user_id', 'device_id', 'token_id', 'parameters_json', 'files_json', 'remote_ip', 'verdict'] as $required) {
         if (!str_contains($migration, $required)) {
@@ -742,9 +762,9 @@ $test('Debug capture logging is bounded, redacted, and device scoped', function 
 });
 $test('Capture collections share responsive list and grid presentations', function () use ($root) {
     $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $view = (string) file_get_contents($root . '/app/Views/captures/_list.php');
-    $item = (string) file_get_contents($root . '/app/Views/captures/_item.php');
-    $device = (string) file_get_contents($root . '/app/Views/devices/show.php');
+    $view = (string) file_get_contents($root . '/app/Views/captures/_list.html');
+    $item = (string) file_get_contents($root . '/app/Views/captures/_item.html');
+    $device = (string) file_get_contents($root . '/app/Views/devices/show.html');
     $style = (string) file_get_contents($root . '/public/assets/css/capture-collection.css');
     $script = (string) file_get_contents($root . '/public/assets/js/capture-view.js');
 
@@ -764,7 +784,7 @@ $test('Capture collections share responsive list and grid presentations', functi
         }
     }
 
-    if (!str_contains($device, "require dirname(__DIR__) . '/captures/_list.php'")) {
+    if (!str_contains($device, '<include href="captures/_list.html" />')) {
         throw new RuntimeException('Device capture history does not use the shared collection component');
     }
 
@@ -791,8 +811,8 @@ $test('Relative capture times update globally and expose full local tooltips', f
         }
     }
 
-    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
-    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.html');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.html');
     $script = (string) file_get_contents($root . '/public/assets/js/relative-time.js');
     foreach (['data-relative-time', 'relativeTime', 'setInterval', '60_000', 'element.title'] as $required) {
         if (!str_contains($collection . $script, $required)) {
@@ -804,11 +824,11 @@ $test('Capture menus and bulk actions share list assignment controls', function 
     $application = (string) file_get_contents($root . '/app/Core/Application.php');
     $captureRepository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $listRepository = (string) file_get_contents($root . '/app/Repositories/ListRepository.php');
-    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
-    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
-    $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.php');
-    $dialog = (string) file_get_contents($root . '/app/Views/captures/_list_dialog.php');
-    $bulk = (string) file_get_contents($root . '/app/Views/captures/index.php');
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.html');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.html');
+    $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.html');
+    $dialog = (string) file_get_contents($root . '/app/Views/captures/_list_dialog.html');
+    $bulk = (string) file_get_contents($root . '/app/Views/captures/index.html');
 
     foreach (['POST /captures/bulk-archive', 'POST /captures/bulk-lists'] as $required) {
         if (!str_contains($application, $required)) {
@@ -830,8 +850,8 @@ $test('URL captures store immutable WebP preview attachments', function () use (
     $uploads = (string) file_get_contents($root . '/app/Services/UploadService.php');
     $service = (string) file_get_contents($root . '/app/Services/CaptureService.php');
     $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $detail = (string) file_get_contents($root . '/app/Views/captures/show.php');
-    $preview = (string) file_get_contents($root . '/app/Views/captures/_link_preview.php');
+    $detail = (string) file_get_contents($root . '/app/Views/captures/show.html');
+    $preview = (string) file_get_contents($root . '/app/Views/captures/_link_preview.html');
 
     foreach (["ENUM('source','preview')", "DEFAULT 'source'", 'idx_attachments_capture_kind'] as $required) {
         if (!str_contains($migration, $required)) {
@@ -857,7 +877,8 @@ $test('URL captures store immutable WebP preview attachments', function () use (
         }
     }
 
-    if (!str_contains($detail, "=== 'preview'") || !str_contains($detail, "=== 'source'")) {
+    $viewModel = (string) file_get_contents($root . '/app/Core/View.php');
+    if (!str_contains($viewModel, "=== 'preview'") || !str_contains($viewModel, "=== 'source'")) {
         throw new RuntimeException('Generated previews are not separated from user attachments');
     }
 
@@ -877,7 +898,6 @@ $test('URL captures store immutable WebP preview attachments', function () use (
     ob_start();
     imagepng($image);
     $png = ob_get_clean();
-    imagedestroy($image);
 
     try {
         $uploadService = new Catch\Services\UploadService(
@@ -987,11 +1007,11 @@ $test('Link previews are deferred, bounded, and use the social preview identity'
     $application = (string) file_get_contents($root . '/app/Core/Application.php');
     $service = (string) file_get_contents($root . '/app/Services/CaptureService.php');
     $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
-    $detail = (string) file_get_contents($root . '/app/Views/captures/show.php');
+    $detail = (string) file_get_contents($root . '/app/Views/captures/show.html');
     $client = (string) file_get_contents($root . '/public/assets/js/capture-preview.js');
     $devices = (string) file_get_contents($root . '/app/Repositories/DeviceRepository.php');
-    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
-    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.html');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.html');
 
     foreach (['link_preview_fetch', "'status' => 'pending'", 'previewFetchIsDue', 'failedPreviewFetchState'] as $required) {
         if (!str_contains($service, $required)) {
@@ -1019,9 +1039,10 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
     $deviceMigration = (string) file_get_contents($root . '/database/migrations/013_device_client_icons.sql');
     $devices = (string) file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $cli = (string) file_get_contents($root . '/app/Repositories/CliAuthRepository.php');
-    $deviceDetail = (string) file_get_contents($root . '/app/Views/devices/show.php');
+    $deviceDetail = (string) file_get_contents($root . '/app/Views/devices/show.html');
+    $viewModel = (string) file_get_contents($root . '/app/Core/View.php');
     foreach (["'extension','cli'", "'extension' => 'Extension'", "'cli' => 'CLI'"] as $required) {
-        if (!str_contains($deviceMigration . $deviceDetail, $required)) {
+        if (!str_contains($deviceMigration . $deviceDetail . $viewModel, $required)) {
             throw new RuntimeException('CLI or extension device icon support is incomplete: ' . $required);
         }
     }
@@ -1030,8 +1051,8 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
     }
 
     $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.php');
-    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.php');
+    $collection = (string) file_get_contents($root . '/app/Views/captures/_list.html');
+    $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.html');
     $previewClient = (string) file_get_contents($root . '/public/assets/js/capture-preview.js');
     $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
     $appStoreProvider = (string) file_get_contents($root . '/app/Services/LinkPreview/AppStoreProvider.php');
@@ -1050,7 +1071,7 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
     }
 
     $captureController = (string) file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
-    $captureIndex = (string) file_get_contents($root . '/app/Views/captures/index.php');
+    $captureIndex = (string) file_get_contents($root . '/app/Views/captures/index.html');
     $captureCreate = (string) file_get_contents($root . '/public/assets/js/capture-create.js');
     foreach (['Request::wantsJson()', "Response::redirect('/inbox')", 'data-capture-form-status', 'new FormData(form)', 'captureCollection?.insert'] as $required) {
         if (!str_contains($captureController . $captureIndex . $captureCreate, $required)) {
@@ -1068,7 +1089,7 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
     }
 
     $debug = (string) file_get_contents($root . '/app/Services/CaptureDebugService.php');
-    $captureDetail = (string) file_get_contents($root . '/app/Views/captures/show.php');
+    $captureDetail = (string) file_get_contents($root . '/app/Views/captures/show.html');
     if (!str_contains($debug, 'forCapture') || !str_contains($captureDetail, 'Related debug request')) {
         throw new RuntimeException('Capture detail does not expose its related debug request');
     }
@@ -1082,10 +1103,10 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
 });
 $test('Account settings and provider adapters remain decoupled', function () use ($root) {
     $application = (string) file_get_contents($root . '/app/Core/Application.php');
-    $layout = (string) file_get_contents($root . '/app/Views/layout.php');
-    $settings = (string) file_get_contents($root . '/app/Views/account/settings.php');
-    $deviceTable = (string) file_get_contents($root . '/app/Views/devices/_table.php');
-    $capture = (string) file_get_contents($root . '/app/Views/captures/show.php');
+    $layout = (string) file_get_contents($root . '/app/Views/layout.html');
+    $settings = (string) file_get_contents($root . '/app/Views/account/settings.html');
+    $deviceTable = (string) file_get_contents($root . '/app/Views/devices/_table.html');
+    $capture = (string) file_get_contents($root . '/app/Views/captures/show.html');
     $listDialog = (string) file_get_contents($root . '/public/assets/js/capture-lists.js');
     $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
     $registry = (string) file_get_contents($root . '/app/Services/LinkPreview/ProviderRegistry.php');
@@ -1100,7 +1121,7 @@ $test('Account settings and provider adapters remain decoupled', function () use
             throw new RuntimeException('Account menu is incomplete: ' . $required);
         }
     }
-    foreach (['data-theme-select', 'data-capture-view-setting', "settingsTab === 'devices'"] as $required) {
+    foreach (['data-theme-select', 'data-capture-view-setting', "@settingsTab=='devices'"] as $required) {
         if (!str_contains($settings, $required)) {
             throw new RuntimeException('Settings interface is incomplete: ' . $required);
         }
@@ -1205,7 +1226,7 @@ $test('Email importer remains folder-scoped and cron-safe', function () use ($ro
         . (string) file_get_contents($root . '/database/migrations/015_email_inbox_raw_addresses.sql');
     $importer = (string) file_get_contents($root . '/app/Services/EmailImporter.php');
     $cli = (string) file_get_contents($root . '/cli/import-mail.php');
-    $settings = (string) file_get_contents($root . '/app/Views/account/settings.php');
+    $settings = (string) file_get_contents($root . '/app/Views/account/settings.html');
     $account = (string) file_get_contents($root . '/app/Controllers/Web/AccountController.php');
     foreach (['catch_email_inboxes', 'address VARCHAR(254)', 'catch_email_imports', 'message_key_hash'] as $required) {
         if (!str_contains($migration, $required)) {
@@ -1228,7 +1249,7 @@ $test('Email importer remains folder-scoped and cron-safe', function () use ($ro
     if (!str_contains($cli, 'LOCK_EX | LOCK_NB')) {
         throw new RuntimeException('Concurrent cron imports are not locked');
     }
-    foreach (['email-address-row', 'data-copy-row', "'address'", 'EmailInboxRepository'] as $required) {
+    foreach (['email-address-row', 'data-copy-row', '@inbox.address', 'EmailInboxRepository'] as $required) {
         if (!str_contains($settings . $account . $cli, $required)) {
             throw new RuntimeException('Reusable email address UX is missing ' . $required);
         }

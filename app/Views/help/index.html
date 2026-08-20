@@ -1,12 +1,12 @@
-<?php if (empty($user)): ?><header class="public-header"><a class="brand brand-nav" href="/"><img src="/assets/logo/landscape_dark_small.png" alt="Catch" width="104" height="37"></a><a class="button button-secondary" href="/login">Log in</a></header><?php endif; ?>
+<check if="{{ !@user }}"><header class="public-header"><a class="brand brand-nav" href="/"><img src="/assets/logo/landscape_dark_small.png" alt="Catch" width="104" height="37"></a><a class="button button-secondary" href="/login">Log in</a></header></check>
 <article class="help-doc">
-  <header><p class="kicker">iOS Shortcut</p><h1>Use Catch with Shortcuts</h1><p>The shared shortcut accepts content from the Share Sheet, stores it locally when needed, and sends it securely to your personal Catch inbox.</p><?php if (!empty($user)):?><a class="button button-primary" href="/devices/new">Add device</a><?php endif;?></header>
+  <header><p class="kicker">iOS Shortcut</p><h1>Use Catch with Shortcuts</h1><p>The shared shortcut accepts content from the Share Sheet, stores it locally when needed, and sends it securely to your personal Catch inbox.</p><check if="{{ @user }}"><a class="button button-primary" href="/devices/new">Add device</a></check></header>
 
   <nav class="doc-index" aria-label="On this page"><a href="#setup">Setup</a><a href="#pairing">Pairing</a><a href="#capture">Send captures</a><a href="#inputs">Inputs</a><a href="#offline">Offline outbox</a></nav>
 
-  <section id="setup"><h2>Set up the shortcut</h2><ol class="instruction-list"><li><strong>Create a device</strong><span>Sign in to Catch, open “Devices,” and add your iPhone or iPad.</span></li><li><strong>Download Catch Setup</strong><span>Download the <a href="<?=htmlspecialchars($appUrl)?>/assets/shortcuts/Catch%20Setup.shortcut" download>shortcut file</a> from the device page or scan its QR code.</span></li><li><strong>Create a pairing code</strong><span>Create the code when Catch Setup asks for it, then enter it in the shortcut.</span></li><li><strong>Complete the connection</strong><span>Catch Setup exchanges the code for a device token and stores it centrally for other Catch shortcuts.</span></li></ol></section>
+  <section id="setup"><h2>Set up the shortcut</h2><ol class="instruction-list"><li><strong>Create a device</strong><span>Sign in to Catch, open “Devices,” and add your iPhone or iPad.</span></li><li><strong>Download Catch Setup</strong><span>Download the <a href="{{ @appUrl }}/assets/shortcuts/Catch%20Setup.shortcut" download>shortcut file</a> from the device page or scan its QR code.</span></li><li><strong>Create a pairing code</strong><span>Create the code when Catch Setup asks for it, then enter it in the shortcut.</span></li><li><strong>Complete the connection</strong><span>Catch Setup exchanges the code for a device token and stores it centrally for other Catch shortcuts.</span></li></ol></section>
 
-  <section id="pairing"><h2>Pairing endpoint</h2><p>The 10-digit pairing code belongs to the device you created and expires after 15 minutes. It is deleted after a successful exchange. The returned token remains valid until the device is removed.</p><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/pair</code></div><pre><code>{
+  <section id="pairing"><h2>Pairing endpoint</h2><p>The 10-digit pairing code belongs to the device you created and expires after 15 minutes. It is deleted after a successful exchange. The returned token remains valid until the device is removed.</p><div class="endpoint"><span>POST</span><code>{{ @appUrl }}/api/shortcut/pair</code></div><pre><code>{
   "pairing_code": "12345 67890"
 }</code></pre><p>Success response:</p><pre><code>{
   "result": "catch_device_..."
@@ -14,7 +14,7 @@
   "error": "The pairing code is invalid."
 }</code></pre></section>
 
-  <section id="capture"><h2>Capture endpoint</h2><div class="endpoint"><span>POST</span><code><?=htmlspecialchars($appUrl)?>/api/shortcut/captures</code></div><pre><code>Authorization: Bearer catch_device_...
+  <section id="capture"><h2>Capture endpoint</h2><div class="endpoint"><span>POST</span><code>{{ @appUrl }}/api/shortcut/captures</code></div><pre><code>Authorization: Bearer catch_device_...
 Content-Type: multipart/form-data</code></pre><pre><code>type: text
 text: Review proposal
 source: ios-shortcut

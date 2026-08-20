@@ -213,7 +213,6 @@ final class UploadService
         $targetHeight = max(1, (int) round($height * $scale));
         $target = imagecreatetruecolor($targetWidth, $targetHeight);
         if ($target === false) {
-            imagedestroy($source);
             throw new RuntimeException('The preview image could not be resized.');
         }
 
@@ -237,8 +236,6 @@ final class UploadService
         ob_start();
         $encoded = imagewebp($target, null, 82);
         $webp = ob_get_clean();
-        imagedestroy($target);
-        imagedestroy($source);
 
         if (!$encoded || !is_string($webp) || $webp === '') {
             throw new RuntimeException('The preview image could not be encoded.');
