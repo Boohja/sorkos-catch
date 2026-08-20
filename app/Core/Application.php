@@ -101,7 +101,7 @@ final class Application
         $cliAuth = new CliAuthRepository($pdo);
         $cliAuthController = new CliAuthController($view, $auth, $cliAuth, $csrf);
         $help = new HelpController($view, $auth, $config);
-        $api = new ApiCaptures($devices, $captures, $service, $captureDebug);
+        $api = new ApiCaptures($devices, $captures, $tags, $service, $captureDebug);
         $apiShortcut = new ApiShortcut($devices, $config);
         $apiExtension = new ApiExtension($devices, $config);
         $apiCli = new ApiCli($cliAuth, $devices, $config);

@@ -755,6 +755,11 @@
             "description": "Optional client/channel label for provenance. It is not an enum; use a stable value such as `ios-shortcut`. If omitted, the server stores `web`.",
             "example": "ios-shortcut"
           },
+          "tags": {
+            "type": "string",
+            "description": "Optional comma-separated tag names to assign after the capture is stored. Blank entries are ignored, duplicate names are assigned once, and new tags are created in lowercase.",
+            "example": "work, follow up, urgent"
+          },
           "metadata": {
             "nullable": true,
             "description": "Optional client-defined structured details. Send a JSON object with an application/json request, or a JSON-encoded object string with multipart/form-data. Metadata is stored but does not satisfy the content requirement.",

@@ -284,6 +284,12 @@ $test('Capture aliases document their respective multipart attachment shapes', f
     $two = ['attachments' => ['error' => [UPLOAD_ERR_OK,UPLOAD_ERR_OK]]];
     if ($count->invoke($controller, $two) !== 2) {
         throw new RuntimeException('Shortcut multi-file enforcement cannot count uploads');
+    }$tagNames = $controllerClass->getMethod('tagNames');
+    if ($tagNames->invoke($controller, ' Work,follow up,WORK,, ') !== ['work','follow up']) {
+        throw new RuntimeException('Capture tags are not normalized and deduplicated');
+    }$tags = $spec['components']['schemas']['CaptureInput']['properties']['tags'] ?? null;
+    if (($tags['type'] ?? null) !== 'string' || !str_contains((string) ($tags['description'] ?? ''), 'comma-separated')) {
+        throw new RuntimeException('Capture tags are not documented as a comma-separated string');
     }$typeDescription = $spec['components']['schemas']['CaptureType']['description'] ?? '';
     $textDescription = $spec['components']['schemas']['CaptureInput']['properties']['text']['description'] ?? '';
     $extractedDescription = $spec['components']['schemas']['CaptureInput']['properties']['extracted_text']['description'] ?? '';

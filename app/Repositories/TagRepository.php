@@ -28,7 +28,7 @@ final class TagRepository
     }
     public function create(string $userId, string $name): array
     {
-        $name = $this->name($name);
+        $name = mb_strtolower($this->name($name));
         $id = Id::uuid();
         try {
             $this->db->prepare('INSERT INTO catch_tags (id,user_id,name,created_at) VALUES (:id,:user,:name,UTC_TIMESTAMP(6))')->execute(['id' => $id,'user' => $userId,'name' => $name]);
@@ -73,7 +73,7 @@ final class TagRepository
         if (!$this->ownsCapture($captureId, $userId)) {
             return null;
         }
-        $name = $this->name($name);
+        $name = mb_strtolower($this->name($name));
         $tag = $this->findByName($name, $userId);
         if (!$tag) {
             try {

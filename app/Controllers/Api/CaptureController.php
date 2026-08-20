@@ -8,6 +8,7 @@ use Catch\Http\Request;
 use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\DeviceRepository;
+use Catch\Repositories\TagRepository;
 use Catch\Services\CaptureDebugService;
 use Catch\Services\CaptureService;
 use InvalidArgumentException;
@@ -17,6 +18,7 @@ final class CaptureController
     public function __construct(
         private readonly DeviceRepository $devices,
         private readonly CaptureRepository $captures,
+        private readonly TagRepository $tags,
         private readonly CaptureService $service,
         private readonly CaptureDebugService $debug,
     ) {
@@ -84,6 +86,8 @@ final class CaptureController
         );
 
         try {
+            $tagNames = $this->tagNames($input['tags'] ?? null);
+            unset($input['tags']);
             $input['client_capture_id'] = $this->clientCaptureId(
                 $input['client_capture_id'] ?? null,
                 $_SERVER['HTTP_IDEMPOTENCY_KEY'] ?? null,
@@ -97,6 +101,9 @@ final class CaptureController
             }
             $result = $this->service->create($user['id'], $input, $_FILES, $user['device_id']);
             $capture = $result['capture'];
+            foreach ($tagNames as $tagName) {
+                $this->tags->assignByName((string) $capture['id'], $tagName, (string) $user['id']);
+            }
             $status = $result['created'] ? 201 : 200;
             $this->debug->finish(
                 $debugRequestId,
@@ -189,6 +196,31 @@ final class CaptureController
             }
         }
         return 'client_capture_' . bin2hex(random_bytes(16));
+    }
+
+    /** @return list<string> */
+    private function tagNames(mixed $value): array
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+        if (!is_string($value)) {
+            throw new InvalidArgumentException(json_encode(['tags' => 'Tags must be a comma-separated string.']));
+        }
+
+        $tags = [];
+        foreach (explode(',', $value) as $name) {
+            $name = mb_strtolower(trim(preg_replace('/\s+/u', ' ', $name) ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            if (mb_strlen($name) > 100) {
+                throw new InvalidArgumentException(json_encode(['tags' => 'Each tag must be no longer than 100 characters.']));
+            }
+            $tags[$name] = true;
+        }
+
+        return array_keys($tags);
     }
 
     private function uploadedFileCount(array $files): int
