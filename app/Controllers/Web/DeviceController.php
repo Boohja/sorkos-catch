@@ -70,13 +70,24 @@ final class DeviceController
     public function new(): void
     {
         $this->view->render('devices/new', [
-            'title' => 'Add device',
+            'title' => 'Add to Catch',
             'user' => $this->user(),
             'error' => $_SESSION['device_error'] ?? null,
             'csrf' => $this->csrf->token(),
         ]);
 
         unset($_SESSION['device_error']);
+    }
+
+    public function shortcuts(): void
+    {
+        $appUrl = rtrim((string) $this->config->get('app.url'), '/');
+
+        $this->view->render('devices/shortcuts', [
+            'title' => 'Shortcut library',
+            'user' => $this->user(),
+            'shortcutUrl' => $appUrl . '/assets/shortcuts/Catch%20Setup.shortcut',
+        ]);
     }
 
     public function create(): never
@@ -90,12 +101,18 @@ final class DeviceController
         $platform = (string) ($_POST['platform'] ?? '');
         $name = trim((string) ($_POST['name'] ?? ''));
 
-        if ($kind !== 'mobile' || !in_array($platform, ['ios', 'ipados'], true) || $name === '') {
-            $_SESSION['device_error'] = 'Choose Mobile and either iOS or iPadOS, then enter a device name.';
+        $clientType = match (true) {
+            $kind === 'mobile' && in_array($platform, ['ios', 'ipados'], true) => 'shortcut',
+            $kind === 'automation' && $platform === 'api' => 'api',
+            default => null,
+        };
+
+        if ($clientType === null || $name === '') {
+            $_SESSION['device_error'] = 'Choose a supported setup and enter a name, then try again.';
             Response::redirect('/devices/new');
         }
 
-        $device = $this->devices->create($user['id'], $name, $kind, $platform);
+        $device = $this->devices->create($user['id'], $name, $kind, $platform, $clientType);
         Response::redirect($this->url($device));
     }
 
@@ -118,6 +135,7 @@ final class DeviceController
             'csrf' => $this->csrf->token(),
             'deviceUrl' => $this->url($device),
             'shortcutUrl' => $appUrl . '/assets/shortcuts/Catch%20Setup.shortcut',
+            'apiPairUrl' => $appUrl . '/api/devices/pair',
             'pairingCodeTtlMinutes' => DeviceRepository::PAIRING_CODE_TTL_MINUTES,
             'debugEnabled' => $debugEnabled,
             'debugRequests' => $debugEnabled

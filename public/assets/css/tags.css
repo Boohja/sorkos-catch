@@ -1,2 +1,128 @@
-.tag-create,.tag-edit{padding:20px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);margin-bottom:28px}.tag-list{border-top:1px solid var(--border)}.tag-row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:16px 4px;border-bottom:1px solid var(--border)}.tag-row>div:first-child{display:grid;gap:2px}.tag-row a{text-underline-offset:3px}.tag-row span{font-size:13px;color:var(--muted)}.tag-actions{display:flex;gap:8px}.tag-actions form{margin:0}.tag-link,.assigned-tag{display:inline-flex;align-items:center;border-radius:999px;background:var(--surface-muted);color:var(--muted);font-size:12px;font-weight:650;text-decoration:none}.tag-link{padding:3px 8px}.assigned-tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}.assigned-tag a{padding:5px 4px 5px 10px;color:inherit;text-decoration:none}.assigned-tag button{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:5px 9px 5px 4px}.tag-assign-form{display:flex;align-items:center;gap:8px}.tag-assign-form select{min-width:190px;padding:9px 32px 9px 10px;border:1px solid var(--border);border-radius:9px;background:var(--surface)}.tag-status{min-height:1.4em;margin:8px 0 0;color:var(--muted);font-size:13px}.tag-status.is-error{color:var(--danger)}
-@media(max-width:600px){.tag-row,.inline-form{align-items:stretch;flex-direction:column}.tag-actions{align-self:flex-start}.tag-assign-form{align-items:stretch;flex-direction:column}.tag-assign-form select{width:100%}}
+.tag-create,
+.tag-edit {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 28px
+}
+
+.tag-list {
+  border-top: 1px solid var(--border)
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 4px;
+  border-bottom: 1px solid var(--border)
+}
+
+.tag-row>div:first-child {
+  display: grid;
+  gap: 2px
+}
+
+.tag-row a {
+  text-underline-offset: 3px
+}
+
+.tag-row span {
+  font-size: 13px;
+  color: var(--muted)
+}
+
+.tag-actions {
+  display: flex;
+  gap: 8px
+}
+
+.tag-actions form {
+  margin: 0
+}
+
+.tag-link,
+.assigned-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none
+}
+
+.tag-link {
+  padding: 3px 8px
+}
+
+.assigned-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px
+}
+
+.assigned-tag a {
+  padding: 5px 4px 5px 10px;
+  color: inherit;
+  text-decoration: none
+}
+
+.assigned-tag button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 5px 9px 5px 4px
+}
+
+.tag-assign-form {
+  display: flex;
+  align-items: center;
+  gap: 8px
+}
+
+.tag-assign-form select {
+  min-width: 190px;
+  padding: 9px 32px 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface)
+}
+
+.tag-status {
+  min-height: 1.4em;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px
+}
+
+.tag-status.is-error {
+  color: var(--danger)
+}
+
+@media(max-width:600px) {
+
+  .tag-row,
+  .inline-form {
+    align-items: stretch;
+    flex-direction: column
+  }
+
+  .tag-actions {
+    align-self: flex-start
+  }
+
+  .tag-assign-form {
+    align-items: stretch;
+    flex-direction: column
+  }
+
+  .tag-assign-form select {
+    width: 100%
+  }
+}

@@ -1,8 +1,10 @@
 {
   "private": true,
   "scripts": {
-    "test": "npm run lint:views",
+    "test": "npm run lint:views && npm run lint:css",
+    "format:css": "node scripts/format-css.mjs --write",
     "format:views": "node scripts/format-views.mjs --write",
+    "lint:css": "node scripts/format-css.mjs --check",
     "lint:views": "node scripts/format-views.mjs --check"
   },
   "devDependencies": {

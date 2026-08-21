@@ -150,6 +150,7 @@ final class Application
         $f3->route('POST /captures/@id/lists/@list/delete', [$listController,'unassign']);
         $f3->route('GET /devices', [$deviceController,'index']);
         $f3->route('GET /devices/new', [$deviceController,'new']);
+        $f3->route('GET /devices/shortcuts', [$deviceController,'shortcuts']);
         $f3->route('POST /devices', [$deviceController,'create']);
         $f3->route('GET /devices/@device', [$deviceController,'show']);
         $f3->route('POST /devices/@device/rename', [$deviceController,'rename']);

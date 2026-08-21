@@ -30,18 +30,33 @@
           if="{{ isset(@device.pairing_code) }}"> data-pairing-code-expires-at="{{ @device.pairing_code_expires_at }}"
     </check>><ol class="pairing-steps">
       <li class="pairing-step pairing-step-download pairing-step-active"><span>1</span>
-        <div class="shortcut-install-options">
-          <div>
-            <h2>Download the setup shortcut</h2>
-            <p>Open the file on your iPhone or iPad. The shortcut creates a secure connection to Catch.</p><a
-              class="button button-primary" href="{{ @shortcutUrl }}" download>Download Catch Setup</a>
-          </div>
-          <div class="shortcut-choice-divider" aria-hidden="true"><span>OR</span></div>
-          <div class="shortcut-qr">
-            <div data-qr-code data-qr-value="{{ @shortcutUrl }}" aria-label="QR code for the shortcut download"></div>
-            <small>Scan with your device camera</small>
-          </div>
-        </div>
+        <check if="{{ @device.client_type=='api' }}">
+          <true>
+            <div>
+              <h2>Prepare your API client</h2>
+              <p>Your client will exchange the temporary code from the next step for a capture-only device token. Keep
+                the token in your platform credential store; Catch will not display it here.</p>
+              <pre class="pairing-request"><code>POST {{ @apiPairUrl }}
+Content-Type: application/json
+
+{"pairing_code":"12345 67890"}</code></pre>
+            </div>
+          </true>
+          <false>
+            <div class="shortcut-install-options">
+              <div>
+                <h2>Download the setup shortcut</h2>
+                <p>Open the file on your iPhone or iPad. The shortcut creates a secure connection to Catch.</p><a
+                  class="button button-primary" href="{{ @shortcutUrl }}" download>Download Catch Setup</a>
+              </div>
+              <div class="shortcut-choice-divider" aria-hidden="true"><span>OR</span></div>
+              <div class="shortcut-qr">
+                <div data-qr-code data-qr-value="{{ @shortcutUrl }}" aria-label="QR code for the shortcut download">
+                </div><small>Scan with your device camera</small>
+              </div>
+            </div>
+          </false>
+        </check>
       </li>
       <li class="pairing-step<check if=" {{ isset(@device.pairing_code) }}"> pairing-step-active
 </check>"><span>2</span>
@@ -49,14 +64,16 @@
   <h2>Enter the pairing code</h2>
   <check if="{{ isset(@device.pairing_code) }}">
     <true>
-      <p>Enter this 10-digit code when the setup shortcut asks for it.<span class="pairing-expiry">It expires in <strong
-            data-pairing-countdown>--:--</strong> minutes.</span></p>
+      <p>Enter this 10-digit code when {{ @device.client_type=='api' ? 'your API client' : 'the setup shortcut' }} asks
+        for it.<span class="pairing-expiry">It expires in <strong data-pairing-countdown>--:--</strong> minutes.</span>
+      </p>
       <div class="pairing-code-row" data-copy-row><code data-copy-source>{{ @device.pairing_code }}</code><button
           class="button button-secondary" type="button" data-copy-button>Copy code</button></div>
     </true>
     <false>
-      <p>Create the code only after opening the setup shortcut on this device. It will be valid for
-        {{ @pairingCodeTtlMinutes }} minutes.</p>
+      <p>Create the code when
+        {{ @device.client_type=='api' ? 'your API client is ready to exchange it' : 'the setup shortcut is open on this device' }}.
+        It will be valid for {{ @pairingCodeTtlMinutes }} minutes.</p>
       <form method="post" action="{{ @deviceUrl }}/pairing-code"><input type="hidden" name="_csrf"
           value="{{ @csrf }}"><button class="button button-secondary" type="submit">Create pairing code</button></form>
     </false>
@@ -67,7 +84,7 @@
   <div>
     <h2>Wait for the connection</h2>
     <p data-pairing-status>
-      {{ isset(@device.pairing_code) ? 'This page automatically checks whether the device is connected.' : 'After creating the code, Catch waits for the first connection.' }}
+      {{ isset(@device.pairing_code) ? 'This page automatically checks whether the connection is complete.' : 'After creating the code, Catch waits for the first connection.' }}
     </p>
     <check if="{{ isset(@device.pairing_code) }}">
       <div class="waiting-indicator" role="status"><span aria-hidden="true"></span>Checking every 7 seconds</div>
@@ -149,6 +166,6 @@
   <set debugRequestCard="{{ false }}" />
   <include href="devices/_debug_requests.html" />
 </check>
-<check if="{{ @device.status=='setup' }}">
+<check if="{{ @device.status=='setup' && @device.client_type=='shortcut' }}">
   <script src="/assets/vendor/qrcode.js"></script>
 </check>

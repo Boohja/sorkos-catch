@@ -36,14 +36,14 @@
   background: var(--danger-soft);
 }
 
-.button > .glyph {
+.button>.glyph {
   inline-size: 1.1em;
   block-size: 1.1em;
   font-size: 1em;
   line-height: 1.1;
 }
 
-.button > .glyph::before {
+.button>.glyph::before {
   inline-size: 1.1em;
   line-height: 1.1;
 }
@@ -59,7 +59,7 @@
   align-items: center;
 }
 
-.icon-page-heading > .glyph {
+.icon-page-heading>.glyph {
   display: grid;
   place-items: center;
   width: 44px;
@@ -115,17 +115,17 @@
   display: none;
 }
 
-.toast > span {
+.toast>span {
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: 14px;
 }
 
-.toast-success > span {
+.toast-success>span {
   color: #15803d;
 }
 
-.toast-error > span {
+.toast-error>span {
   color: var(--danger);
 }
 
@@ -150,12 +150,12 @@
   outline-offset: 1px;
 }
 
-[data-theme='dark'] .toast-success > span {
+[data-theme='dark'] .toast-success>span {
   color: #86efac;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .toast-success > span {
+  :root:not([data-theme='light']) .toast-success>span {
     color: #86efac;
   }
 }

@@ -7,6 +7,7 @@ namespace Catch\Services;
 use Catch\Core\Database;
 use Catch\Core\Id;
 use Catch\Repositories\CaptureRepository;
+use Catch\Support\CaptureTitle;
 use Catch\Validation\CaptureValidator;
 use InvalidArgumentException;
 
@@ -39,7 +40,7 @@ final class CaptureService
             ];
         }
         if (empty(trim((string)($input['title'] ?? ''))) && $url !== '') {
-            $input['title'] = $this->nullable($metadata['link_text'] ?? null);
+            $input['title'] = CaptureTitle::shorten($metadata['link_text'] ?? null);
         }
         if ($url !== '' && empty($metadata['source_url'])) {
             $metadata['source_url'] = $url;
@@ -62,7 +63,26 @@ final class CaptureService
             $input['title'] = $remoteImage['name'];
         }
         $id = Id::uuid();
-        $data = ['id' => $id,'user_id' => $userId,'device_id' => $deviceId,'client_capture_id' => (string)$input['client_capture_id'],'type' => (string)$input['type'],'title' => $this->nullable($input['title'] ?? null),'text' => $this->nullable($input['text'] ?? null),'url' => $this->nullable($input['url'] ?? null),'extracted_text' => $this->nullable($input['extracted_text'] ?? null),'source' => $source,'metadata_json' => json_encode($input['metadata'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
+        $title = $this->nullable($input['title'] ?? null);
+        if (in_array($source, ['browser-extension', 'ios-shortcut'], true)) {
+            $title = CaptureTitle::shorten($title);
+        }
+        $data = [
+            'id' => $id,
+            'user_id' => $userId,
+            'device_id' => $deviceId,
+            'client_capture_id' => (string) $input['client_capture_id'],
+            'type' => (string) $input['type'],
+            'title' => $title,
+            'text' => $this->nullable($input['text'] ?? null),
+            'url' => $this->nullable($input['url'] ?? null),
+            'extracted_text' => $this->nullable($input['extracted_text'] ?? null),
+            'source' => $source,
+            'metadata_json' => json_encode(
+                $input['metadata'],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            ),
+        ];
         $stored = [];
         try {
             $this->database->transaction(function () use ($repo, &$data, $files, $id, &$stored, $remoteImage) {
@@ -160,7 +180,7 @@ final class CaptureService
             ? $repo->previewStorageNames($captureId, $userId)
             : [];
         $defaultTitle = $this->nullable($capture['title'] ?? null) === null
-            ? $this->nullable($linkPreview['metadata']['title'] ?? null)
+            ? CaptureTitle::shorten($linkPreview['metadata']['title'] ?? null)
             : null;
         try {
             $this->database->transaction(function () use (
@@ -340,7 +360,7 @@ final class CaptureService
     private function textTitle(string $text): string
     {
         $line = trim((string)(preg_split('/\R/u', $text, 2)[0] ?? $text));
-        return mb_strimwidth($line, 0, 120, '…');
+        return CaptureTitle::shorten($line) ?? '';
     }
 
     private function hasValue(mixed $value): bool

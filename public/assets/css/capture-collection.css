@@ -330,7 +330,7 @@
   outline-offset: 2px;
 }
 
-.capture-menu-trigger > .glyph {
+.capture-menu-trigger>.glyph {
   font-size: 18px;
 }
 

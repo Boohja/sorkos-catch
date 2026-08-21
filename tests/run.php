@@ -30,6 +30,13 @@ $test('Capture validation accepts text', function () {
         throw new RuntimeException(json_encode($errors));
     }
 });
+$test('Generated capture titles stay readable without losing Unicode', function () {
+    $short = Catch\Support\CaptureTitle::shorten('A short title');
+    $long = Catch\Support\CaptureTitle::shorten(str_repeat('movement 🧘‍♂️ ', 20));
+    if ($short !== 'A short title' || $long === null || mb_strlen($long) > 100 || !str_ends_with($long, '...')) {
+        throw new RuntimeException('Generated titles are not capped at 100 characters');
+    }
+});
 $test('Unknown captures resolve content and reject unsafe attachments', function () use ($root) {
     $config = Catch\Core\Config::load($root);
     $uploads = new Catch\Services\UploadService($config, sys_get_temp_dir());
@@ -413,7 +420,8 @@ $test('Inbox bulk delete is confirmed and permanently removes related data', fun
         if (!str_contains($script, $required)) {
             throw new RuntimeException('Bulk visibility or confirmation behavior is missing ' . $required);
         }
-    }if (!str_contains($style, 'position:sticky') || !str_contains($style, 'justify-content:flex-end')) {
+    }$compactStyle = preg_replace('/\s+/', '', $style);
+    if (!str_contains($compactStyle, 'position:sticky') || !str_contains($compactStyle, 'justify-content:flex-end')) {
         throw new RuntimeException('Bulk action bar is not sticky and right aligned');
     }
 });
@@ -599,7 +607,8 @@ $test('Capture detail supports quiet in-place editing and global request progres
         if (!str_contains($editing, $required)) {
             throw new RuntimeException('Hidden editable fields lose their initial value: ' . $required);
         }
-    }if (!str_contains($progress, 'window.fetch=async') || !str_contains($style, 'position:fixed;inset:0 0 auto') || !str_contains($style, 'height:4px')) {
+    }$compactStyle = preg_replace('/\s+/', '', $style);
+    if (!str_contains($progress, 'window.fetch=async') || !str_contains($compactStyle, 'position:fixed;inset:00auto') || !str_contains($compactStyle, 'height:4px')) {
         throw new RuntimeException('Global async progress indicator is incomplete');
     }
 });
@@ -643,6 +652,68 @@ $test('Devices expose capture counts, last use time, and capture history', funct
         }
     }if (!str_contains($detail, 'Captures from this device')) {
         throw new RuntimeException('Device detail capture history is missing');
+    }
+});
+$test('Add to Catch routes every capture source through its existing setup mechanism', function () use ($root) {
+    $application = (string)file_get_contents($root . '/app/Core/Application.php');
+    $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
+    $view = (string)file_get_contents($root . '/app/Views/devices/new.html');
+    $library = (string)file_get_contents($root . '/app/Views/devices/shortcuts.html');
+    $detail = (string)file_get_contents($root . '/app/Views/devices/show.html');
+    $script = (string)file_get_contents($root . '/public/assets/js/devices.js');
+    $styles = (string)file_get_contents($root . '/public/assets/css/devices.css');
+    $manifest = json_decode((string)file_get_contents($root . '/public/manifest.webmanifest'), true, 512, JSON_THROW_ON_ERROR);
+    foreach (['name="catch_source" value="phone"','name="catch_source" value="computer"',
+        'name="catch_source" value="email"','name="catch_source" value="automation"','data-result="shortcut"',
+        'data-result="pwa"','data-result="extension"','data-result="web"','data-result="email"',
+        'data-result="cli"','data-result="api"','glyph-mail','glyph-brand-chrome','glyph-brand-firefox',
+        'glyph-brand-windows','glyph-brand-linux','glyph-app','iPhone / iPad','Standalone browser app'] as $required) {
+        if (!str_contains($view, $required)) {
+            throw new RuntimeException('Add to Catch choice or result is missing: ' . $required);
+        }
+    }
+    foreach (["'shortcut'","'api'",'$clientType'] as $required) {
+        if (!str_contains($controller, $required)) {
+            throw new RuntimeException('Device creation no longer preserves a setup client: ' . $required);
+        }
+    }
+    foreach (['data-shortcut-platform','beforeinstallprompt','navigator.maxTouchPoints','data-extension-store'] as $required) {
+        if (!str_contains($view . $script, $required)) {
+            throw new RuntimeException('Adaptive setup behavior is missing: ' . $required);
+        }
+    }
+    foreach (['setup-progress','question-help','value="ipados"'] as $removed) {
+        if (str_contains($view, $removed)) {
+            throw new RuntimeException('Removed setup noise returned: ' . $removed);
+        }
+    }
+    foreach (['choice-arrow'] as $removed) {
+        if (str_contains($view, $removed)) {
+            throw new RuntimeException('Removed method decoration returned: ' . $removed);
+        }
+    }
+    foreach (['/devices/shortcuts','Catch Setup','How to use it','@shortcutUrl'] as $required) {
+        if (!str_contains($application . $controller . $view . $library, $required)) {
+            throw new RuntimeException('Shortcut library is incomplete: ' . $required);
+        }
+    }
+    if (strpos($application, "GET /devices/shortcuts") > strpos($application, "GET /devices/@device")) {
+        throw new RuntimeException('Shortcut library route must precede the catch-all device route');
+    }
+    foreach (['visibleMethods.length===1','methodStep.hidden=true'] as $required) {
+        if (!str_contains($script, $required)) {
+            throw new RuntimeException('Single-method setup is not skipped: ' . $required);
+        }
+    }
+    $compactStyles = preg_replace('/\s+/', '', $styles);
+    if (preg_match('/\.platform-label[^\{]*\{[^\}]*font-weight:/', $compactStyles)) {
+        throw new RuntimeException('Platform icon must not set font-weight');
+    }
+    if (!str_contains($compactStyles, 'background:transparent;color:var(--text);font-size:28px')) {
+        throw new RuntimeException('Chooser icons regained their square backgrounds');
+    }
+    if (($manifest['share_target']['action'] ?? null) !== '/inbox' || !str_contains($detail, '@apiPairUrl')) {
+        throw new RuntimeException('PWA sharing or API pairing setup is incomplete');
     }
 });
 $test('Device types drive icons and remain editable', function () use ($root) {
@@ -701,7 +772,8 @@ $test('Scrolling remains browser-native and progress uses the primary color', fu
     $style = (string)file_get_contents($root . '/public/assets/css/capture-detail.css');
     if (str_contains($layout . $app, 'page-scrollbar')) {
         throw new RuntimeException('Custom page scrolling is still installed');
-    }if (!str_contains($style, 'background:var(--primary)')) {
+    }$compactStyle = preg_replace('/\s+/', '', $style);
+    if (!str_contains($compactStyle, 'background:var(--primary)')) {
         throw new RuntimeException('Request progress does not use the primary color');
     }
 });

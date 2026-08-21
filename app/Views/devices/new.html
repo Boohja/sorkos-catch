@@ -1,35 +1,202 @@
-<a class="back-link" href="/settings/devices">← Back to devices</a>
-<header class="flow-heading">
-  <h1>Add a device</h1>
-  <p>Choose where you want to use Catch. We’ll show only the steps you need.</p>
+<a class="back-link" href="/settings/devices">&larr; Back to settings</a>
+<header class="flow-heading add-catch-heading">
+  <h1>Add to Catch</h1>
+  <p>Tell us where a capture starts. We’ll point you to the quickest way to get it into your inbox.</p>
 </header>
 <check if="{{ @error }}">
   <p class="form-error" role="alert">{{ @error }}</p>
 </check>
-<form class="device-wizard" method="post" action="/devices" data-device-wizard><input type="hidden" name="_csrf"
-    value="{{ @csrf }}">
-  <fieldset>
-    <legend>What do you want to connect?</legend>
-    <div class="choice-grid"><label class="choice-option"><input type="radio" name="kind" value="mobile" required><span
-          class="choice-icon choice-icon-mobile" aria-hidden="true"></span><strong>Mobile</strong><small>iPhone, iPad,
-          and Android later</small></label><label class="choice-option choice-option-disabled"><input type="radio"
-          name="kind" value="desktop" disabled><span class="choice-icon choice-icon-desktop"
-          aria-hidden="true"></span><strong>Desktop browser</strong><small>Chrome and Firefox · coming
-          soon</small></label></div>
+<section class="add-catch-flow" data-add-catch-flow aria-label="Choose a way to capture">
+  <div class="detected-device" data-detected-device hidden><i class="detected-glyph glyph" data-detected-icon
+      aria-hidden="true"></i>
+    <p><strong data-detected-title></strong><span data-detected-copy></span></p>
+  </div>
+  <fieldset class="setup-question" data-source-step>
+    <legend>Where do you want to catch from?</legend>
+    <div class="source-choice-grid">
+      <label class="setup-choice"><input type="radio" name="catch_source" value="phone"><i
+          class="setup-choice-mark glyph glyph-phone" aria-hidden="true"></i><span><strong>Phone or
+            tablet</strong><small>Share, speak, photograph, or type</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_source" value="computer"><i
+          class="setup-choice-mark glyph glyph-laptop"
+          aria-hidden="true"></i><span><strong>Computer</strong><small>Browser, command line, or web
+            app</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_source" value="email"><i
+          class="setup-choice-mark glyph glyph-mail" aria-hidden="true"></i><span><strong>Email</strong><small>Forward
+            messages and attachments</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_source" value="automation"><i
+          class="setup-choice-mark glyph glyph-cli" aria-hidden="true"></i><span><strong>Automation or other
+            software</strong><small>Scripts and custom integrations</small></span></label>
+    </div>
   </fieldset>
-  <fieldset data-platform-step hidden>
-    <legend>Which platform?</legend>
-    <div class="choice-grid"><label class="choice-option"><input type="radio" name="platform" value="ios" required><span
-          class="choice-icon" aria-hidden="true">iOS</span><strong>iPhone</strong><small>Using Apple
-          Shortcuts</small></label><label class="choice-option"><input type="radio" name="platform" value="ipados"
-          required><span class="choice-icon" aria-hidden="true">iPad</span><strong>iPad</strong><small>Using Apple
-          Shortcuts</small></label><label class="choice-option choice-option-disabled"><input type="radio"
-          name="platform" value="android" disabled><span class="choice-icon"
-          aria-hidden="true">A</span><strong>Android</strong><small>Coming soon</small></label></div>
+  <fieldset class="setup-question" data-platform-step hidden>
+    <legend data-platform-question>Which platform?</legend>
+    <div class="platform-choice-grid" data-phone-platforms hidden>
+      <label class="setup-choice"><input type="radio" name="catch_platform" value="ios"><i
+          class="platform-label glyph glyph-brand-apple" aria-hidden="true"></i><span><strong>iPhone /
+            iPad</strong><small>Apple Shortcuts and the Catch PWA</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_platform" value="android"><i
+          class="platform-label glyph glyph-brand-android"
+          aria-hidden="true"></i><span><strong>Android</strong><small>Installable PWA with share
+            support</small></span></label>
+    </div>
+    <div class="platform-choice-grid" data-computer-platforms hidden>
+      <label class="setup-choice"><input type="radio" name="catch_platform" value="chromium"><i
+          class="platform-label glyph glyph-brand-chrome" aria-hidden="true"></i><span><strong>Chrome or
+            Chromium</strong><small>Chrome, Edge, Brave, and similar browsers</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_platform" value="firefox"><i
+          class="platform-label glyph glyph-brand-firefox"
+          aria-hidden="true"></i><span><strong>Firefox</strong><small>Firefox and compatible
+            browsers</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_platform" value="terminal-windows"><i
+          class="platform-label glyph glyph-brand-windows" aria-hidden="true"></i><span><strong>Windows command
+            line</strong><small>Build and connect Catch CLI</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_platform" value="terminal-linux"><i
+          class="platform-label glyph glyph-brand-linux" aria-hidden="true"></i><span><strong>Linux command
+            line</strong><small>Build and connect Catch CLI</small></span></label>
+      <label class="setup-choice"><input type="radio" name="catch_platform" value="web"><i
+          class="platform-label glyph glyph-app" aria-hidden="true"></i><span><strong>Web App
+            (PWA)</strong><small>Standalone browser app</small></span></label>
+    </div>
   </fieldset>
-  <fieldset data-name-step hidden>
-    <legend>What is this device called?</legend><label class="device-name-field">Device name<input name="name"
-        maxlength="120" required placeholder="e.g. My iPhone"></label>
-    <div class="wizard-actions"><button class="button button-primary" type="submit">Create device</button></div>
+  <fieldset class="setup-question" data-method-step hidden>
+    <legend>How do you want to catch things?</legend>
+    <div class="method-choice-list">
+      <label class="method-choice" data-method-option data-sources="phone" data-platforms="ios"><input type="radio"
+          name="catch_method" value="share"><span><strong>Share from other apps</strong><small>Send links, text, images,
+            and files from the Share Sheet</small></span></label>
+      <label class="method-choice" data-method-option data-sources="phone" data-platforms="ios"><input type="radio"
+          name="catch_method" value="voice"><span><strong>Capture by voice</strong><small>Speak a thought without
+            opening Catch</small></span></label>
+      <label class="method-choice" data-method-option data-sources="phone" data-platforms="ios android"><input
+          type="radio" name="catch_method" value="image"><span><strong>Capture an image or
+            screenshot</strong><small>Keep the original image in your inbox</small></span></label>
+      <label class="method-choice" data-method-option data-sources="phone" data-platforms="android"><input type="radio"
+          name="catch_method" value="share"><span><strong>Share links and text from other apps</strong><small>Use the
+            installed PWA as an Android share target</small></span></label>
+      <label class="method-choice" data-method-option data-sources="phone" data-platforms="ios android"><input
+          type="radio" name="catch_method" value="manual"><span><strong>Capture manually</strong><small>Open Catch from
+            your Home Screen</small></span></label>
+      <label class="method-choice" data-method-option data-sources="computer" data-platforms="chromium firefox"><input
+          type="radio" name="catch_method" value="browser"><span><strong>Capture pages, selections, or
+            screenshots</strong><small>Use the Catch browser extension</small></span></label>
+      <label class="method-choice" data-method-option data-sources="computer"
+        data-platforms="chromium firefox web"><input type="radio" name="catch_method"
+          value="manual"><span><strong>Capture manually</strong><small>Use the Catch Web App in this
+            browser</small></span></label>
+      <label class="method-choice" data-method-option data-sources="computer"
+        data-platforms="terminal-windows terminal-linux"><input type="radio" name="catch_method"
+          value="cli"><span><strong>Use Catch from the terminal</strong><small>Build the CLI and pair it with your
+            account</small></span></label>
+      <label class="method-choice" data-method-option data-sources="automation" data-platforms="any"><input type="radio"
+          name="catch_method" value="cli"><span><strong>Run a local script</strong><small>Connect with the Catch
+            CLI</small></span></label>
+      <label class="method-choice" data-method-option data-sources="automation" data-platforms="any"><input type="radio"
+          name="catch_method" value="api"><span><strong>Build a custom integration</strong><small>Pair an API client
+            with capture-only access</small></span></label>
+    </div>
   </fieldset>
-</form>
+  <div class="setup-result" data-setup-result aria-live="polite" hidden>
+    <section data-result="shortcut" hidden>
+      <header><i class="result-glyph glyph glyph-brand-apple" aria-hidden="true"></i>
+        <div>
+          <h2>Set up Apple Shortcuts</h2>
+          <p data-shortcut-result-copy>Create the connection first. Catch will then walk you through downloading the
+            setup shortcut and entering a temporary pairing code.</p>
+        </div>
+      </header>
+      <form class="result-form" method="post" action="/devices"><input type="hidden" name="_csrf"
+          value="{{ @csrf }}"><input type="hidden" name="kind" value="mobile"><input type="hidden" name="platform"
+          value="ios" data-shortcut-platform><label>What should Catch call this device?<input name="name"
+            maxlength="120" required placeholder="e.g. My iPhone / iPad"></label><button class="button button-primary"
+          type="submit">Continue to Shortcut setup</button></form>
+      <p class="result-followup"><strong>Already set up?</strong> <a href="/devices/shortcuts">Browse our shortcut
+          library</a></p>
+    </section>
+    <section data-result="pwa" hidden>
+      <header><i class="result-glyph glyph glyph-app" aria-hidden="true"></i>
+        <div>
+          <h2>Install the Catch PWA</h2>
+          <p>It opens like an app, keeps manual captures close, and queues work safely when your connection drops.</p>
+        </div>
+      </header>
+      <div class="result-actions"><button class="button button-primary" type="button" data-install-pwa hidden>Install
+          Catch</button><a class="button button-secondary" href="/inbox#capture-title">Open Catch Web App</a></div>
+      <ol class="compact-steps" data-pwa-instructions>
+        <li>Open this page in your device browser.</li>
+        <li>Use the browser menu and choose <strong>Install app</strong> or <strong>Add to Home Screen</strong>.</li>
+        <li>Open Catch from the new Home Screen or app-menu icon.</li>
+      </ol>
+      <p class="result-note" data-share-target-note hidden>On Android, the installed PWA also appears in the share menu
+        for links and text.</p>
+    </section>
+    <section data-result="extension" hidden>
+      <header><i class="result-glyph glyph glyph-extension" aria-hidden="true"></i>
+        <div>
+          <h2 data-extension-title>Install the Catch extension</h2>
+          <p>The extension pairs from its own setup screen. Approve it in Catch once, then capture from the toolbar or
+            context menu.</p>
+        </div>
+      </header>
+      <div class="result-actions"><a class="button button-primary is-placeholder" href="#" aria-disabled="true"
+          data-extension-store>Store listing coming soon</a><a class="button button-secondary"
+          href="/settings/devices">View connected devices</a></div>
+      <p class="result-note">The extension can queue captures before pairing finishes. Screenshots are only taken after
+        it has capture access.</p>
+    </section>
+    <section data-result="web" hidden>
+      <header><i class="result-glyph glyph glyph-pc" aria-hidden="true"></i>
+        <div>
+          <h2>Nothing else to set up</h2>
+          <p>This browser is already available to Catch. Manual text, links, images, audio, PDFs, and files can go
+            straight into your inbox.</p>
+        </div>
+      </header><a class="button button-primary" href="/inbox#capture-title">Create a capture</a>
+    </section>
+    <section data-result="email" hidden>
+      <header><i class="result-glyph glyph glyph-mail" aria-hidden="true"></i>
+        <div>
+          <h2>Use your personal Catch email address</h2>
+          <p>Create a private address, save it in your contacts or forwarding rules, then send or forward emails to it.
+          </p>
+        </div>
+      </header><a class="button button-primary" href="/settings/email">Create or copy an email address</a>
+    </section>
+    <section data-result="cli" hidden>
+      <header><i class="result-glyph glyph glyph-cli" aria-hidden="true"></i>
+        <div>
+          <h2>Connect Catch CLI</h2>
+          <p>Build the client, run its login command, and approve the short-lived request in the Catch tab it opens.</p>
+        </div>
+      </header>
+      <div class="command-guide"><code>cd cli<br>go build -trimpath -o catch ./cmd/catch<br>catch login</code></div>
+      <p class="result-note">The current CLI can read and search Catch. Capture commands for scripts are not included
+        yet; use the API for write access.</p>
+    </section>
+    <section data-result="api" hidden>
+      <header><i class="result-glyph glyph glyph-cli" aria-hidden="true"></i>
+        <div>
+          <h2>Create an API connection</h2>
+          <p>Name the integration first. Catch will create a temporary pairing code that your client exchanges for a
+            capture-only device token.</p>
+        </div>
+      </header>
+      <form class="result-form" method="post" action="/devices"><input type="hidden" name="_csrf"
+          value="{{ @csrf }}"><input type="hidden" name="kind" value="automation"><input type="hidden" name="platform"
+          value="api"><label>Integration name<input name="name" maxlength="120" required
+            placeholder="e.g. Scanner workflow"></label><button class="button button-primary" type="submit">Continue to
+          API pairing</button></form><a class="result-doc-link" href="/help#capture">Review the capture API
+        reference</a>
+    </section>
+  </div>
+</section>
+<noscript>
+  <section class="no-script-setup">
+    <h2>Set up an iPhone / iPad Shortcut</h2>
+    <form class="result-form" method="post" action="/devices"><input type="hidden" name="_csrf"
+        value="{{ @csrf }}"><input type="hidden" name="kind" value="mobile"><label>Platform<select name="platform">
+          <option value="ios">iPhone / iPad</option>
+        </select></label><label>Device name<input name="name" maxlength="120" required></label><button
+        class="button button-primary" type="submit">Continue to Shortcut setup</button></form>
+  </section>
+</noscript>

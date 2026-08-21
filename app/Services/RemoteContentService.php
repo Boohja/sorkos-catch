@@ -6,6 +6,7 @@ namespace Catch\Services;
 
 use Catch\Services\LinkPreview\Provider;
 use Catch\Services\LinkPreview\ProviderRegistry;
+use Catch\Support\CaptureTitle;
 use DOMDocument;
 use DOMXPath;
 
@@ -38,7 +39,7 @@ final class RemoteContentService
             return null;
         }
         $title = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($match[1]), ENT_QUOTES | ENT_HTML5, 'UTF-8')) ?? '');
-        return $title === '' ? null : mb_substr($title, 0, 500);
+        return CaptureTitle::shorten($title);
     }
 
     /**
@@ -65,11 +66,11 @@ final class RemoteContentService
         $embed = $embedUrl ? $this->oembed($embedUrl) : [];
         $providerPreview = $this->providerPreview($providerAdapter, $canonicalUrl);
 
-        $title = $this->firstText(
+        $title = CaptureTitle::shorten($this->firstText(
             $embed['title'] ?? null,
             $providerPreview['title'] ?? null,
             $document['title'] ?? null,
-        );
+        ));
         $description = $this->firstText(
             $providerPreview['description'] ?? null,
             $document['description'] ?? null,

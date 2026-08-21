@@ -16,6 +16,17 @@ export function initCaptureCreate() {
   };
 
   renewId();
+  const shared = new URLSearchParams(location.search);
+  if (input && (shared.has('title') || shared.has('text') || shared.has('url'))) {
+    const parts = [shared.get('title'), shared.get('text'), shared.get('url')]
+      .map((part) => part?.trim())
+      .filter((part, index, values) => part && values.indexOf(part) === index);
+    input.value = parts.join('\n');
+    form.elements.type.value = parts.length === 1 && /^https?:\/\/\S+$/.test(parts[0]) ? 'url' : 'text';
+    input.focus();
+    setStatus('Shared content is ready to save.');
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
   input?.addEventListener('input', () => {
     form.elements.type.value = /^https?:\/\/\S+$/.test(input.value.trim())
       ? 'url'

@@ -1,3 +1,17 @@
-.button-link{display:inline-block;text-align:center;text-decoration:none}
-.button:disabled{opacity:.55;cursor:not-allowed}
-.auth-note{font-size:13px;color:var(--muted);margin:0!important;text-align:center}
+.button-link {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none
+}
+
+.button:disabled {
+  opacity: .55;
+  cursor: not-allowed
+}
+
+.auth-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 !important;
+  text-align: center
+}

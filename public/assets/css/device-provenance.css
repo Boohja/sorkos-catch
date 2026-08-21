@@ -1,4 +1,39 @@
-.connection-status-revoked{color:var(--danger)}.connection-status-revoked>span{background:var(--danger)}
-.revoked-summary .connected-check{background:var(--danger-soft);color:var(--danger)}
-.device-identity>p{color:var(--muted);margin-bottom:15px}.device-identity .inline-form{max-width:560px}.device-identity details{margin-top:18px}.device-identity details code{display:block;margin-top:10px;padding:12px;border-radius:9px;background:var(--surface-muted);font-size:12px;overflow-wrap:anywhere}
-.connected-summary h2+dl{margin-top:14px}
+.connection-status-revoked {
+  color: var(--danger)
+}
+
+.connection-status-revoked>span {
+  background: var(--danger)
+}
+
+.revoked-summary .connected-check {
+  background: var(--danger-soft);
+  color: var(--danger)
+}
+
+.device-identity>p {
+  color: var(--muted);
+  margin-bottom: 15px
+}
+
+.device-identity .inline-form {
+  max-width: 560px
+}
+
+.device-identity details {
+  margin-top: 18px
+}
+
+.device-identity details code {
+  display: block;
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 9px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere
+}
+
+.connected-summary h2+dl {
+  margin-top: 14px
+}
