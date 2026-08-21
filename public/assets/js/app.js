@@ -1,7 +1,7 @@
 import { initTheme } from './theme.js?v=2';
 import { onSync, syncOutbox } from './sync-manager.js';
 import { initRequestProgress } from './request-progress.js?v=1';
-import { initCaptureEditing } from './capture-edit.js?v=5';
+import { initCaptureEditing } from './capture-edit.js?v=6';
 import { initDevices } from './devices.js?v=6';
 import { initCaptureTags } from './capture-tags.js?v=4';
 import { initCaptureLists } from './capture-lists.js?v=9';

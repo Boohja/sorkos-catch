@@ -136,8 +136,6 @@ export function initCaptureEditing() {
     element.classList.toggle('is-empty', value === '');
 
     if (element.dataset.captureField === 'title') {
-      const separator = root.querySelector('[data-title-separator]');
-      if (separator) separator.hidden = value === '';
       document.title = `${value || 'Capture'} | Catch`;
     }
     if (element.dataset.captureField === 'url') {

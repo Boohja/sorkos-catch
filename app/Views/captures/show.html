@@ -4,15 +4,14 @@
   <check if="{{ @previewFetchDue }}"> data-preview-fetch-due</check>> <header class="capture-detail-heading"><i
       class="glyph glyph-capture capture-detail-icon" aria-hidden="true"></i>
     <div>
-      <h1><span class="capture-heading-number">#{{ (int)@capture.catch_number }}<span data-title-separator<check
-            if="{{ !@capture.title }}"> hidden</check>> -</span></span> <span class="<check if="
-          {{ !@isTrashed }}">capture-editable</check>
+      <h1><span class="<check if=" {{ !@isTrashed }}">capture-editable</check>
           <check if="{{ !@capture.title }}"> is-empty</check>" data-capture-field="title" data-single-line
           data-placeholder="Add title" role="textbox" aria-label="Capture title"<check if="{{ !@isTrashed }}">
             contenteditable="true"</check>>{{ @capture.title }}
         </span></h1>
-      <p class="capture-heading-meta"><time datetime="{{ @utcCreatedAt }}" data-local-time data-date-style="medium"
-          data-time-style="short">UTC {{ @capture.created_at }}</time><span class="capture-heading-lists"
+      <p class="capture-heading-meta"><span class="capture-heading-number">#{{ (int)@capture.catch_number }}</span><span
+          aria-hidden="true">·</span><time datetime="{{ @utcCreatedAt }}" data-relative-time
+          title="UTC {{ @capture.created_at }}">{{ @relativeTime }}</time><span class="capture-heading-lists"
           data-assigned-lists>
           <repeat group="{{ @capture.lists }}" value="{{ @list }}"><a data-list-id="{{ @list.id }}"
               href="{{ @list.url }}">{{ @list.title }}</a></repeat>
@@ -165,8 +164,8 @@
     </check>
   </footer>
   <p class="edit-status" data-edit-status role="status" aria-live="polite"></p>
-  <section class="capture-metadata">
-    <h2>Captured from</h2>
+  <details class="capture-metadata">
+    <summary>Captured from</summary>
     <dl>
       <div>
         <dt>Device</dt>
@@ -191,7 +190,7 @@
         <dd>{{ @methodLabel }}</dd>
       </div>
     </dl>
-  </section>
+  </details>
   <check if="{{ @debugEnabled && @debugRequests }}">
     <set debugRequestHeading="Related debug request" />
     <set debugRequestCard="{{ true }}" />

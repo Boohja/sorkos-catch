@@ -362,6 +362,16 @@ $test('Remote Reddit previews resolve to their canonical original', function () 
     if ($method->invoke($service, $preview) !== 'https://i.redd.it/ols9a6zsjoqg1.png') {
         throw new RuntimeException('Reddit preview URL was not normalized');
     }
+
+    $payload = (new ReflectionClass($service))->getMethod('imagePayload');
+    $extensionless = $payload->invoke($service, [
+        'body' => 'image-bytes',
+        'type' => 'image/webp',
+        'url' => 'https://images.example.test/rendered-image',
+    ]);
+    if ($extensionless['name'] !== 'rendered-image.webp') {
+        throw new RuntimeException('Extensionless image responses do not receive a MIME-derived filename');
+    }
 });
 $test('Browser labels distinguish common desktop clients', function () {
     $firefox = Catch\Services\BrowserInfo::fromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0');
@@ -889,12 +899,31 @@ $test('Relative capture times update globally and expose full local tooltips', f
         }
     }
 
+    $detail = (string) file_get_contents($root . '/app/Views/captures/show.html');
     $collection = (string) file_get_contents($root . '/app/Views/captures/_list.html');
     $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.html');
     $script = (string) file_get_contents($root . '/public/assets/js/relative-time.js');
+    $style = (string) file_get_contents($root . '/public/assets/css/capture-detail.css');
     foreach (['data-relative-time', 'relativeTime', 'setInterval', '60_000', 'element.title'] as $required) {
-        if (!str_contains($collection . $script, $required)) {
+        if (!str_contains($detail . $collection . $script, $required)) {
             throw new RuntimeException('Dynamic relative capture time is missing ' . $required);
+        }
+    }
+
+    foreach (['<details class="capture-metadata">', '<summary>Captured from</summary>', 'capture-heading-number', 'data-assigned-lists', 'data-heading-tags'] as $required) {
+        if (!str_contains($detail, $required)) {
+            throw new RuntimeException('Capture detail metadata is incomplete: ' . $required);
+        }
+    }
+    if (str_contains($detail, 'data-title-separator') || str_contains($detail, '<details class="capture-metadata" open')) {
+        throw new RuntimeException('Capture detail metadata still uses the old title separator or opens provenance by default');
+    }
+    if (preg_match('/<h1>(.*?)<\/h1>/s', $detail, $heading) !== 1 || str_contains($heading[1], 'capture-heading-number')) {
+        throw new RuntimeException('The capture number is not isolated from the detail title');
+    }
+    foreach (['.capture-heading-lists:has(a)::before', '.capture-heading-tags:has(a)::before', '.capture-heading-lists:not(:has(a))', '.capture-heading-tags:not(:has(a))'] as $required) {
+        if (!str_contains($style, $required)) {
+            throw new RuntimeException('Capture detail separators do not follow visible metadata: ' . $required);
         }
     }
 });
@@ -937,7 +966,7 @@ $test('URL captures store immutable WebP preview attachments', function () use (
         }
     }
 
-    foreach (['linkPreview', 'thumbnail_url', 'og:image', 'json+oembed', 'previewProvider'] as $required) {
+    foreach (['linkPreview', 'thumbnail_url', 'og:image', 'json+oembed', 'previewProvider', 'IMAGE_TYPES', 'imagePayload', 'typeLimits', 'responseType', "in_array(\$page['type'], self::IMAGE_TYPES, true)"] as $required) {
         if (!str_contains($remote, $required)) {
             throw new RuntimeException('Remote preview discovery is incomplete: ' . $required);
         }

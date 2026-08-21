@@ -14,6 +14,8 @@ final class RemoteContentService
 {
     private const PAGE_LIMIT = 524288;
     private const LINK_PREVIEW_USER_AGENT = 'Discordbot/2.0';
+    private const PAGE_TYPES = ['text/html', 'application/xhtml+xml'];
+    private const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     private ?string $lastError = null;
     private ?string $lastResolvedUrl = null;
     /** @var list<Provider> */
@@ -53,11 +55,24 @@ final class RemoteContentService
         $page = $this->request(
             $url,
             self::PAGE_LIMIT,
-            ['text/html', 'application/xhtml+xml'],
+            [...self::PAGE_TYPES, ...self::IMAGE_TYPES],
             self::LINK_PREVIEW_USER_AGENT,
             true,
+            array_fill_keys(self::IMAGE_TYPES, $this->imageLimit),
         );
         $canonicalUrl = $page['url'] ?? $this->lastResolvedUrl ?? $url;
+
+        if ($page && in_array($page['type'], self::IMAGE_TYPES, true)) {
+            return [
+                'metadata' => array_filter([
+                    'canonical_url' => $canonicalUrl,
+                    'provider_name' => $this->providerName($canonicalUrl),
+                    'image_source_url' => $canonicalUrl,
+                ]),
+                'image' => $this->imagePayload($page),
+            ];
+        }
+
         $document = $page ? $this->documentMetadata($page['body'], $canonicalUrl) : [];
         $canonicalUrl = $document['canonical_url'] ?? $canonicalUrl;
         $providerAdapter = $this->previewProvider($canonicalUrl);
@@ -112,10 +127,20 @@ final class RemoteContentService
     public function image(string $url): ?array
     {
         $url = $this->canonicalImageUrl($url);
-        $resource = $this->request($url, $this->imageLimit, ['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+        $resource = $this->request($url, $this->imageLimit, self::IMAGE_TYPES);
         if (!$resource) {
             return null;
         }
+
+        return $this->imagePayload($resource);
+    }
+
+    /**
+     * @param array{body:string,type:string,url:string} $resource
+     * @return array{name:string,type:string,contents:string}
+     */
+    private function imagePayload(array $resource): array
+    {
         $path = (string) parse_url($resource['url'], PHP_URL_PATH);
         $name = basename($path) ?: 'captured-image';
         if (!str_contains($name, '.')) {
@@ -131,13 +156,18 @@ final class RemoteContentService
         return $this->lastError;
     }
 
-    /** @return array{body:string,type:string,url:string}|null */
+    /**
+     * @param list<string> $allowedTypes
+     * @param array<string, int> $typeLimits
+     * @return array{body:string,type:string,url:string}|null
+     */
     private function request(
         string $url,
         int $limit,
         array $allowedTypes,
         string $userAgent = 'Catch link preview/1.0',
         bool $allowTruncated = false,
+        array $typeLimits = [],
     ): ?array {
         $this->lastError = null;
         $this->lastResolvedUrl = null;
@@ -150,6 +180,7 @@ final class RemoteContentService
             }
             $body = '';
             $headers = [];
+            $responseType = '';
             $tooLarge = false;
             $curl = curl_init($url);
             if ($curl === false) {
@@ -167,16 +198,22 @@ final class RemoteContentService
                     'Accept-Language: en-US,en;q=0.8',
                 ],
                 CURLOPT_RESOLVE => [$target['resolve']],
-                CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers): int {
+                CURLOPT_HEADERFUNCTION => static function ($handle, string $line) use (&$headers, &$responseType): int {
                     $length = strlen($line);
                     if (str_contains($line, ':')) {
                         [$name, $value] = explode(':', $line, 2);
-                        $headers[strtolower(trim($name))] = trim($value);
+                        $name = strtolower(trim($name));
+                        $value = trim($value);
+                        $headers[$name] = $value;
+                        if ($name === 'content-type') {
+                            $responseType = strtolower(trim(explode(';', $value, 2)[0]));
+                        }
                     }
                     return $length;
                 },
-                CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$body, $limit, &$tooLarge): int {
-                    if (strlen($body) + strlen($chunk) > $limit) {
+                CURLOPT_WRITEFUNCTION => static function ($handle, string $chunk) use (&$body, $limit, $typeLimits, &$responseType, &$tooLarge): int {
+                    $responseLimit = (int) ($typeLimits[$responseType] ?? $limit);
+                    if (strlen($body) + strlen($chunk) > $responseLimit) {
                         $tooLarge = true;
                         return 0;
                     }
@@ -203,6 +240,7 @@ final class RemoteContentService
                     && $status >= 200
                     && $status < 300
                     && in_array($type, $allowedTypes, true)
+                    && in_array($type, self::PAGE_TYPES, true)
                 ) {
                     return ['body' => $body, 'type' => $type, 'url' => $url];
                 }

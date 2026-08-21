@@ -258,9 +258,8 @@
 
 .capture-heading-number {
   color: var(--muted);
-  font-size: .72em;
   font-weight: 650;
-  letter-spacing: -.01em
+  font-variant-numeric: tabular-nums
 }
 
 .detail>header h1 {
@@ -353,6 +352,15 @@
   display: grid;
   gap: 12px;
   margin: 0
+}
+
+.capture-metadata summary {
+  width: fit-content;
+  color: var(--text)
+}
+
+.capture-metadata[open] summary {
+  margin-bottom: 20px
 }
 
 .capture-metadata dl>div {
@@ -514,13 +522,13 @@
   gap: 8px
 }
 
-.capture-heading-lists:empty,
-.capture-heading-tags:empty {
+.capture-heading-lists:not(:has(a)),
+.capture-heading-tags:not(:has(a)) {
   display: none
 }
 
-.capture-heading-lists:not(:empty)::before,
-.capture-heading-tags:not(:empty)::before {
+.capture-heading-lists:has(a)::before,
+.capture-heading-tags:has(a)::before {
   content: '·';
   color: var(--muted)
 }
