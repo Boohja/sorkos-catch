@@ -1,5 +1,5 @@
 import { initTheme } from './theme.js?v=2';
-import { onSync, syncOutbox } from './sync-manager.js';
+import { onSync, syncOutbox } from './sync-manager.js?v=2';
 import { initRequestProgress } from './request-progress.js?v=1';
 import { initCaptureEditing } from './capture-edit.js?v=6';
 import { initDevices } from './devices.js?v=6';

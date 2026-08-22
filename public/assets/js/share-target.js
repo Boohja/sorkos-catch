@@ -1,5 +1,5 @@
-import { get } from './db.js';
-import { saveSharedCapture } from './sync-manager.js';
+import { get } from './db.js?v=2';
+import { saveSharedCapture } from './sync-manager.js?v=2';
 
 const root = document.querySelector('[data-share-target]');
 
