@@ -7,7 +7,6 @@ FORM: Focused processing state; narrow extension of Catch's established Operate 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->
 <style>
-/* HTML: <div class="loader"></div> */
 .loader {
   height: 160px;
   aspect-ratio: 2;
@@ -51,3 +50,68 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     </div>
   </div>
 </section>
+<check if="{{ @debugEnabled }}">
+  <details class="share-debug" open>
+    <summary>Share debug trace</summary>
+    <p>Visible because <code>app.debug</code> is enabled. Shared content and tokens are not included.</p>
+    <pre data-share-debug-output role="log" aria-live="polite"></pre>
+  </details>
+  <script>
+    (() => {
+      const output = document.querySelector('[data-share-debug-output]');
+      if (!output) return;
+      const entries = [];
+      let moduleStarted = false;
+      const clean = (value) => {
+        if (!value || typeof value !== 'object') return value;
+        return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+      };
+      const log = (step, detail = {}) => {
+        entries.push({
+          at: new Date().toISOString().slice(11, 23),
+          step,
+          ...clean(detail),
+        });
+        if (entries.length > 80) entries.shift();
+        output.textContent = entries.map((entry) => JSON.stringify(entry)).join('\n');
+        output.scrollTop = output.scrollHeight;
+      };
+      window.CatchShareDebug = {
+        log,
+        started() {
+          moduleStarted = true;
+          log('module.started');
+        },
+      };
+      log('page.ready', {
+        path: location.pathname,
+        hasQueueId: new URLSearchParams(location.search).has('id'),
+        online: navigator.onLine,
+        serviceWorkerControlled: Boolean(navigator.serviceWorker?.controller),
+      });
+      window.addEventListener('error', (event) => {
+        let source = '';
+        try {
+          source = event.filename ? new URL(event.filename, location.href).pathname : '';
+        } catch {}
+        log('window.error', {
+          message: event.message || 'Unknown script error',
+          source,
+          line: event.lineno || 0,
+        });
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        log('promise.unhandled', {
+          message: event.reason?.message || String(event.reason || 'Unknown rejection'),
+        });
+      });
+      window.setTimeout(() => {
+        if (!moduleStarted) {
+          log('module.timeout', {
+            hint: 'share-target.js or one of its imports did not start',
+          });
+        }
+      }, 3000);
+    })();
+  </script>
+</check>

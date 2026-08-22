@@ -81,6 +81,38 @@
   display: none;
 }
 
+.share-debug {
+  margin-top: 32px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  text-align: left;
+}
+
+.share-debug summary {
+  padding: 14px 0 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.share-debug p {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.share-debug pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font: 12px/1.55 ui-monospace, "SFMono-Regular", Consolas, monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .share-target[data-state='queued'] .share-target-glyph,
 .share-target[data-state='success'] .share-target-glyph {
   border: 0;

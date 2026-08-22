@@ -108,6 +108,7 @@ final class CaptureController
             'isShareTarget' => true,
             'captureUrl' => $captureUrl,
             'shareError' => $shareError,
+            'debugEnabled' => $this->debug->enabled(),
         ], $shareError ? 422 : 200);
     }
 

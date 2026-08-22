@@ -757,6 +757,16 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The share processing state is incomplete: ' . $required);
         }
     }
+    foreach (['app.debug','module.timeout','queue.lookup.start','capture.request.start','timed out after'] as $required) {
+        if (!str_contains($view . $script, $required)) {
+            throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
+        }
+    }
+    foreach (['catch-shell-v37','share-target.js?v=2'] as $required) {
+        if (!str_contains($worker, $required)) {
+            throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
+        }
+    }
     foreach (['saveSharedCapture','client_capture_id','attachments[]'] as $required) {
         if (!str_contains($sync, $required)) {
             throw new RuntimeException('Queued share synchronization is incomplete: ' . $required);
