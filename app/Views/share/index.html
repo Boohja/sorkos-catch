@@ -1,0 +1,53 @@
+<!--
+THESIS: A shared item enters a calm, unmistakable handoff instead of landing in the inbox composer.
+OWN-WORLD: Catch neutrals, amber capture tile, direct system typography, and a single purposeful processing motion.
+STORY: Catch has received the original, preserves it locally when needed, creates the capture, then opens the result.
+FIRST VIEWPORT: One centered amber capture mark, live state heading, recovery copy, and actions only when intervention is needed.
+FORM: Focused processing state; narrow extension of Catch's established Operate surface.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<style>
+/* HTML: <div class="loader"></div> */
+.loader {
+  height: 160px;
+  aspect-ratio: 2;
+  border-bottom: 3px solid #0000;
+  background:
+    linear-gradient(90deg,var(--border) 50%,#0000 0)
+    -25% 100%/50% 3px repeat-x border-box;
+  position: relative;
+  animation: l3-0 .75s linear infinite;
+  justify-self: center;
+  margin-bottom: 2rem;
+}
+.loader:before {
+  content: "";
+  position: absolute;
+  inset: auto 42.5% 0;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: l3-1 .75s cubic-bezier(0,900,1,900) infinite;
+}
+@keyframes l3-0 {
+  to {background-position: -125% 100%}
+}
+@keyframes l3-1 {
+  0%,2% {bottom: 0%}
+  98%,to {bottom:.1%}
+}
+</style>
+<section class="share-target" data-share-target data-state="{{ @shareError ? 'error' : 'processing' }}"
+  data-capture-url="{{ @captureUrl }}" data-share-error="{{ @shareError }}">
+  <div class="share-target-inner">
+    <div class="loader"></div>
+    <h1 data-share-title>{{ @shareError ? 'Couldn’t finish capture' : 'Processing capture' }}</h1>
+    <p data-share-message>{{ @shareError ?: 'Please wait...' }}</p>
+    <p class="sr-only" role="status" aria-live="polite" data-share-status>{{ @shareError ?: 'Processing capture.' }}</p>
+    <div class="share-target-actions">
+      <button class="button button-secondary" type="button" data-share-retry hidden>Retry</button>
+      <a class="button button-primary" href="/inbox" data-share-inbox hidden>Open inbox</a>
+      <a class="button button-primary" href="/inbox" data-share-open hidden>Open capture</a>
+    </div>
+  </div>
+</section>

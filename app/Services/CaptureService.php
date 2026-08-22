@@ -290,6 +290,7 @@ final class CaptureService
         $hasImage = false;
         $hasAudio = false;
         $hasPdf = false;
+        $hasFile = false;
         $totalSize = 0;
         foreach ($attachments as $file) {
             try {
@@ -303,6 +304,8 @@ final class CaptureService
             }
             if ($info['mime'] === 'application/pdf') {
                 $hasPdf = true;
+            } elseif ($info['mime'] === 'text/plain') {
+                $hasFile = true;
             } elseif (str_starts_with($info['mime'], 'audio/')) {
                 $hasAudio = true;
             } else {
@@ -333,7 +336,7 @@ final class CaptureService
             $kinds[] = 'image';
         }if ($hasAudio) {
             $kinds[] = 'audio';
-        }if ($hasPdf) {
+        }if ($hasPdf || $hasFile) {
             $kinds[] = 'file';
         }
         $input['type'] = count($kinds) > 1 ? 'mixed' : ($kinds[0] ?? 'text');

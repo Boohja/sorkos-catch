@@ -126,7 +126,7 @@ final class UploadService
         $mime = $detected ?: 'application/octet-stream';
         $safeKind = str_starts_with($mime, 'image/')
             || str_starts_with($mime, 'audio/')
-            || $mime === 'application/pdf';
+            || in_array($mime, ['application/pdf', 'text/plain'], true);
 
         if (!$safeKind || !in_array($mime, $this->allowed, true)) {
             throw new UnsupportedAttachmentException($this->rejectionMessage($file, $mime));

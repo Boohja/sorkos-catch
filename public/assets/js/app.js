@@ -122,11 +122,13 @@ onSync(({ state, count = 0 }) => {
   }
 });
 
-window.addEventListener('online', syncOutbox);
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') syncOutbox();
+window.addEventListener('online', () => {
+  if (!document.querySelector('[data-share-target]')) syncOutbox();
 });
-syncOutbox();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !document.querySelector('[data-share-target]')) syncOutbox();
+});
+if (!document.querySelector('[data-share-target]')) syncOutbox();
 
 document.querySelectorAll('[data-copy-button]').forEach((button) => {
   button.addEventListener('click', async (event) => {

@@ -85,7 +85,7 @@ final class Application
             $_SESSION['catch_web_device_id'] = $webDevice['id'];
             $webDeviceId = $webDevice['id'];
         }$path = (string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
-        $publicPaths = ['/coming-soon','/login','/auth/start','/auth/callback','/logout','/health','/pair','/cli/authorize','/cron/import-mail'];
+        $publicPaths = ['/coming-soon','/login','/auth/start','/auth/callback','/logout','/health','/pair','/share','/cli/authorize','/cron/import-mail'];
         $isApi = $path === '/api' || str_starts_with($path, '/api/');
         if ($access->isPrerelease() && !$currentUser && !$isApi && !in_array($path, $publicPaths, true)) {
             \Catch\Http\Response::redirect('/coming-soon');
@@ -142,6 +142,8 @@ final class Application
         $f3->route('GET /inbox', [$web,'index']);
         $f3->route('GET /archive', [$web,'archiveIndex']);
         $f3->route('GET /trash', [$web,'trashIndex']);
+        $f3->route('GET /share', [$web,'shareTarget']);
+        $f3->route('POST /share', [$web,'shareTarget']);
         $f3->route('POST /captures', [$web,'create']);
         $f3->route('POST /captures/bulk-delete', [$web,'bulkDelete']);
         $f3->route('POST /captures/bulk-archive', [$web,'bulkArchive']);

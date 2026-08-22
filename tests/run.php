@@ -37,7 +37,7 @@ $test('Generated capture titles stay readable without losing Unicode', function 
         throw new RuntimeException('Generated titles are not capped at 100 characters');
     }
 });
-$test('Unknown captures resolve content and reject unsafe attachments', function () use ($root) {
+$test('Unknown captures resolve content and reject unsupported attachments', function () use ($root) {
     $config = Catch\Core\Config::load($root);
     $uploads = new Catch\Services\UploadService($config, sys_get_temp_dir());
     $service = new Catch\Services\CaptureService(new Catch\Core\Database($config), new Catch\Validation\CaptureValidator(), $uploads);
@@ -82,16 +82,10 @@ $test('Unknown captures resolve content and reject unsafe attachments', function
         if ($audio['type'] !== 'audio' || $audio['title'] !== 'memo.wav' || $audio['extracted_text'] !== 'Call Alice tomorrow' || isset($audio['text'])) {
             throw new RuntimeException('Audio input was not classified without preserving the recording as the source');
         }
-        $unsafe = ['attachment' => ['name' => 'notes.txt','tmp_name' => $plain,'error' => UPLOAD_ERR_OK,'size' => filesize($plain)]];
-        try {
-            $normalize->invoke($service, ['type' => 'unknown','text' => 'Context'], $unsafe);
-            throw new RuntimeException('Unsafe attachment was accepted');
-        } catch (InvalidArgumentException $error) {
-            $fields = json_decode($error->getMessage(), true);
-            $message = (string)($fields['attachment'] ?? '');
-            if (!str_contains($message, 'text/plain') || !str_contains($message, '.txt')) {
-                throw $error;
-            }
+        $plainFile = ['attachment' => ['name' => 'notes.txt','tmp_name' => $plain,'error' => UPLOAD_ERR_OK,'size' => filesize($plain)]];
+        $plainDocument = $normalize->invoke($service, ['type' => 'unknown'], $plainFile);
+        if ($plainDocument['type'] !== 'file' || $plainDocument['title'] !== 'notes.txt') {
+            throw new RuntimeException('Plain-text file input was not classified');
         }
         $tinyRoot = sys_get_temp_dir() . '/catch-unknown-config-' . bin2hex(random_bytes(4));
         mkdir($tinyRoot . '/config', 0777, true);
@@ -722,8 +716,51 @@ $test('Add to Catch routes every capture source through its existing setup mecha
     if (!str_contains($compactStyles, 'background:transparent;color:var(--text);font-size:28px')) {
         throw new RuntimeException('Chooser icons regained their square backgrounds');
     }
-    if (($manifest['share_target']['action'] ?? null) !== '/inbox' || !str_contains($detail, '@apiPairUrl')) {
+    if (($manifest['share_target']['action'] ?? null) !== '/share' || !str_contains($detail, '@apiPairUrl')) {
         throw new RuntimeException('PWA sharing or API pairing setup is incomplete');
+    }
+});
+$test('PWA share targets stage originals and open a dedicated processing route', function () use ($root) {
+    $manifest = json_decode((string) file_get_contents($root . '/public/manifest.webmanifest'), true, 512, JSON_THROW_ON_ERROR);
+    $worker = (string) file_get_contents($root . '/public/service-worker.js');
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $view = (string) file_get_contents($root . '/app/Views/share/index.html');
+    $script = (string) file_get_contents($root . '/public/assets/js/share-target.js');
+    $style = (string) file_get_contents($root . '/public/assets/css/share-target.css');
+    $sync = (string) file_get_contents($root . '/public/assets/js/sync-manager.js');
+    $params = $manifest['share_target']['params'] ?? [];
+
+    if (
+        ($manifest['share_target']['method'] ?? null) !== 'POST'
+        || ($manifest['share_target']['enctype'] ?? null) !== 'multipart/form-data'
+        || ($params['files'][0]['name'] ?? null) !== 'files'
+    ) {
+        throw new RuntimeException('The manifest does not declare a multipart share receiver');
+    }
+    foreach (['image/*','audio/*','application/pdf','text/plain'] as $mime) {
+        if (!in_array($mime, $params['files'][0]['accept'] ?? [], true)) {
+            throw new RuntimeException('The share target is missing ' . $mime);
+        }
+    }
+    foreach (['POST /share','GET /share','shareTarget'] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('The dedicated share route is incomplete: ' . $required);
+        }
+    }
+    foreach (['share-targets','stageShare','Response.redirect','request.formData()'] as $required) {
+        if (!str_contains($worker, $required)) {
+            throw new RuntimeException('Offline share staging is incomplete: ' . $required);
+        }
+    }
+    foreach (['Processing capture','data-share-status','prefers-reduced-motion'] as $required) {
+        if (!str_contains($view . $script . $style, $required)) {
+            throw new RuntimeException('The share processing state is incomplete: ' . $required);
+        }
+    }
+    foreach (['saveSharedCapture','client_capture_id','attachments[]'] as $required) {
+        if (!str_contains($sync, $required)) {
+            throw new RuntimeException('Queued share synchronization is incomplete: ' . $required);
+        }
     }
 });
 $test('Device types drive icons and remain editable', function () use ($root) {

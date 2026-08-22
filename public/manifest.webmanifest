@@ -7,13 +7,24 @@
   "scope": "/",
   "display": "standalone",
   "share_target": {
-    "action": "/inbox",
-    "method": "GET",
-    "enctype": "application/x-www-form-urlencoded",
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
     "params": {
       "title": "title",
       "text": "text",
-      "url": "url"
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": [
+            "image/*",
+            "audio/*",
+            "application/pdf",
+            "text/plain"
+          ]
+        }
+      ]
     }
   },
   "background_color": "#0b0f14",

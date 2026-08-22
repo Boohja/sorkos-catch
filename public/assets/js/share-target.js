@@ -1,0 +1,108 @@
+import { get } from './db.js';
+import { saveSharedCapture } from './sync-manager.js';
+
+const root = document.querySelector('[data-share-target]');
+
+if (root) {
+  const title = root.querySelector('[data-share-title]');
+  const message = root.querySelector('[data-share-message]');
+  const status = root.querySelector('[data-share-status]');
+  const retry = root.querySelector('[data-share-retry]');
+  const openInbox = root.querySelector('[data-share-inbox]');
+  const openCapture = root.querySelector('[data-share-open]');
+  const id = new URLSearchParams(location.search).get('id');
+  const pageCsrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  let working = false;
+
+  const setState = (state, heading, copy) => {
+    root.dataset.state = state;
+    title.textContent = heading;
+    message.textContent = copy;
+    status.textContent = copy;
+    retry.hidden = state !== 'error';
+    openInbox.hidden = !['queued', 'error'].includes(state);
+    openCapture.hidden = true;
+  };
+
+  const finish = (url) => {
+    root.dataset.state = 'success';
+    title.textContent = 'Capture saved';
+    message.textContent = 'Opening your capture…';
+    status.textContent = 'Capture saved. Opening it now.';
+    openInbox.hidden = true;
+    openCapture.href = url;
+    openCapture.hidden = false;
+    window.setTimeout(() => location.replace(url), 450);
+  };
+
+  const process = async () => {
+    if (working) return;
+    const serverError = root.dataset.shareError;
+    if (serverError) {
+      setState('error', 'Couldn’t finish capture', serverError);
+      return;
+    }
+    const completedUrl = root.dataset.captureUrl;
+    if (completedUrl) {
+      window.setTimeout(() => finish(completedUrl), 500);
+      return;
+    }
+    if (!id) {
+      setState('error', 'Nothing to process', 'Share something with Catch and try again.');
+      return;
+    }
+
+    const item = await get('share-targets', id).catch(() => null);
+    if (!item) {
+      setState('error', 'Capture unavailable', 'The shared item is no longer in the local queue.');
+      return;
+    }
+    if (!navigator.onLine) {
+      setState('queued', 'Saved for later', 'You’re offline. Catch will finish this capture when a connection returns.');
+      return;
+    }
+
+    working = true;
+    setState('processing', 'Processing capture', 'Keeping the original safe while Catch prepares your capture.');
+    const minimumSplash = new Promise((resolve) => window.setTimeout(resolve, 700));
+    try {
+      let csrf = pageCsrf;
+      if (!csrf) {
+        const tokenResponse = await fetch(`/share?id=${encodeURIComponent(id)}`, {
+          headers: { Accept: 'text/html' },
+          cache: 'no-store',
+        });
+        if (tokenResponse.redirected) {
+          location.assign(tokenResponse.url);
+          return;
+        }
+        const tokenPage = new DOMParser().parseFromString(await tokenResponse.text(), 'text/html');
+        csrf = tokenPage.querySelector('meta[name="csrf-token"]')?.content || '';
+        if (!csrf) {
+          const tokenError = new Error('Sign in to Catch and retry.');
+          tokenError.status = 401;
+          throw tokenError;
+        }
+      }
+      const [result] = await Promise.all([saveSharedCapture(item, csrf), minimumSplash]);
+      finish(result.url);
+    } catch (error) {
+      if (!error.status) {
+        setState('queued', 'Saved for later', 'The connection dropped. Catch will finish this capture when you’re online.');
+        return;
+      }
+      const expired = [401, 419].includes(error.status);
+      setState(
+        'error',
+        expired ? 'Session expired' : 'Couldn’t finish capture',
+        expired ? 'Open Catch and sign in, then retry this capture.' : 'The original is still saved locally. Check your connection and retry.',
+      );
+    } finally {
+      working = false;
+    }
+  };
+
+  retry.addEventListener('click', process);
+  window.addEventListener('online', process);
+  process();
+}

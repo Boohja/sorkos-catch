@@ -61,6 +61,56 @@ final class CaptureController
         $this->renderIndex('trash');
     }
 
+    public function shareTarget(): void
+    {
+        $user = $this->user();
+        $captureUrl = '';
+        $shareError = '';
+
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
+            $fetchSite = strtolower((string) ($_SERVER['HTTP_SEC_FETCH_SITE'] ?? ''));
+            if (!in_array($fetchSite, ['', 'none', 'same-origin'], true)) {
+                $shareError = 'This share request did not come from your device share sheet.';
+            } else {
+                $_POST['client_capture_id'] = 'web_share_' . Id::uuid();
+                $_POST['type'] = 'unknown';
+                $_POST['source'] = 'web-share-target';
+                if (
+                    trim((string) ($_POST['url'] ?? '')) !== ''
+                    && trim((string) ($_POST['text'] ?? '')) === trim((string) $_POST['url'])
+                ) {
+                    $_POST['text'] = null;
+                }
+                if (isset($_FILES['files'])) {
+                    $_FILES['attachments'] = $_FILES['files'];
+                }
+
+                try {
+                    $result = $this->service->create(
+                        $user['id'],
+                        $_POST,
+                        $_FILES,
+                        $this->webDeviceId,
+                    );
+                    $captureUrl = '/captures/' . $result['capture']['id'];
+                } catch (Throwable $error) {
+                    $shareError = $error instanceof InvalidArgumentException
+                        ? $this->validationMessage($error)
+                        : 'The capture could not be saved. The shared item may be too large.';
+                }
+            }
+        }
+
+        $this->view->render('share/index', [
+            'title' => $shareError ? 'Capture needs attention' : 'Processing capture',
+            'user' => $user,
+            'csrf' => $this->csrf->token(),
+            'isShareTarget' => true,
+            'captureUrl' => $captureUrl,
+            'shareError' => $shareError,
+        ], $shareError ? 422 : 200);
+    }
+
     private function renderIndex(string $status): void
     {
         $user = $this->user();
@@ -100,7 +150,9 @@ final class CaptureController
         }
 
         $_POST['client_capture_id'] = $_POST['client_capture_id'] ?? Id::uuid();
-        $_POST['source'] = 'web';
+        $_POST['source'] = ($_POST['source'] ?? '') === 'web-share-target'
+            ? 'web-share-target'
+            : 'web';
 
         if (($_POST['type'] ?? '') === 'url') {
             $_POST['url'] = $_POST['text'] ?? null;
