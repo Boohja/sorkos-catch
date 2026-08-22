@@ -8,6 +8,7 @@ use Catch\Controllers\Api\CaptureController as ApiCaptures;
 use Catch\Controllers\Api\CliController as ApiCli;
 use Catch\Controllers\Api\ExtensionController as ApiExtension;
 use Catch\Controllers\Api\ShortcutController as ApiShortcut;
+use Catch\Controllers\Technical\EmailImportController;
 use Catch\Controllers\Web\AccountController;
 use Catch\Controllers\Web\AuthController;
 use Catch\Controllers\Web\CaptureController as WebCaptures;
@@ -21,6 +22,7 @@ use Catch\Controllers\Web\TagController;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\CliAuthRepository;
 use Catch\Repositories\DeviceRepository;
+use Catch\Repositories\EmailImportRepository;
 use Catch\Repositories\EmailInboxRepository;
 use Catch\Repositories\ListRepository;
 use Catch\Repositories\TagRepository;
@@ -29,6 +31,10 @@ use Catch\Services\AuthService;
 use Catch\Services\CaptureDebugService;
 use Catch\Services\CaptureService;
 use Catch\Services\Csrf;
+use Catch\Services\EmailContentSanitizer;
+use Catch\Services\EmailImporter;
+use Catch\Services\EmailImportRunner;
+use Catch\Services\EmailMessageReader;
 use Catch\Services\RemoteContentService;
 use Catch\Services\SecretBox;
 use Catch\Services\UploadService;
@@ -79,7 +85,7 @@ final class Application
             $_SESSION['catch_web_device_id'] = $webDevice['id'];
             $webDeviceId = $webDevice['id'];
         }$path = (string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
-        $publicPaths = ['/coming-soon','/login','/auth/start','/auth/callback','/logout','/health','/pair','/cli/authorize'];
+        $publicPaths = ['/coming-soon','/login','/auth/start','/auth/callback','/logout','/health','/pair','/cli/authorize','/cron/import-mail'];
         $isApi = $path === '/api' || str_starts_with($path, '/api/');
         if ($access->isPrerelease() && !$currentUser && !$isApi && !in_array($path, $publicPaths, true)) {
             \Catch\Http\Response::redirect('/coming-soon');
@@ -101,6 +107,21 @@ final class Application
         $cliAuth = new CliAuthRepository($pdo);
         $cliAuthController = new CliAuthController($view, $auth, $cliAuth, $csrf);
         $help = new HelpController($view, $auth, $config);
+        $emailImport = new EmailImportController(
+            $config,
+            new EmailImportRunner(
+                new EmailImporter(
+                    $config,
+                    new EmailInboxRepository($pdo, $config),
+                    new EmailImportRepository($pdo),
+                    $service,
+                    new EmailMessageReader(new EmailContentSanitizer()),
+                    $this->root . '/storage/logs/import-mail.log',
+                ),
+                $this->root . '/storage/tmp/import-mail.lock',
+            ),
+            $this->root . '/storage/logs/import-mail.log',
+        );
         $api = new ApiCaptures($devices, $captures, $tags, $service, $captureDebug);
         $apiShortcut = new ApiShortcut($devices, $config);
         $apiExtension = new ApiExtension($devices, $config);
@@ -111,6 +132,7 @@ final class Application
         $f3->route('GET /auth/start', [$authController,'start']);
         $f3->route('GET /auth/callback', [$authController,'callback']);
         $f3->route('POST /logout', [$authController,'logout']);
+        $f3->route('GET /cron/import-mail', [$emailImport, 'run']);
         $f3->route('GET /profile', [$accountController, 'profile']);
         $f3->route('GET /settings', [$accountController, 'settings']);
         $f3->route('GET /settings/devices', [$accountController, 'devices']);
@@ -123,12 +145,14 @@ final class Application
         $f3->route('POST /captures', [$web,'create']);
         $f3->route('POST /captures/bulk-delete', [$web,'bulkDelete']);
         $f3->route('POST /captures/bulk-archive', [$web,'bulkArchive']);
+        $f3->route('POST /captures/bulk-later', [$web,'bulkLater']);
         $f3->route('POST /captures/bulk-lists', [$listController,'bulkAssign']);
         $f3->route('GET /captures/@id', [$web,'show']);
         $f3->route('POST /captures/@id', [$web,'update']);
         $f3->route('POST /captures/@id/preview', [$web, 'preview']);
         $f3->route('GET /attachments/@id', [$web,'attachment']);
         $f3->route('POST /captures/@id/archive', [$web,'archive']);
+        $f3->route('POST /captures/@id/later', [$web,'later']);
         $f3->route('POST /captures/@id/restore', [$web,'restore']);
         $f3->route('POST /captures/@id/delete', [$web,'delete']);
         $f3->route('GET /tags', [$tagController,'index']);

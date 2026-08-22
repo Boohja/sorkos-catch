@@ -41,13 +41,21 @@ npm run format:views
 
 Configure the `[mail]` values in `config/config.ini` (or the corresponding `MAIL_*` environment variables), then run the migration. Catch only opens `mail.imap_folder`; the normal inbox is never scanned. Processed messages move to `mail.imap_processed_folder`, valid-address failures move to `mail.imap_failed_folder`, and unknown or revoked addresses are silently deleted.
 
-Run the importer from the project root:
+Run the importer directly from the project root when CLI cron commands are available:
 
 ```text
 php cli/import-mail.php
 ```
 
-On ALL-INKL, schedule that command every five minutes. The command uses a non-blocking lock, so overlapping cron invocations exit without processing the same mailbox concurrently. PHP's IMAP and DOM extensions are required. Keep the IMAP password in `config/config.ini` or the host's environment; both `config/config.ini` and `.env` are excluded from source control.
+For ALL-INKL's URL-based cron service, set a long random `mail.cron_secret` and request the technical endpoint every five minutes:
+
+```text
+https://catch.example.com/cron/import-mail?secret=replace-with-a-long-random-secret
+```
+
+The endpoint is disabled with HTTP 404 while `cron_secret` is empty, returns HTTP 401 for a missing or incorrect secret, and uses a constant-time comparison. Both the URL endpoint and CLI command share one non-blocking lock, so overlapping invocations cannot process the mailbox concurrently. Because URL query parameters may appear in hosting access logs, use a unique high-entropy secret that is not reused anywhere else and HTTPS only.
+
+PHP's IMAP and DOM extensions are required. Keep the IMAP password and cron secret in `config/config.ini` or the host's environment.
 
 Users create, copy, and revoke private inbound addresses under **Settings → Email**. Catch stores the generated address directly. Its 16-character lowercase Base32 token contains 80 random bits, which keeps addresses compact while remaining impractical to guess through email delivery. Unknown addresses receive no response.
 

@@ -40,6 +40,7 @@ final class Config
             'MAIL_IMAP_PROCESSED_FOLDER' => 'mail.imap_processed_folder',
             'MAIL_IMAP_FAILED_FOLDER' => 'mail.imap_failed_folder',
             'MAIL_ADDRESS_DOMAIN' => 'mail.address_domain', 'MAIL_MAX_BYTES' => 'mail.max_bytes',
+            'MAIL_CRON_SECRET' => 'mail.cron_secret',
         ];
         foreach ($map as $environment => $key) {
             $value = getenv($environment);

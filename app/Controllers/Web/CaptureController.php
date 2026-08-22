@@ -84,6 +84,7 @@ final class CaptureController
             'availableLists' => $this->lists->list($user['id']),
             'enableListDialog' => $status !== 'trash',
             'enableCaptureActionMenu' => $status !== 'trash',
+            'enableLaterDialog' => $status === 'inbox',
             'csrf' => $this->csrf->token(),
         ]);
     }
@@ -168,6 +169,7 @@ final class CaptureController
             'availableLists' => $this->lists->list($user['id']),
             'enableListDialog' => empty($capture['deleted_at']),
             'enableTagDialog' => empty($capture['deleted_at']),
+            'enableLaterDialog' => empty($capture['deleted_at']) && $capture['status'] === 'inbox',
             'debugEnabled' => $this->debug->enabled(),
             'debugRequests' => $this->debug->forCapture($user['id'], $capture['id']),
             'csrf' => $this->csrf->token(),
@@ -354,6 +356,42 @@ final class CaptureController
         Response::redirect('/inbox');
     }
 
+    public function later(\Base $f3, array $params): never
+    {
+        $user = $this->user();
+        if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Refresh and try again.'], 419);
+            }
+            Response::redirect('/inbox');
+        }
+
+        try {
+            $until = $this->laterUntil();
+            $updated = $this->captures->later((string) $params['id'], $user['id'], $until);
+            if (!$updated) {
+                throw new InvalidArgumentException('Only captures in the inbox can be moved to Later.');
+            }
+        } catch (InvalidArgumentException $error) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => $error->getMessage()], 422);
+            }
+            $_SESSION['flash_error'] = $error->getMessage();
+            Response::redirect('/inbox');
+        }
+
+        if (Request::wantsJson()) {
+            Response::json([
+                'updated' => true,
+                'capture_status' => 'later',
+                'later_until' => $until,
+            ]);
+        }
+
+        $_SESSION['flash_success'] = 'Capture moved to Later.';
+        Response::redirect('/inbox');
+    }
+
     public function restore(\Base $f3, array $params): never
     {
         $user = $this->user();
@@ -512,6 +550,99 @@ final class CaptureController
         $noun = $archived === 1 ? 'capture was' : 'captures were';
         $_SESSION['flash_success'] = $archived . ' ' . $noun . ' archived.';
         Response::redirect($redirect);
+    }
+
+    public function bulkLater(): never
+    {
+        $user = $this->user();
+        if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Your session expired. Select the captures and try again.'], 419);
+            }
+            $_SESSION['flash_error'] = 'Your session expired. Select the captures and try again.';
+            Response::redirect('/inbox');
+        }
+
+        $ids = $this->selectedCaptureIds();
+        if (!$ids) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => 'Select at least one capture to move to Later.'], 422);
+            }
+            $_SESSION['flash_error'] = 'Select at least one capture to move to Later.';
+            Response::redirect('/inbox');
+        }
+
+        try {
+            $until = $this->laterUntil();
+            $changed = $this->captures->laterMany($user['id'], $ids, $until);
+        } catch (InvalidArgumentException $error) {
+            if (Request::wantsJson()) {
+                Response::json(['error' => $error->getMessage()], 422);
+            }
+            $_SESSION['flash_error'] = $error->getMessage();
+            Response::redirect('/inbox');
+        }
+
+        if (Request::wantsJson()) {
+            Response::json([
+                'changed' => $changed,
+                'capture_ids' => $ids,
+                'capture_status' => 'later',
+                'later_until' => $until,
+            ]);
+        }
+
+        $noun = $changed === 1 ? 'capture was' : 'captures were';
+        $_SESSION['flash_success'] = $changed . ' ' . $noun . ' moved to Later.';
+        Response::redirect('/inbox');
+    }
+
+    private function laterUntil(): string
+    {
+        $choice = (string) ($_POST['later_choice'] ?? '');
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        $until = match ($choice) {
+            '1_hour' => $now->modify('+1 hour'),
+            '12_hours' => $now->modify('+12 hours'),
+            '1_day' => $now->modify('+1 day'),
+            '1_week' => $now->modify('+1 week'),
+            'date' => $this->customLaterUntil(),
+            default => throw new InvalidArgumentException('Choose when this capture should return to the inbox.'),
+        };
+
+        if ($until <= $now) {
+            throw new InvalidArgumentException('Choose a date in the future.');
+        }
+
+        return $until->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s.u');
+    }
+
+    private function customLaterUntil(): \DateTimeImmutable
+    {
+        $date = (string) ($_POST['later_date'] ?? '');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) {
+            throw new InvalidArgumentException('Choose a date for this capture to return.');
+        }
+
+        $utcValue = trim((string) ($_POST['later_until_utc'] ?? ''));
+        if ($utcValue !== '') {
+            try {
+                return new \DateTimeImmutable($utcValue);
+            } catch (\Exception) {
+                throw new InvalidArgumentException('The selected date could not be read. Choose it again.');
+            }
+        }
+
+        $until = \DateTimeImmutable::createFromFormat(
+            '!Y-m-d H:i',
+            $date . ' 01:00',
+            new \DateTimeZone('UTC'),
+        );
+        if (!$until) {
+            throw new InvalidArgumentException('The selected date could not be read. Choose it again.');
+        }
+
+        return $until;
     }
 
     private function selectedCaptureIds(): array

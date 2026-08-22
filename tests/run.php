@@ -1332,6 +1332,11 @@ $test('Email importer remains folder-scoped and cron-safe', function () use ($ro
     $migration = (string) file_get_contents($root . '/database/migrations/014_email_inboxes.sql')
         . (string) file_get_contents($root . '/database/migrations/015_email_inbox_raw_addresses.sql');
     $importer = (string) file_get_contents($root . '/app/Services/EmailImporter.php');
+    $runner = (string) file_get_contents($root . '/app/Services/EmailImportRunner.php');
+    $cron = (string) file_get_contents($root . '/app/Controllers/Technical/EmailImportController.php');
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $config = (string) file_get_contents($root . '/app/Core/Config.php');
+    $configExample = (string) file_get_contents($root . '/config/config.example.ini');
     $cli = (string) file_get_contents($root . '/cli/import-mail.php');
     $settings = (string) file_get_contents($root . '/app/Views/account/settings.html');
     $account = (string) file_get_contents($root . '/app/Controllers/Web/AccountController.php');
@@ -1353,8 +1358,26 @@ $test('Email importer remains folder-scoped and cron-safe', function () use ($ro
     if (str_contains($importer, 'imap_fetchheader($connection, $uid, FT_UID | FT_PEEK)')) {
         throw new RuntimeException('The header fetch uses body-only FT_PEEK flags');
     }
-    if (!str_contains($cli, 'LOCK_EX | LOCK_NB')) {
-        throw new RuntimeException('Concurrent cron imports are not locked');
+    foreach (['LOCK_EX | LOCK_NB', 'EmailImporter', 'return null'] as $required) {
+        if (!str_contains($runner, $required)) {
+            throw new RuntimeException('Concurrent email imports are not locked: ' . $required);
+        }
+    }
+    foreach (['GET /cron/import-mail', '/cron/import-mail', 'EmailImportRunner'] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('Technical email import route is missing: ' . $required);
+        }
+    }
+    foreach (['mail.cron_secret', 'hash_equals', "'secret'", "'cron_disabled'", "'unauthorized'", '401'] as $required) {
+        if (!str_contains($cron, $required)) {
+            throw new RuntimeException('Cron endpoint authentication is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($config, 'MAIL_CRON_SECRET') || !str_contains($configExample, 'cron_secret = ""')) {
+        throw new RuntimeException('Cron secret configuration is incomplete');
+    }
+    if (!str_contains($cli, 'EmailImportRunner')) {
+        throw new RuntimeException('CLI and HTTP imports do not share the runner lock');
     }
     foreach (['email-address-row', 'data-copy-row', '@inbox.address', 'EmailInboxRepository'] as $required) {
         if (!str_contains($settings . $account . $cli, $required)) {
@@ -1366,6 +1389,85 @@ $test('Email importer remains folder-scoped and cron-safe', function () use ($ro
         if (!str_contains($editing, $required)) {
             throw new RuntimeException('Imported email structure is not rendered safely: ' . $required);
         }
+    }
+});
+$test('Inbox captures can be moved to Later and return when due', function () use ($root) {
+    $migration = (string) file_get_contents($root . '/database/migrations/016_capture_later.sql');
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $controller = (string) file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
+    $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $detail = (string) file_get_contents($root . '/app/Views/captures/show.html');
+    $index = (string) file_get_contents($root . '/app/Views/captures/index.html');
+    $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.html');
+    $dialog = (string) file_get_contents($root . '/app/Views/captures/_later_dialog.html');
+    $client = (string) file_get_contents($root . '/public/assets/js/capture-later.js');
+
+    foreach (["ENUM('inbox','later','archived')", 'later_until DATETIME(6)', 'idx_captures_user_later_until'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Later migration is incomplete: ' . $required);
+        }
+    }
+    foreach (['POST /captures/@id/later', 'POST /captures/bulk-later', 'laterMany', 'releaseDueLater'] as $required) {
+        if (!str_contains($application . $controller . $repository, $required)) {
+            throw new RuntimeException('Later workflow is incomplete: ' . $required);
+        }
+    }
+    foreach (['glyph-resubmission', 'data-open-later', 'data-open-bulk-later', 'data-menu-later', 'value="12_hours"', 'value="1_day"', 'value="1_week"', 'type="date"'] as $required) {
+        if (!str_contains($detail . $index . $menu . $dialog, $required)) {
+            throw new RuntimeException('Later action is missing from a capture surface: ' . $required);
+        }
+    }
+    foreach (["T01:00:00", 'toISOString()', 'captureCollection?.transition'] as $required) {
+        if (!str_contains($client, $required)) {
+            throw new RuntimeException('Later client behavior is incomplete: ' . $required);
+        }
+    }
+
+    if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        return;
+    }
+
+    $database = new PDO('sqlite::memory:');
+    $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $database->sqliteCreateFunction(
+        'UTC_TIMESTAMP',
+        static fn (): string => '2026-08-22 12:00:00.000000',
+        -1,
+    );
+    $database->exec(<<<'SQL'
+        CREATE TABLE catch_captures (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, device_id TEXT, status TEXT NOT NULL,
+            archived_at TEXT, later_until TEXT, deleted_at TEXT, created_at TEXT NOT NULL, updated_at TEXT,
+            metadata_json TEXT
+        );
+        CREATE TABLE catch_devices (id TEXT PRIMARY KEY, name TEXT, client_type TEXT);
+        CREATE TABLE catch_attachments (
+            id TEXT PRIMARY KEY, capture_id TEXT, kind TEXT, mime_type TEXT, created_at TEXT
+        );
+        CREATE TABLE catch_capture_lists (capture_id TEXT, list_id TEXT);
+        CREATE TABLE catch_tags (id TEXT PRIMARY KEY, name TEXT);
+        CREATE TABLE catch_capture_tags (capture_id TEXT, tag_id TEXT);
+        INSERT INTO catch_captures VALUES
+            ('due','user-1',NULL,'later',NULL,'2026-08-22 11:59:00',NULL,'2026-08-20',NULL,'{}'),
+            ('future','user-1',NULL,'later',NULL,'2026-08-23 01:00:00',NULL,'2026-08-21',NULL,'{}'),
+            ('inbox','user-1',NULL,'inbox',NULL,NULL,NULL,'2026-08-22',NULL,'{}');
+        SQL);
+
+    $captures = new Catch\Repositories\CaptureRepository($database);
+    if (!$captures->later('inbox', 'user-1', '2026-08-24 01:00:00.000000')) {
+        throw new RuntimeException('An inbox capture could not be moved to Later');
+    }
+    $releaseDue = new ReflectionMethod($captures, 'releaseDueLater');
+    $releaseDue->invoke($captures, 'user-1');
+    $states = $database->query(
+        "SELECT id, status, later_until FROM catch_captures ORDER BY id",
+    )->fetchAll(PDO::FETCH_ASSOC);
+    $states = array_column($states, null, 'id');
+    if (($states['due']['status'] ?? null) !== 'inbox' || ($states['due']['later_until'] ?? null) !== null) {
+        throw new RuntimeException('A due Later capture was not restored to a clean inbox state');
+    }
+    if (($states['future']['status'] ?? null) !== 'later' || ($states['inbox']['status'] ?? null) !== 'later') {
+        throw new RuntimeException('A future Later capture became visible before its return time');
     }
 });
 $test('Swagger UI is fully local', function () use ($root) {
