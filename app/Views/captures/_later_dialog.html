@@ -1,0 +1,41 @@
+<dialog class="confirm-dialog later-dialog" data-later-dialog aria-labelledby="later-dialog-title"
+  aria-describedby="later-dialog-description">
+  <form method="post" action="/captures/bulk-later" data-later-form><input type="hidden" name="_csrf"
+      value="{{ @csrf }}"><input type="hidden" name="later_until_utc" value="" data-later-until-utc>
+    <h2 id="later-dialog-title">Move to Later</h2>
+    <p id="later-dialog-description" data-later-description>This item will be removed from the inbox until the time you
+      choose.</p>
+    <fieldset class="later-options">
+      <legend>Show in the inbox again</legend>
+      <label>
+          <input type="radio" name="later_choice" value="1_hour"
+          checked>
+          <span>1 hour</span>
+      </label>
+      <label>
+          <input type="radio" name="later_choice" value="12_hours"
+          checked>
+          <span>12 hours</span>
+      </label>
+      <label>
+          <input type="radio" name="later_choice" value="1_day">
+          <span>1 day</span>
+      </label>
+      <label>
+          <input type="radio" name="later_choice" value="1_week">
+          <span>1 week</span>
+      </label>
+      <label class="later-date-option">
+          <input type="radio" name="later_choice"
+          value="date">
+          <span>On a date</span>
+          <input type="date" name="later_date" aria-label="Return date"
+          data-later-date>
+      </label>
+    </fieldset>
+    <p class="later-status" data-later-status role="status" aria-live="polite"></p>
+    <div class="confirm-dialog-actions"><button class="button button-secondary" type="button"
+        data-close-later-dialog>Cancel</button><button class="button button-primary" type="submit" data-save-later><i
+          class="glyph glyph-resubmission" aria-hidden="true"></i>Later</button></div>
+  </form>
+</dialog>

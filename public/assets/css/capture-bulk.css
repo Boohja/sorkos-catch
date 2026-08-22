@@ -94,6 +94,70 @@
   margin-top: 24px
 }
 
+.later-options {
+  display: grid;
+  gap: 2px;
+  margin: 20px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.later-options legend {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.later-options label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.later-options label:hover,
+.later-options label:focus-within {
+  background: var(--surface-muted);
+}
+
+.later-options input[type='radio'] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+.later-date-option span {
+  min-width: 74px;
+}
+
+.later-date-option input[type='date'] {
+  min-width: 0;
+  margin-left: auto;
+}
+
+.later-status {
+  min-height: 1.4em;
+  margin-top: 10px !important;
+  font-size: 13px;
+}
+
+.later-status.is-error {
+  color: var(--danger);
+}
+
+.later-dialog .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
 @media(max-width:560px) {
   .bulk-actions {
     right: auto;
@@ -125,5 +189,15 @@
   .confirm-dialog-actions .button {
     width: 100%;
     min-height: 44px
+  }
+
+  .later-date-option {
+    flex-wrap: wrap;
+  }
+
+  .later-date-option input[type='date'] {
+    flex-basis: 100%;
+    width: 100%;
+    margin-left: 27px;
   }
 }

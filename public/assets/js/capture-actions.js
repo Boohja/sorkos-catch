@@ -3,6 +3,7 @@ export function initCaptureActions() {
   if (!menu) return;
 
   const listButton = menu.querySelector('[data-menu-list]');
+  const laterButton = menu.querySelector('[data-menu-later]');
   const archiveForm = menu.querySelector('[data-menu-archive]');
   const trashForm = menu.querySelector('[data-menu-trash]');
   let trigger = null;
@@ -63,6 +64,7 @@ export function initCaptureActions() {
       const id = encodeURIComponent(trigger.dataset.captureId);
       archiveForm.action = `/captures/${id}/archive`;
       archiveForm.hidden = trigger.dataset.captureStatus !== 'inbox';
+      laterButton.hidden = trigger.dataset.captureStatus !== 'inbox';
       trashForm.action = `/captures/${id}/delete`;
       menu.hidden = false;
       position();
@@ -84,6 +86,13 @@ export function initCaptureActions() {
     const captureIds = [trigger.dataset.captureId];
     close();
     window.Catch?.openListDialog?.({ captureIds, assignedListIds, mode: 'single' });
+  });
+
+  laterButton?.addEventListener('click', () => {
+    if (!trigger) return;
+    const captureId = trigger.dataset.captureId;
+    close();
+    window.Catch?.openLaterDialog?.({ ids: [captureId] });
   });
 
   [archiveForm, trashForm].forEach((form) => {

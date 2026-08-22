@@ -18,9 +18,9 @@ final class CaptureRepository
     public function list(string $userId, string $status = 'inbox', int $limit = 100): array
     {
         $limit = max(1, min($limit, 200));
-        $statusClause = $status === 'deleted'
-            ? 'c.deleted_at IS NOT NULL'
-            : 'c.status=:status AND c.deleted_at IS NULL';
+        if ($status === 'inbox') {
+            $this->releaseDueLater($userId);
+        }
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
                 (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
@@ -82,6 +82,9 @@ final class CaptureRepository
         int $limit = 100,
     ): array {
         $limit = max(1, min($limit, 200));
+        if ($status === 'inbox') {
+            $this->releaseDueLater($userId);
+        }
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
                 (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
@@ -250,6 +253,12 @@ final class CaptureRepository
     {
         $limit = max(1, min($limit, 200));
         $term = mb_substr(trim($term), 0, 500);
+        if ($status === 'inbox') {
+            $this->releaseDueLater($userId);
+        }
+        $statusClause = $status === 'deleted'
+            ? 'c.deleted_at IS NOT NULL'
+            : 'c.status=:status AND c.deleted_at IS NULL';
         $sql = <<<SQL
             SELECT c.*, d.name device_name, d.client_type device_client_type,
                 (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id=c.id AND a.kind='source') attachment_count,
@@ -411,6 +420,7 @@ final class CaptureRepository
             UPDATE catch_captures
             SET status = :status,
                 archived_at = {$archivedAt},
+                later_until = NULL,
                 updated_at = UTC_TIMESTAMP(6)
             WHERE id = :id
                 AND user_id = :user
@@ -460,9 +470,46 @@ final class CaptureRepository
         }
 
         $sql = 'UPDATE catch_captures '
-            . "SET status = 'archived', archived_at = COALESCE(archived_at, UTC_TIMESTAMP(6)), "
+            . "SET status = 'archived', archived_at = COALESCE(archived_at, UTC_TIMESTAMP(6)), later_until = NULL, "
             . 'updated_at = UTC_TIMESTAMP(6) '
             . 'WHERE user_id = :user AND status = \'inbox\' AND deleted_at IS NULL '
+            . 'AND id IN (' . implode(',', $placeholders) . ')';
+        $query = $this->db->prepare($sql);
+        $query->execute($params);
+
+        return $query->rowCount();
+    }
+
+    public function later(string $id, string $userId, string $until): bool
+    {
+        $query = $this->db->prepare(<<<'SQL'
+            UPDATE catch_captures
+            SET status = 'later',
+                later_until = :later_until,
+                archived_at = NULL,
+                updated_at = UTC_TIMESTAMP(6)
+            WHERE id = :id
+                AND user_id = :user
+                AND status = 'inbox'
+                AND deleted_at IS NULL
+            SQL);
+        $query->execute(['later_until' => $until, 'id' => $id, 'user' => $userId]);
+
+        return $query->rowCount() > 0;
+    }
+
+    public function laterMany(string $userId, array $ids, string $until): int
+    {
+        [$placeholders, $params] = $this->captureIdParams($userId, $ids);
+        if (!$placeholders) {
+            return 0;
+        }
+
+        $params['later_until'] = $until;
+        $sql = 'UPDATE catch_captures '
+            . "SET status = 'later', later_until = :later_until, archived_at = NULL, "
+            . 'updated_at = UTC_TIMESTAMP(6) '
+            . "WHERE user_id = :user AND status = 'inbox' AND deleted_at IS NULL "
             . 'AND id IN (' . implode(',', $placeholders) . ')';
         $query = $this->db->prepare($sql);
         $query->execute($params);
@@ -485,6 +532,7 @@ final class CaptureRepository
                     COALESCE(c.archived_at, UTC_TIMESTAMP(6)),
                     NULL
                 ),
+                later_until = NULL,
                 updated_at = UTC_TIMESTAMP(6)
             WHERE c.id = :id AND c.user_id = :user AND c.deleted_at IS NOT NULL
             SQL;
@@ -492,6 +540,21 @@ final class CaptureRepository
         $query->execute(['id' => $id, 'user' => $userId]);
 
         return $query->rowCount() > 0;
+    }
+
+    private function releaseDueLater(string $userId): void
+    {
+        $query = $this->db->prepare(<<<'SQL'
+            UPDATE catch_captures
+            SET status = 'inbox',
+                later_until = NULL,
+                updated_at = UTC_TIMESTAMP(6)
+            WHERE user_id = :user
+                AND status = 'later'
+                AND later_until <= UTC_TIMESTAMP(6)
+                AND deleted_at IS NULL
+            SQL);
+        $query->execute(['user' => $userId]);
     }
 
     public function expiredTrashIds(string $userId, int $days = 30): array

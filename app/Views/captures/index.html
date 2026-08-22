@@ -38,6 +38,8 @@
     data-bulk-count role="status" aria-live="polite"></span>
   <check if="{{ !@permanent }}"><button class="button button-secondary" type="button" data-open-bulk-lists><i
         class="glyph glyph-list" aria-hidden="true"></i>Add to list</button></check>
+  <check if="{{ @status=='inbox' }}"><button class="button button-secondary" type="button" data-open-bulk-later><i
+        class="glyph glyph-resubmission" aria-hidden="true"></i>Later</button></check>
   <check if="{{ @status=='inbox' }}"><button class="button button-secondary" type="submit"
       formaction="/captures/bulk-archive"><i class="glyph glyph-archive" aria-hidden="true"></i>Archive</button></check>
   <button class="button button-danger-outline" type="button" data-open-bulk-delete><i class="glyph glyph-trash"

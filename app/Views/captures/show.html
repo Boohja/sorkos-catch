@@ -153,6 +153,9 @@
             aria-hidden="true"></i>Tags</button><button class="button button-secondary" type="button"
           data-open-list-dialog data-capture-id="{{ @capture.id }}" data-list-ids="{{ @assignedListIdsJson }}"><i
             class="glyph glyph-list" aria-hidden="true"></i>Add to list</button>
+        <check if="{{ @capture.status=='inbox' }}"><button class="button button-secondary" type="button" data-open-later
+            data-capture-id="{{ @capture.id }}"><i class="glyph glyph-resubmission"
+              aria-hidden="true"></i>Later</button></check>
         <form method="post" action="/captures/{{ urlencode(@capture.id) }}/archive" data-archive-action<check
           if="{{ @capture.status!='inbox' }}"> hidden
     </check>> <input type="hidden" name="_csrf" value="{{ @csrf }}"><button class="button button-secondary"><i

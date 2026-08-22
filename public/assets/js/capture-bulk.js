@@ -5,6 +5,7 @@ export function initCaptureBulk() {
   const count = form.querySelector('[data-bulk-count]');
   const open = form.querySelector('[data-open-bulk-delete]');
   const openLists = form.querySelector('[data-open-bulk-lists]');
+  const openLater = form.querySelector('[data-open-bulk-later]');
   const dialog = document.querySelector('[data-bulk-delete-dialog]');
   const description = dialog?.querySelector('[data-bulk-delete-description]');
   const confirm = dialog?.querySelector('[data-confirm-bulk-delete]');
@@ -65,6 +66,13 @@ export function initCaptureBulk() {
       assignedListIds: [],
       mode: 'bulk',
     });
+  });
+
+  openLater?.addEventListener('click', () => {
+    const ids = selected().map((box) => box.value);
+    if (!ids.length) return;
+
+    window.Catch?.openLaterDialog?.({ ids });
   });
 
   form.addEventListener('submit', async (event) => {

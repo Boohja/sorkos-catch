@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="/assets/css/device-provenance.css?v=1">
   <link rel="stylesheet" href="/assets/css/capture-detail.css?v=13">
   <link rel="stylesheet" href="/assets/css/capture-collection.css?v=5">
-  <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=2">
+  <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=3">
   <link rel="stylesheet" href="/assets/css/tags.css?v=1">
   <link rel="stylesheet" href="/assets/css/lists.css?v=2">
   <link rel="stylesheet" href="/assets/css/pair.css?v=1">
@@ -93,7 +93,8 @@
   <include if="{{ @enableCaptureActionMenu }}" href="captures/_action_menu.html" />
   <include if="{{ @enableListDialog }}" href="captures/_list_dialog.html" />
   <include if="{{ @enableTagDialog }}" href="captures/_tag_dialog.html" />
-  <script type="module" src="/assets/js/app.js?v=38"></script>
+  <include if="{{ @enableLaterDialog }}" href="captures/_later_dialog.html" />
+  <script type="module" src="/assets/js/app.js?v=39"></script>
   </body>
 
 </html>
