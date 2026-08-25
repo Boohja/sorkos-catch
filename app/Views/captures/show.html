@@ -1,8 +1,7 @@
 <a class="back-link" href="{{ @backRoute }}">&larr; Back to {{ @backLabel }}</a>
 <article class="detail" data-capture-detail data-capture-lists data-capture-id="{{ @capture.id }}"
   data-csrf="{{ @csrf }}" <check if="{{ @capture.title }}"> data-has-title="true"</check>
-  <check if="{{ @previewFetchDue }}"> data-preview-fetch-due</check>> <header class="capture-detail-heading"><i
-      class="glyph glyph-capture capture-detail-icon" aria-hidden="true"></i>
+  <check if="{{ @previewFetchDue }}"> data-preview-fetch-due</check>> <header class="capture-detail-heading">
     <div>
       <h1><span class="<check if=" {{ !@isTrashed }}">capture-editable</check>
           <check if="{{ !@capture.title }}"> is-empty</check>" data-capture-field="title" data-single-line
@@ -97,7 +96,8 @@
                     src="{{ @attachment.viewUrl }}" alt="{{ @attachment.original_name }}" loading="lazy"></a>
                 <figcaption><strong>{{ @attachment.original_name }}</strong><span>{{ @attachment.mime_type }} &middot;
                     {{ @attachment.sizeKb }} KB<check if="{{ @attachment.width && @attachment.height }}"> &middot;
-                      {{ (int)@attachment.width }} &times; {{ (int)@attachment.height }}</check></span></figcaption>
+                      {{ (int)@attachment.width }} &times; {{ (int)@attachment.height }}
+                    </check></span></figcaption>
               </figure>
             </true>
             <false>
@@ -152,18 +152,14 @@
       <false><button class="button button-secondary" type="button" data-open-tag-dialog><i class="glyph glyph-tag"
             aria-hidden="true"></i>Tags</button><button class="button button-secondary" type="button"
           data-open-list-dialog data-capture-id="{{ @capture.id }}" data-list-ids="{{ @assignedListIdsJson }}"><i
-            class="glyph glyph-list" aria-hidden="true"></i>Add to list</button>
+            class="glyph glyph-list" aria-hidden="true"></i>List</button>
         <check if="{{ @capture.status=='inbox' }}"><button class="button button-secondary" type="button" data-open-later
             data-capture-id="{{ @capture.id }}"><i class="glyph glyph-resubmission"
               aria-hidden="true"></i>Later</button></check>
-        <form method="post" action="/captures/{{ urlencode(@capture.id) }}/archive" data-archive-action<check
-          if="{{ @capture.status!='inbox' }}"> hidden
-    </check>> <input type="hidden" name="_csrf" value="{{ @csrf }}"><button class="button button-secondary"><i
-        class="glyph glyph-archive" aria-hidden="true"></i>Archive</button></form>
-    <form method="post" action="/captures/{{ urlencode(@capture.id) }}/delete"><input type="hidden" name="_csrf"
-        value="{{ @csrf }}"><button class="button button-danger-outline"><i class="glyph glyph-trash"
-          aria-hidden="true"></i>Move to Trash</button></form>
-    </false>
+        <button class="button button-secondary" type="button" data-open-move data-capture-id="{{ @capture.id }}"
+          data-move-status="{{ @capture.status }}" data-move-return="{{ @backRoute }}"><i class="glyph glyph-move"
+            aria-hidden="true"></i>Move</button>
+      </false>
     </check>
   </footer>
   <p class="edit-status" data-edit-status role="status" aria-live="polite"></p>

@@ -14,20 +14,20 @@
   <link rel="icon" href="/assets/favicon/favicon-16x16.png" type="image/png" sizes="16x16">
   <link rel="apple-touch-icon" href="/assets/favicon/apple-touch-icon.png" sizes="180x180">
   <link rel="stylesheet" href="https://glyph.sorkos.net/cdn/fonts/a588550d09ff860a08cf6a3dceac2747.css">
-  <link rel="stylesheet" href="/assets/css/app.css?v=4">
+  <link rel="stylesheet" href="/assets/css/app.css?v=5">
   <link rel="stylesheet" href="/assets/css/components.css?v=4">
   <link rel="stylesheet" href="/assets/css/auth.css?v=2">
   <link rel="stylesheet" href="/assets/css/devices.css?v=10">
   <link rel="stylesheet" href="/assets/css/device-detail.css?v=6">
   <link rel="stylesheet" href="/assets/css/device-provenance.css?v=1">
-  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=13">
-  <link rel="stylesheet" href="/assets/css/capture-collection.css?v=5">
-  <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=3">
+  <link rel="stylesheet" href="/assets/css/capture-detail.css?v=15">
+  <link rel="stylesheet" href="/assets/css/capture-collection.css?v=7">
+  <link rel="stylesheet" href="/assets/css/capture-bulk.css?v=5">
   <link rel="stylesheet" href="/assets/css/tags.css?v=1">
   <link rel="stylesheet" href="/assets/css/lists.css?v=2">
   <link rel="stylesheet" href="/assets/css/pair.css?v=1">
   <link rel="stylesheet" href="/assets/css/coming-soon.css?v=2">
-  <link rel="stylesheet" href="/assets/css/shell.css?v=3">
+  <link rel="stylesheet" href="/assets/css/shell.css?v=4">
   <link rel="stylesheet" href="/assets/css/account.css?v=2">
   <link rel="stylesheet" href="/assets/css/layout-compat.css?v=1">
   <link rel="stylesheet" href="/assets/css/share-target.css?v=1">
@@ -76,6 +76,15 @@
       class="{{ @isShareTarget ? 'share-main' : (@isAuthenticated && !@isComingSoon ? 'app-main' : 'guest-main') }}">
       <include href="{{ @content }}" />
     </main>
+    <check if="{{ @isAuthenticated && !@isComingSoon && !@isShareTarget }}">
+      <nav class="mobile-tab-bar" aria-label="Primary navigation" data-mobile-tab-bar><a href="/inbox" <check
+          if="{{ @currentPath=='/inbox' }}"> aria-current="page"
+    </check>><i class="glyph glyph-inbox" aria-hidden="true"></i><span>Inbox</span></a><a href="/tags" <check
+      if="{{ str_starts_with(@currentPath,'/tags') }}"> aria-current="page"</check>><i class="glyph glyph-tag"
+        aria-hidden="true"></i><span>Tags</span></a><a href="/lists" <check
+      if="{{ str_starts_with(@currentPath,'/lists') }}"> aria-current="page"</check>><i class="glyph glyph-list"
+        aria-hidden="true"></i><span>Lists</span></a></nav>
+    </check>
   </div>
   <footer class="site-footer<check if=" {{ @isComingSoon }}"> site-footer-coming-soon</check>"<check
       if="{{ @isShareTarget }}"> hidden</check>><span>&copy; {{ @year }} by <a href="https://sorkos.net"
@@ -98,7 +107,8 @@
   <include if="{{ @enableListDialog }}" href="captures/_list_dialog.html" />
   <include if="{{ @enableTagDialog }}" href="captures/_tag_dialog.html" />
   <include if="{{ @enableLaterDialog }}" href="captures/_later_dialog.html" />
-  <script type="module" src="/assets/js/app.js?v=41"></script>
+  <include if="{{ @enableMoveDialog }}" href="captures/_move_dialog.html" />
+  <script type="module" src="/assets/js/app.js?v=43"></script>
   <check if="{{ @isShareTarget }}">
     <script type="module" src="/assets/js/share-target.js?v=3"></script>
   </check>

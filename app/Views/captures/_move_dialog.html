@@ -1,0 +1,15 @@
+<dialog class="confirm-dialog move-dialog" data-move-dialog aria-labelledby="move-dialog-title"
+  aria-describedby="move-dialog-description">
+  <form method="dialog"><input type="hidden" name="_csrf" value="{{ @csrf }}" data-move-csrf>
+    <h2 id="move-dialog-title" data-move-title>Move capture</h2>
+    <p id="move-dialog-description">Choose a destination.</p>
+    <div class="move-targets"><button type="button" data-move-target="archive"><i class="glyph glyph-archive"
+          aria-hidden="true"></i><span><strong>Archive</strong><small data-current-archive hidden>Current
+            destination</small></span></button><button type="button" data-move-target="trash"><i
+          class="glyph glyph-trash" aria-hidden="true"></i><span><strong>Trash</strong><small>Recoverable for 30
+            days</small></span></button></div>
+    <p class="move-status" data-move-status-message role="status" aria-live="polite"></p>
+    <div class="confirm-dialog-actions"><button class="button button-secondary" type="button"
+        data-close-move-dialog>Cancel</button></div>
+  </form>
+</dialog>

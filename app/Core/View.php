@@ -65,6 +65,7 @@ final class View
             'tag' => null,'tags' => [],'lists' => [],'settingsTab' => 'general','login' => '','appUrl' => '',
             'bulkFormId' => '','debugRequestHeading' => 'Incoming capture requests','debugRequestCard' => false,
             'isShareTarget' => false,'captureUrl' => '','shareError' => '','enableLaterDialog' => false,
+            'enableMoveDialog' => false,
         ];
         $data['currentPath'] = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
         $data['isAuthenticated'] = is_array($data['user']);

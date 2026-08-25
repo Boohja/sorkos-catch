@@ -1,7 +1,13 @@
 .site-shell {
   min-height: 100dvh;
   display: flex;
-  flex-direction: column
+  flex-direction: column;
+  max-width: 100%;
+  overflow-x: clip
+}
+
+.mobile-tab-bar {
+  display: none
 }
 
 .site-footer {
@@ -198,8 +204,72 @@
 }
 
 @media(max-width:760px) {
+  :root {
+    --mobile-tab-bar-height: 68px;
+    --mobile-nav-offset: calc(var(--mobile-tab-bar-height) + env(safe-area-inset-bottom))
+  }
+
+  body[data-mobile-nav-hidden=true] {
+    --mobile-nav-offset: 0px
+  }
+
   .brand-nav img {
     width: 88px
+  }
+
+  .mobile-tab-bar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 10;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-height: calc(var(--mobile-tab-bar-height) + env(safe-area-inset-bottom));
+    padding: 5px max(10px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(10px, env(safe-area-inset-left));
+    border-top: 1px solid #303036;
+    background: #18181b;
+    box-shadow: 0 -8px 24px rgb(0 0 0/.16);
+    transform: translateY(0);
+    transition: transform .22s cubic-bezier(.22, 1, .36, 1), opacity .16s ease
+  }
+
+  body[data-mobile-nav-hidden=true] .mobile-tab-bar {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(100%)
+  }
+
+  .mobile-tab-bar a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    min-height: 58px;
+    border-radius: 10px;
+    color: #a1a1aa;
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent
+  }
+
+  .mobile-tab-bar a[aria-current=page] {
+    color: #fbbf24
+  }
+
+  .mobile-tab-bar a:active {
+    background: #27272a
+  }
+
+  .mobile-tab-bar a:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--focus) 60%, transparent);
+    outline-offset: -3px
+  }
+
+  .mobile-tab-bar .glyph {
+    font-size: 20px
   }
 
   .site-footer {
@@ -212,5 +282,11 @@
 
   .setup-brand {
     min-height: 220px
+  }
+}
+
+@media(max-width:760px) and (prefers-reduced-motion:reduce) {
+  .mobile-tab-bar {
+    transition: none
   }
 }

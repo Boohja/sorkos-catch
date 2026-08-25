@@ -489,22 +489,7 @@
 }
 
 .capture-detail-heading {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 14px;
-  align-items: start
-}
-
-.capture-detail-icon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  margin-top: 10px;
-  border-radius: 10px;
-  background: var(--surface-muted);
-  color: var(--muted);
-  font-size: 20px
+  display: block
 }
 
 .capture-heading-meta {
@@ -691,6 +676,44 @@
 }
 
 @media(max-width:560px) {
+  .app-main:has(.detail-actions) {
+    padding-bottom: calc(164px + env(safe-area-inset-bottom))
+  }
+
+  .detail .detail-actions {
+    position: fixed;
+    right: 14px;
+    bottom: calc(var(--mobile-nav-offset, env(safe-area-inset-bottom)) + 10px);
+    left: 14px;
+    z-index: 4;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 9px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: 0 10px 30px rgb(24 24 27/.14);
+    scrollbar-width: none;
+    transition: bottom .22s cubic-bezier(.22, 1, .36, 1)
+  }
+
+  .detail .detail-actions::-webkit-scrollbar {
+    display: none
+  }
+
+  .detail .detail-actions form {
+    flex: 0 0 auto;
+    margin: 0
+  }
+
+  .detail .detail-actions .button {
+    min-height: 44px;
+    padding-inline: 12px;
+    white-space: nowrap
+  }
+
   .capture-row {
     gap: 8px
   }
@@ -744,6 +767,12 @@
 
   .link-preview>.url-card-open {
     margin-right: 14px
+  }
+}
+
+@media(max-width:560px) and (prefers-reduced-motion:reduce) {
+  .detail .detail-actions {
+    transition: none
   }
 }
 

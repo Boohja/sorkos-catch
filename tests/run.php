@@ -425,8 +425,8 @@ $test('Inbox bulk delete is confirmed and permanently removes related data', fun
             throw new RuntimeException('Bulk visibility or confirmation behavior is missing ' . $required);
         }
     }$compactStyle = preg_replace('/\s+/', '', $style);
-    if (!str_contains($compactStyle, 'position:sticky') || !str_contains($compactStyle, 'justify-content:flex-end')) {
-        throw new RuntimeException('Bulk action bar is not sticky and right aligned');
+    if (!str_contains($compactStyle, 'position:fixed') || !str_contains($compactStyle, 'justify-content:flex-end')) {
+        throw new RuntimeException('Bulk action bar is not fixed and right aligned');
     }
 });
 $test('Lists group captures many-to-many and appear in capture details', function () use ($root) {
@@ -809,9 +809,9 @@ $test('Requested interface icons and danger outline are used consistently', func
     $views = '';
     foreach (glob($root . '/app/Views/*/*.html') as $path) {
         $views .= (string)file_get_contents($path);
-    }foreach (['glyph-capture','glyph-list','glyph-archive','glyph-trash'] as $required) {
+    }foreach (['glyph-list','glyph-move'] as $required) {
         if (!str_contains($capture, $required)) {
-            throw new RuntimeException('Capture detail icon is missing: ' . $required);
+            throw new RuntimeException('Capture detail action icon is missing: ' . $required);
         }
     }foreach (['glyph-inbox','glyph-archive','glyph-trash'] as $required) {
         if (!str_contains($inbox, $required)) {
@@ -982,6 +982,8 @@ $test('Capture menus and bulk actions share list assignment controls', function 
     $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.html');
     $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.html');
     $dialog = (string) file_get_contents($root . '/app/Views/captures/_list_dialog.html');
+    $moveDialog = (string) file_get_contents($root . '/app/Views/captures/_move_dialog.html');
+    $moveScript = (string) file_get_contents($root . '/public/assets/js/capture-move.js');
     $bulk = (string) file_get_contents($root . '/app/Views/captures/index.html');
 
     foreach (['POST /captures/bulk-archive', 'POST /captures/bulk-lists'] as $required) {
@@ -993,8 +995,13 @@ $test('Capture menus and bulk actions share list assignment controls', function 
         throw new RuntimeException('Bulk archive or list assignment persistence is missing');
     }
     foreach (['data-capture-actions', 'data-capture-action-menu', 'data-list-dialog', 'data-open-bulk-lists', 'glyph-archive', 'glyph-trash'] as $required) {
-        if (!str_contains($collection . $collectionItem . $menu . $dialog . $bulk, $required)) {
+        if (!str_contains($collection . $collectionItem . $menu . $dialog . $moveDialog . $bulk, $required)) {
             throw new RuntimeException('Capture action interface is missing ' . $required);
+        }
+    }
+    foreach (['data-move-target="archive"', 'data-move-target="trash"', 'glyph-move', 'openMoveDialog'] as $required) {
+        if (!str_contains($moveDialog . $moveScript . $bulk, $required)) {
+            throw new RuntimeException('Move destination interface is missing ' . $required);
         }
     }
 });

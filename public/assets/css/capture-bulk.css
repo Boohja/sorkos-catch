@@ -1,5 +1,6 @@
 .bulk-actions {
-  position: sticky;
+  position: fixed;
+  right: max(20px, calc((100vw - 980px)/2));
   bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 2;
   display: flex;
@@ -8,7 +9,7 @@
   gap: 14px;
   width: max-content;
   max-width: 100%;
-  margin: 18px 0 0 auto;
+  margin: 0;
   padding: 10px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -94,6 +95,78 @@
   margin-top: 24px
 }
 
+.move-targets {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px
+}
+
+.move-targets button {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer
+}
+
+.move-targets button:hover,
+.move-targets button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: var(--surface-muted);
+  outline: 0
+}
+
+.move-targets button:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 38%, transparent)
+}
+
+.move-targets button:disabled {
+  cursor: default;
+  opacity: .52
+}
+
+.move-targets .glyph {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 18px
+}
+
+.move-targets button>span {
+  display: grid;
+  gap: 2px
+}
+
+.move-targets strong {
+  font-size: 15px
+}
+
+.move-targets small {
+  color: var(--muted);
+  font-size: 12px
+}
+
+.move-status {
+  min-height: 1.4em;
+  margin-top: 10px !important;
+  font-size: 13px
+}
+
+.move-status.is-error {
+  color: var(--danger)
+}
+
 .later-options {
   display: grid;
   gap: 2px;
@@ -160,12 +233,17 @@
 
 @media(max-width:560px) {
   .bulk-actions {
-    right: auto;
-    bottom: max(10px, env(safe-area-inset-bottom));
-    width: 100%;
+    position: fixed;
+    right: 14px;
+    bottom: calc(var(--mobile-nav-offset, env(safe-area-inset-bottom)) + 10px);
+    left: 14px;
+    z-index: 5;
+    width: auto;
+    margin: 0;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 8px
+    gap: 8px;
+    transition: bottom .22s cubic-bezier(.22, 1, .36, 1)
   }
 
   .bulk-selection-count {
@@ -199,5 +277,11 @@
     flex-basis: 100%;
     width: 100%;
     margin-left: 27px;
+  }
+}
+
+@media(max-width:560px) and (prefers-reduced-motion:reduce) {
+  .bulk-actions {
+    transition: none
   }
 }

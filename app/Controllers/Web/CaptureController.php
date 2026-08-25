@@ -136,6 +136,7 @@ final class CaptureController
             'enableListDialog' => $status !== 'trash',
             'enableCaptureActionMenu' => $status !== 'trash',
             'enableLaterDialog' => $status === 'inbox',
+            'enableMoveDialog' => $status !== 'trash',
             'csrf' => $this->csrf->token(),
         ]);
     }
@@ -223,6 +224,7 @@ final class CaptureController
             'enableListDialog' => empty($capture['deleted_at']),
             'enableTagDialog' => empty($capture['deleted_at']),
             'enableLaterDialog' => empty($capture['deleted_at']) && $capture['status'] === 'inbox',
+            'enableMoveDialog' => empty($capture['deleted_at']),
             'debugEnabled' => $this->debug->enabled(),
             'debugRequests' => $this->debug->forCapture($user['id'], $capture['id']),
             'csrf' => $this->csrf->token(),

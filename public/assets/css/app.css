@@ -66,12 +66,16 @@
 
 html {
   background: var(--bg);
-  color: var(--text)
+  color: var(--text);
+  max-width: 100%;
+  overflow-x: hidden
 }
 
 body {
   margin: 0;
   min-height: 100dvh;
+  max-width: 100%;
+  overflow-x: hidden;
   background: var(--bg);
   font-size: 15px;
   line-height: 1.5
@@ -783,18 +787,13 @@ details summary {
 
 @media(max-width:760px) {
   .app-header {
+    position: static;
     padding: 0 16px;
     gap: 14px
   }
 
-  .app-header nav a {
+  .app-header>nav {
     display: none
-  }
-
-  .app-header nav a[aria-current=page] {
-    display: block;
-    background: transparent;
-    padding: 8px 0
   }
 
   .header-actions .button-quiet {
@@ -813,7 +812,7 @@ details summary {
 
   .app-main {
     width: min(100% - 28px, 980px);
-    padding-top: 28px
+    padding: 28px 0 calc(94px + env(safe-area-inset-bottom))
   }
 
   .page-heading {

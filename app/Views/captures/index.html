@@ -37,13 +37,15 @@
     value="{{ @csrf }}"><input type="hidden" name="view" value="{{ @status }}"><span class="bulk-selection-count"
     data-bulk-count role="status" aria-live="polite"></span>
   <check if="{{ !@permanent }}"><button class="button button-secondary" type="button" data-open-bulk-lists><i
-        class="glyph glyph-list" aria-hidden="true"></i>Add to list</button></check>
+        class="glyph glyph-list" aria-hidden="true"></i>List</button></check>
   <check if="{{ @status=='inbox' }}"><button class="button button-secondary" type="button" data-open-bulk-later><i
         class="glyph glyph-resubmission" aria-hidden="true"></i>Later</button></check>
-  <check if="{{ @status=='inbox' }}"><button class="button button-secondary" type="submit"
-      formaction="/captures/bulk-archive"><i class="glyph glyph-archive" aria-hidden="true"></i>Archive</button></check>
-  <button class="button button-danger-outline" type="button" data-open-bulk-delete><i class="glyph glyph-trash"
-      aria-hidden="true"></i>{{ @permanent ? 'Delete permanently' : 'Move to Trash' }}</button>
+  <check if="{{ @permanent }}">
+    <true><button class="button button-danger-outline" type="button" data-open-bulk-delete><i class="glyph glyph-trash"
+          aria-hidden="true"></i>Delete permanently</button></true>
+    <false><button class="button button-secondary" type="button" data-open-bulk-move data-move-status="{{ @status }}"><i
+          class="glyph glyph-move" aria-hidden="true"></i>Move</button></false>
+  </check>
 </form>
 <dialog class="confirm-dialog" data-bulk-delete-dialog aria-labelledby="bulk-delete-title"
   aria-describedby="bulk-delete-description">
