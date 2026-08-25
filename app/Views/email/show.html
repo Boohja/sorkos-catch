@@ -1,0 +1,39 @@
+<a class="back-link" href="/settings/email">&larr; All email addresses</a>
+<header class="email-detail-heading">
+  <div>
+    <h1>{{ @emailInbox.name }}</h1>
+    <include href="email/_form.html" />
+  </div>
+  <span class="email-inbox-status<check if="{{ @emailInbox.active }}"> is-active</check>"><span
+      aria-hidden="true"></span>{{ @emailInbox.active ? 'Active' : 'Revoked' }}</span>
+</header>
+<div class="email-detail-actions">
+  <check if="{{ @emailInbox.active }}"><form method="post" action="{{ @emailInboxUrl }}/revoke"
+      onsubmit="return confirm('Revoke this email address? New messages sent to it will no longer be captured.')"><input
+        type="hidden" name="_csrf" value="{{ @csrf }}"><button class="button button-danger-outline" type="submit"><i
+          class="glyph glyph-trash" aria-hidden="true"></i>Revoke</button></form></check>
+  <a class="button button-secondary" href="{{ @emailInboxUrl }}/vcard" download><i class="glyph glyph-vcard"
+      aria-hidden="true"></i>vCard</a>
+</div>
+<section class="email-contact-qr">
+  <div>
+    <h2>Add on your phone</h2>
+    <p>Scan to add this address as a contact. The QR code omits the contact image so it stays quick to scan.</p>
+  </div>
+  <div class="email-contact-qr-code" data-qr-code data-qr-base64="{{ @emailQrVcard }}"
+    data-qr-alt="QR code for adding {{ @emailInbox.name }} as a contact"
+    aria-label="QR code for adding {{ @emailInbox.name }} as a contact"></div>
+</section>
+<section class="email-captures">
+  <header>
+    <h2>Captures from this address</h2>
+    <p>{{ count(@captures) }} {{ count(@captures)===1 ? 'capture' : 'captures' }}</p>
+  </header>
+  <set captureCollectionVariant="compact" />
+  <set captureShowActions="{{ false }}" />
+  <set captureShowViewToggle="{{ false }}" />
+  <set captureEmptyTitle="No captures yet" />
+  <set captureEmptyText="Emails sent to this address will appear here after they are processed." />
+  <include href="captures/_list.html" />
+</section>
+<script src="/assets/vendor/qrcode.js"></script>

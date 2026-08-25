@@ -26,8 +26,7 @@
             <h2>Email addresses</h2>
             <p>Forward an email to a private address to create a Catch.</p>
           </div>
-          <form method="post" action="/settings/email"><input type="hidden" name="_csrf" value="{{ @csrf }}"><button
-              class="button button-primary" type="submit">Create address</button></form>
+          <a class="button button-primary" href="/settings/email/new">Create address</a>
         </header>
         <check if="{{ !@emailInboxes }}">
           <true>
@@ -37,21 +36,17 @@
             </section>
           </true>
           <false>
-            <div class="email-inboxes" role="list">
+            <div class="email-inboxes" role="table" aria-label="Email addresses">
               <repeat group="{{ @emailInboxes }}" value="{{ @inbox }}">
-                <article class="email-inbox-row" role="listitem">
-                  <div class="email-inbox-main">
-                    <div class="email-address-row" data-copy-row><code data-copy-source>{{ @inbox.address }}</code>
-                      <check if="{{ @inbox.active }}"><button class="button button-secondary" type="button"
-                          data-copy-button>Copy</button></check>
-                    </div><small>Created {{ @inbox.created_at }}</small>
-                  </div><span class="email-inbox-status<check if=" {{ @inbox.active }}"> is-active
-        </check>">{{ @inbox.active ? 'Active' : 'Revoked' }}</span>
-        <check if="{{ @inbox.active }}">
-          <form method="post" action="/settings/email/{{ @inbox.id }}/revoke"><input type="hidden" name="_csrf"
-              value="{{ @csrf }}"><button class="button button-secondary" type="submit">Revoke</button></form>
-        </check>
-        </article>
+                <a class="email-inbox-row" role="row" href="{{ @inbox.url }}"><span class="email-inbox-icon"
+                    role="cell" aria-label="Email inbox"><i class="glyph glyph-mail" aria-hidden="true"></i></span><span
+                    class="email-inbox-main" role="cell"><strong>{{ @inbox.name }}</strong><code>{{ @inbox.address }}</code></span><span
+                    class="email-inbox-count" role="cell">{{ (int)@inbox.capture_count }}
+                    {{ (int)@inbox.capture_count===1 ? 'capture' : 'captures' }}</span><span class="email-inbox-date"
+                    role="cell">Last used: <check if="{{ @inbox.last_used_at }}"><true><time
+                        datetime="{{ @inbox.view.utcLastUsedAt }}" data-relative-time data-relative-suffix=" ago">{{ @inbox.view.relativeLastUsedAt }} ago</time></true><false>not yet</false></check></span><span
+                    class="email-inbox-status<check if="{{ @inbox.active }}"> is-active</check>" role="cell"><span
+                      aria-hidden="true"></span>{{ @inbox.active ? 'Active' : 'Revoked' }}</span></a>
         </repeat>
         </div>
   </false>

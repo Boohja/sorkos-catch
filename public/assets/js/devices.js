@@ -108,8 +108,10 @@ export function initDevices(){
 
   const qrTarget=document.querySelector('[data-qr-code]');
   if(qrTarget&&typeof globalThis.qrcode==='function'){
-    const qr=globalThis.qrcode(0,'M');qr.addData(qrTarget.dataset.qrValue);qr.make();
-    qrTarget.innerHTML=qr.createSvgTag({cellSize:5,margin:0,scalable:true,alt:'QR code for the Catch Setup shortcut'});
+    const value=qrTarget.dataset.qrBase64?atob(qrTarget.dataset.qrBase64):qrTarget.dataset.qrValue;
+    const alt=qrTarget.dataset.qrAlt||qrTarget.getAttribute('aria-label')||'QR code';
+    const qr=globalThis.qrcode(0,'M');qr.addData(value);qr.make();
+    qrTarget.innerHTML=qr.createSvgTag({cellSize:5,margin:0,scalable:true,alt});
   }
 
   const pairing=document.querySelector('[data-device-status-url][data-polling="true"]');

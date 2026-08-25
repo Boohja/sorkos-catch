@@ -762,7 +762,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v38','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v43','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }
@@ -1348,16 +1348,28 @@ $test('Email inbox addresses are compact and stored for repeated use', function 
         CREATE TABLE catch_email_inboxes (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
+            name TEXT NOT NULL,
             address TEXT NOT NULL UNIQUE,
             created_at TEXT NOT NULL,
             revoked_at TEXT NULL
         )
         SQL);
+    $database->exec(<<<'SQL'
+        CREATE TABLE catch_email_imports (
+            id TEXT PRIMARY KEY,
+            inbox_id TEXT NOT NULL,
+            capture_id TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        SQL);
     $repository = new Catch\Repositories\EmailInboxRepository($database, Catch\Core\Config::load($root));
-    $first = $repository->create('user-1');
+    $first = $repository->create('user-1', 'Receipts');
     $second = $repository->create('user-1');
     if (!preg_match('/^ibx-[a-z2-7]{16}@catch\.sorkos\.net$/', $first['address']) || $first['address'] === $second['address']) {
         throw new RuntimeException('Inbox addresses do not contain independent 80-bit Base32 tokens');
+    }
+    if (($first['name'] ?? null) !== 'Receipts' || ($second['name'] ?? null) !== 'Catch Mail') {
+        throw new RuntimeException('Inbox names are not stored or defaulted correctly');
     }
     $storedQuery = $database->prepare('SELECT address FROM catch_email_inboxes WHERE id=:id');
     $storedQuery->execute(['id' => $first['id']]);
@@ -1384,7 +1396,8 @@ $test('Email inbox addresses are compact and stored for repeated use', function 
 });
 $test('Email importer remains folder-scoped and cron-safe', function () use ($root) {
     $migration = (string) file_get_contents($root . '/database/migrations/014_email_inboxes.sql')
-        . (string) file_get_contents($root . '/database/migrations/015_email_inbox_raw_addresses.sql');
+        . (string) file_get_contents($root . '/database/migrations/015_email_inbox_raw_addresses.sql')
+        . (string) file_get_contents($root . '/database/migrations/017_email_inbox_names.sql');
     $importer = (string) file_get_contents($root . '/app/Services/EmailImporter.php');
     $runner = (string) file_get_contents($root . '/app/Services/EmailImportRunner.php');
     $cron = (string) file_get_contents($root . '/app/Controllers/Technical/EmailImportController.php');
@@ -1394,7 +1407,8 @@ $test('Email importer remains folder-scoped and cron-safe', function () use ($ro
     $cli = (string) file_get_contents($root . '/cli/import-mail.php');
     $settings = (string) file_get_contents($root . '/app/Views/account/settings.html');
     $account = (string) file_get_contents($root . '/app/Controllers/Web/AccountController.php');
-    foreach (['catch_email_inboxes', 'address VARCHAR(254)', 'catch_email_imports', 'message_key_hash'] as $required) {
+    $captureRepository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    foreach (['catch_email_inboxes', 'address VARCHAR(254)', 'name VARCHAR(120)', 'catch_email_imports', 'message_key_hash'] as $required) {
         if (!str_contains($migration, $required)) {
             throw new RuntimeException('Email migration is missing ' . $required);
         }
@@ -1433,8 +1447,10 @@ $test('Email importer remains folder-scoped and cron-safe', function () use ($ro
     if (!str_contains($cli, 'EmailImportRunner')) {
         throw new RuntimeException('CLI and HTTP imports do not share the runner lock');
     }
-    foreach (['email-address-row', 'data-copy-row', '@inbox.address', 'EmailInboxRepository'] as $required) {
-        if (!str_contains($settings . $account . $cli, $required)) {
+    $emailDetail = (string) file_get_contents($root . '/app/Views/email/show.html');
+    $emailForm = (string) file_get_contents($root . '/app/Views/email/_form.html');
+    foreach (['email-inbox-row', 'data-copy-row', '@inbox.address', 'EmailInboxRepository', 'glyph-mail', 'glyph-vcard', 'listByEmailInbox', 'BEGIN:VCARD', 'PHOTO;ENCODING=b;TYPE=PNG:', "'URL:'", 'emailQrVcard', 'data-qr-base64'] as $required) {
+        if (!str_contains($settings . $emailDetail . $emailForm . $account . $cli . $application . $captureRepository, $required)) {
             throw new RuntimeException('Reusable email address UX is missing ' . $required);
         }
     }

@@ -96,6 +96,8 @@ final class Application
             $auth,
             $devices,
             new EmailInboxRepository($pdo, $config),
+            $captures,
+            $config,
             $csrf,
         );
         $comingSoon = new ComingSoonController($view, $auth, $csrf);
@@ -137,7 +139,11 @@ final class Application
         $f3->route('GET /settings', [$accountController, 'settings']);
         $f3->route('GET /settings/devices', [$accountController, 'devices']);
         $f3->route('GET /settings/email', [$accountController, 'email']);
+        $f3->route('GET /settings/email/new', [$accountController, 'newEmail']);
         $f3->route('POST /settings/email', [$accountController, 'createEmail']);
+        $f3->route('GET /settings/email/@inbox', [$accountController, 'showEmail']);
+        $f3->route('POST /settings/email/@inbox/name', [$accountController, 'renameEmail']);
+        $f3->route('GET /settings/email/@inbox/vcard', [$accountController, 'emailVcard']);
         $f3->route('POST /settings/email/@inbox/revoke', [$accountController, 'revokeEmail']);
         $f3->route('GET /inbox', [$web,'index']);
         $f3->route('GET /archive', [$web,'archiveIndex']);

@@ -16,19 +16,21 @@ final class EmailInboxRepository
     ) {
     }
 
-    public function create(string $userId): array
+    public function create(string $userId, string $name = 'Catch Mail'): array
     {
+        $name = $this->name($name);
         $id = Id::uuid();
         $token = $this->base32(random_bytes(10));
         $domain = mb_strtolower(trim((string) $this->config->get('mail.address_domain', 'catch.sorkos.net')));
         $address = 'ibx-' . $token . '@' . $domain;
         $query = $this->db->prepare(
-            'INSERT INTO catch_email_inboxes (id,user_id,address,created_at) '
-            . 'VALUES (:id,:user,:address,UTC_TIMESTAMP(6))',
+            'INSERT INTO catch_email_inboxes (id,user_id,name,address,created_at) '
+            . 'VALUES (:id,:user,:name,:address,UTC_TIMESTAMP(6))',
         );
         $query->execute([
             'id' => $id,
             'user' => $userId,
+            'name' => $name,
             'address' => $address,
         ]);
 
@@ -49,7 +51,10 @@ final class EmailInboxRepository
     public function all(string $userId): array
     {
         $query = $this->db->prepare(
-            'SELECT id,address,created_at,revoked_at FROM catch_email_inboxes '
+            'SELECT i.id,i.name,i.address,i.created_at,i.revoked_at,'
+            . '(SELECT COUNT(*) FROM catch_email_imports e WHERE e.inbox_id=i.id) capture_count,'
+            . '(SELECT MAX(e.created_at) FROM catch_email_imports e WHERE e.inbox_id=i.id) last_used_at '
+            . 'FROM catch_email_inboxes i '
             . 'WHERE user_id=:user ORDER BY created_at DESC',
         );
         $query->execute(['user' => $userId]);
@@ -66,14 +71,42 @@ final class EmailInboxRepository
         $query->execute(['id' => $id, 'user' => $userId]);
     }
 
+    public function find(string $id, string $userId): ?array
+    {
+        $inbox = $this->findOwned($id, $userId);
+
+        return $inbox ?: null;
+    }
+
+    public function rename(string $id, string $userId, string $name): void
+    {
+        $query = $this->db->prepare(
+            'UPDATE catch_email_inboxes SET name=:name WHERE id=:id AND user_id=:user',
+        );
+        $query->execute(['id' => $id, 'user' => $userId, 'name' => $this->name($name)]);
+    }
+
     private function findOwned(string $id, string $userId): array
     {
         $query = $this->db->prepare(
-            'SELECT id,address,created_at,revoked_at FROM catch_email_inboxes WHERE id=:id AND user_id=:user LIMIT 1',
+            'SELECT i.id,i.name,i.address,i.created_at,i.revoked_at,'
+            . '(SELECT COUNT(*) FROM catch_email_imports e WHERE e.inbox_id=i.id) capture_count,'
+            . '(SELECT MAX(e.created_at) FROM catch_email_imports e WHERE e.inbox_id=i.id) last_used_at '
+            . 'FROM catch_email_inboxes i WHERE i.id=:id AND i.user_id=:user LIMIT 1',
         );
         $query->execute(['id' => $id, 'user' => $userId]);
 
         return $query->fetch() ?: [];
+    }
+
+    private function name(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new \InvalidArgumentException('Email inbox name cannot be empty.');
+        }
+
+        return mb_substr($name, 0, 120);
     }
 
     private function base32(string $bytes): string

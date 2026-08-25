@@ -171,6 +171,36 @@ final class CaptureRepository
         return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
     }
 
+    public function listByEmailInbox(string $userId, string $inboxId, int $limit = 200): array
+    {
+        $limit = max(1, min($limit, 500));
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
+                (SELECT a.id FROM catch_attachments a
+                    WHERE a.capture_id = c.id
+                        AND a.mime_type LIKE 'image/%'
+                        AND a.kind IN ('preview', 'source')
+                    ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
+                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
+                    FROM catch_capture_lists cl
+                    WHERE cl.capture_id = c.id) assigned_list_ids
+            FROM catch_email_imports e
+            JOIN catch_email_inboxes i ON i.id = e.inbox_id
+            JOIN catch_captures c ON c.id = e.capture_id
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE i.user_id = :user
+                AND i.id = :inbox
+            ORDER BY e.created_at DESC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId, 'inbox' => $inboxId]);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
+    }
+
     public function find(string $id, string $userId): ?array
     {
         $sql = <<<'SQL'

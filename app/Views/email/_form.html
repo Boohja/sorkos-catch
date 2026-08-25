@@ -1,0 +1,18 @@
+<form class="email-name-form" method="post" action="{{ @emailFormAction }}">
+  <input type="hidden" name="_csrf" value="{{ @csrf }}">
+  <div class="email-form-group">
+    <label for="email-name"><strong>Label</strong><small id="email-label-help">How this inbox will appear in Catch and
+        your address book.</small></label>
+    <div class="email-form-control-row"><input id="email-name" name="name" maxlength="120" required
+        value="{{ @emailFormName }}" aria-describedby="email-label-help<check if="{{ @emailFormError }}"> email-name-error</check>"><button
+        class="button button-primary" type="submit">{{ @emailFormSubmit }}</button></div>
+    <check if="{{ @emailFormError }}"><p class="form-error" id="email-name-error" role="alert">{{ @emailFormError }}</p></check>
+  </div>
+  <div class="email-form-group">
+    <label for="email-address"><strong>Address</strong><small id="email-address-help">{{ @emailFormEditing ? 'Emails sent to this address will be processed by Catch' : 'Your address will be randomly generated' }}</small></label>
+    <div class="email-form-control-row email-form-control-address"<check if="{{ @emailFormEditing }}"> data-copy-row</check>><input
+        id="email-address" class="email-address-input" readonly value="{{ @emailFormAddress }}"
+        aria-describedby="email-address-help"<check if="{{ @emailFormEditing }}"> data-copy-source</check>><check
+        if="{{ @emailFormEditing }}"><button class="button button-secondary" type="button" data-copy-button>Copy</button></check></div>
+  </div>
+</form>

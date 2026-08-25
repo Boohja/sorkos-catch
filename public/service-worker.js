@@ -1,4 +1,4 @@
-const CACHE = 'catch-shell-v38';
+const CACHE = 'catch-shell-v43';
 const SHELL = [
   '/offline.html',
   '/manifest.webmanifest',
@@ -16,11 +16,11 @@ const SHELL = [
   '/assets/css/pair.css?v=1',
   '/assets/css/coming-soon.css?v=2',
   '/assets/css/shell.css?v=3',
-  '/assets/css/account.css?v=2',
+  '/assets/css/account.css?v=6',
   '/assets/css/layout-compat.css?v=1',
   '/assets/css/share-target.css?v=1',
-  '/assets/js/app.js?v=41',
-  '/assets/js/devices.js?v=6',
+  '/assets/js/app.js?v=45',
+  '/assets/js/devices.js?v=7',
   '/assets/js/theme.js?v=2',
   '/assets/js/user-menu.js?v=2',
   '/assets/js/capture-view.js?v=3',

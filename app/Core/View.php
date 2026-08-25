@@ -58,7 +58,7 @@ final class View
         $data += [
             'title' => 'Catch','user' => null,'configured' => false,'csrf' => '','status' => '',
             'captures' => [],'capture' => null,'devices' => [],'device' => null,
-            'availableLists' => [],'availableTags' => [],'emailInboxes' => [],
+            'availableLists' => [],'availableTags' => [],'emailInboxes' => [],'emailInbox' => null,
             'debugRequests' => [],'debugEnabled' => false,'enableCaptureActionMenu' => false,
             'enableListDialog' => false,'enableTagDialog' => false,'error' => null,
             'connected' => false,'request' => null,'pairing' => null,'list' => null,
@@ -91,10 +91,10 @@ final class View
         if (is_array($data['device'])) {
             $data['device'] = $this->prepareDevice($data['device']);
         }
-        $data['emailInboxes'] = array_map(static function (array $inbox): array {
-            $inbox['active'] = empty($inbox['revoked_at']);
-            return $inbox;
-        }, $data['emailInboxes']);
+        $data['emailInboxes'] = array_map($this->prepareEmailInbox(...), $data['emailInboxes']);
+        if (is_array($data['emailInbox'])) {
+            $data['emailInbox'] = $this->prepareEmailInbox($data['emailInbox']);
+        }
 
         $data['captures'] = array_map($this->prepareCapture(...), $data['captures']);
         if (is_array($data['capture'])) {
@@ -140,6 +140,17 @@ final class View
             'relativeLastSeenAt' => $this->relativeTime($device['last_seen_at'] ?? null),
         ];
         return $device;
+    }
+
+    private function prepareEmailInbox(array $inbox): array
+    {
+        $inbox['active'] = empty($inbox['revoked_at']);
+        $inbox['view'] = [
+            'utcLastUsedAt' => $this->utc((string) ($inbox['last_used_at'] ?? '')),
+            'relativeLastUsedAt' => $this->relativeTime($inbox['last_used_at'] ?? null),
+        ];
+
+        return $inbox;
     }
 
     private function prepareCapture(array $capture, bool $detail = false): array

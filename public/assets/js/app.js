@@ -2,7 +2,7 @@ import { initTheme } from './theme.js?v=2';
 import { onSync, syncOutbox } from './sync-manager.js?v=2';
 import { initRequestProgress } from './request-progress.js?v=1';
 import { initCaptureEditing } from './capture-edit.js?v=6';
-import { initDevices } from './devices.js?v=6';
+import { initDevices } from './devices.js?v=7';
 import { initCaptureTags } from './capture-tags.js?v=4';
 import { initCaptureLists } from './capture-lists.js?v=9';
 import { initCaptureBulk } from './capture-bulk.js?v=7';
@@ -138,7 +138,8 @@ document.querySelectorAll('[data-copy-button]').forEach((button) => {
   button.addEventListener('click', async (event) => {
     const trigger = event.currentTarget;
     const row = trigger.closest('[data-copy-row],.pairing-code-row');
-    const value = row?.querySelector('[data-copy-source]')?.textContent?.trim();
+    const source = row?.querySelector('[data-copy-source]');
+    const value = source?.value?.trim() || source?.textContent?.trim();
     if (!value) return;
 
     await navigator.clipboard.writeText(value);
