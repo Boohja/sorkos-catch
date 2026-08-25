@@ -155,6 +155,7 @@ final class Application
         $f3->route('POST /captures/bulk-archive', [$web,'bulkArchive']);
         $f3->route('POST /captures/bulk-later', [$web,'bulkLater']);
         $f3->route('POST /captures/bulk-lists', [$listController,'bulkAssign']);
+        $f3->route('GET /captures/poll', [$web, 'poll']);
         $f3->route('GET /captures/@id', [$web,'show']);
         $f3->route('POST /captures/@id', [$web,'update']);
         $f3->route('POST /captures/@id/preview', [$web, 'preview']);

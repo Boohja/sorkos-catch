@@ -8,7 +8,8 @@
 <section class="capture-collection capture-collection-{{ @captureCollectionVariant }}" aria-label="Captures"
   data-capture-list data-capture-collection data-csrf="{{ @csrf }}" data-collection-status="{{ @status }}"
   data-collection-list-id="{{ @collectionListId }}" data-empty-title="{{ @captureEmptyTitle }}"
-  data-empty-text="{{ @captureEmptyText }}" data-view="list">
+  data-empty-text="{{ @captureEmptyText }}" data-view="list"<check if="{{ @capturePoll }}">
+  data-capture-poll-url="/captures/poll" data-capture-poll-after="{{ (int)@capturePollAfter }}"</check>>
   <check if="{{ !@captures }}">
     <div class="empty-state">
       <h2>{{ @captureEmptyTitle }}</h2>

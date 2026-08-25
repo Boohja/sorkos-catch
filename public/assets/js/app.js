@@ -1,7 +1,7 @@
 import { initTheme } from './theme.js?v=2';
 import { onSync, syncOutbox } from './sync-manager.js?v=2';
 import { initRequestProgress } from './request-progress.js?v=1';
-import { initCaptureEditing } from './capture-edit.js?v=6';
+import { initCaptureEditing } from './capture-edit.js?v=11';
 import { initDevices } from './devices.js?v=7';
 import { initCaptureTags } from './capture-tags.js?v=4';
 import { initCaptureLists } from './capture-lists.js?v=9';
@@ -12,7 +12,7 @@ import { initCaptureActions } from './capture-actions.js?v=2';
 import { initCaptureLater } from './capture-later.js?v=1';
 import { initCapturePreview } from './capture-preview.js?v=2';
 import { initCaptureCreate } from './capture-create.js?v=2';
-import { initCaptureCollection } from './capture-collection.js?v=3';
+import { initCaptureCollection } from './capture-collection.js?v=4';
 import { initUserMenu } from './user-menu.js?v=2';
 import { initMobileNavigation } from './mobile-navigation.js?v=1';
 import { initCaptureMove } from './capture-move.js?v=1';

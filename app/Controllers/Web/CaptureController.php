@@ -137,8 +137,34 @@ final class CaptureController
             'enableCaptureActionMenu' => $status !== 'trash',
             'enableLaterDialog' => $status === 'inbox',
             'enableMoveDialog' => $status !== 'trash',
+            'capturePoll' => $status === 'inbox',
             'csrf' => $this->csrf->token(),
         ]);
+    }
+
+    public function poll(): void
+    {
+        $user = $this->user();
+        $after = filter_input(INPUT_GET, 'after', FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 0],
+        ]);
+        $after = $after === false || $after === null ? 0 : $after;
+        $captures = $this->captures->listNewerInboxCaptures($user['id'], $after);
+        $html = [];
+        foreach ($captures as $capture) {
+            $html[] = $this->view->partial('captures/_item', [
+                'capture' => $capture,
+                'captureCollectionVariant' => 'switchable',
+                'captureShowActions' => true,
+                'bulkFormId' => 'capture-bulk-form',
+                'csrf' => $this->csrf->token(),
+            ]);
+        }
+        $cursor = $captures
+            ? max(array_map(static fn (array $capture): int => (int) $capture['catch_number'], $captures))
+            : $after;
+
+        Response::json(['html' => $html, 'cursor' => $cursor]);
     }
 
     public function create(): void

@@ -762,7 +762,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v43','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v48','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }
@@ -1256,7 +1256,7 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
     }
 
     $editing = (string) file_get_contents($root . '/public/assets/js/capture-edit.js');
-    foreach (['data-markup', 'appendInlineMarkup', 'renderMarkup', "document.createElement('ul')"] as $required) {
+    foreach (['data-markup', 'appendInlineMarkup', 'renderMarkup', 'editableMarkupValue', "document.createElement('ul')"] as $required) {
         if (!str_contains($captureDetail . $editing, $required)) {
             throw new RuntimeException('Safe inline-editable markup is incomplete: ' . $required);
         }
@@ -1335,6 +1335,49 @@ $test('Email recipients and HTML content are normalized safely', function () {
         if (str_contains($text, $unsafe)) {
             throw new RuntimeException('Sanitized email content retained unsafe input: ' . $unsafe);
         }
+    }
+
+    $newsletter = $sanitizer->htmlToText(
+        '<p>Preview&nbsp;&#x2007;&#x034f;&shy;</p>'
+        . '<table><tr><td><strong><a href="https://example.com/mens">MENS</a></strong></td><td></td></tr></table>'
+        . '<a href="https://tracker.test/click"><img src="pixel.gif"></a>',
+    );
+    if (!str_contains($newsletter, '**[MENS](https://example.com/mens)**')) {
+        throw new RuntimeException('Nested newsletter emphasis and links were not preserved');
+    }
+    foreach (["\u{2007}", "\u{034F}", "\u{00AD}", ' | ', '[](https://tracker.test'] as $noise) {
+        if (str_contains($newsletter, $noise)) {
+            throw new RuntimeException('Newsletter layout noise was retained');
+        }
+    }
+});
+
+$test('Email provenance and silent inbox polling are wired through capture details', function () use ($root) {
+    $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
+    $controller = (string) file_get_contents($root . '/app/Controllers/Web/CaptureController.php');
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $detail = (string) file_get_contents($root . '/app/Views/captures/show.html');
+    $collection = (string) file_get_contents($root . '/public/assets/js/capture-collection.js');
+    foreach (['email_inbox_id', 'catch_email_imports', 'email_inbox_address', 'listNewerInboxCaptures'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('Capture source lookup is incomplete: ' . $required);
+        }
+    }
+    foreach (['GET /captures/poll', 'public function poll', 'data-capture-poll-url', 'visibilitychange', '45_000'] as $required) {
+        if (!str_contains($application . $controller . $detail . $collection . (string) file_get_contents($root . '/app/Views/captures/_list.html'), $required)) {
+            throw new RuntimeException('Silent capture polling is incomplete: ' . $required);
+        }
+    }
+    foreach (['@emailInboxId', '@emailInboxName', '@emailInboxAddress', '@emailFromAddress', '/settings/email/'] as $required) {
+        if (!str_contains($detail, $required)) {
+            throw new RuntimeException('Email inbox provenance is missing: ' . $required);
+        }
+    }
+    if (!str_contains((string) file_get_contents($root . '/public/assets/css/capture-detail.css'), '[data-markup]:focus')) {
+        throw new RuntimeException('Raw Markdown editing does not preserve visible line breaks');
+    }
+    if (str_contains((string) file_get_contents($root . '/public/assets/js/capture-edit.js'), 'normalizeEmailMarkup')) {
+        throw new RuntimeException('Email cleanup leaked into the capture display layer');
     }
 });
 $test('Email inbox addresses are compact and stored for repeated use', function () use ($root) {

@@ -384,6 +384,11 @@
   color: var(--muted)
 }
 
+.capture-metadata .metadata-email-address {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px
+}
+
 .capture-editable {
   cursor: text;
   border-radius: 5px;
@@ -460,6 +465,10 @@
 
 .capture-editable.prose[data-markup] {
   white-space: normal
+}
+
+.capture-editable.prose[data-markup]:focus {
+  white-space: pre-wrap
 }
 
 .capture-editable.prose[data-markup]>:first-child {

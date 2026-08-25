@@ -100,6 +100,8 @@ function insert(html) {
   template.innerHTML = html.trim();
   const item = template.content.firstElementChild;
   if (!item) return null;
+  const id = item.dataset.captureId;
+  if (id && root.querySelector(`[data-capture-id="${CSS.escape(id)}"]`)) return null;
 
   root.querySelector('.empty-state')?.remove();
   root.prepend(item);
@@ -151,4 +153,46 @@ export function initCaptureCollection() {
     event.preventDefault();
     submitCollectionAction(form);
   });
+
+  const root = collection();
+  const pollUrl = root?.dataset.capturePollUrl;
+  if (!pollUrl) return;
+
+  let timer;
+  let polling = false;
+  const schedule = (delay = 45_000) => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(poll, delay);
+  };
+  const poll = async () => {
+    if (polling || document.visibilityState !== 'visible' || !navigator.onLine) {
+      schedule();
+      return;
+    }
+    polling = true;
+    try {
+      const url = new URL(pollUrl, window.location.origin);
+      url.searchParams.set('after', root.dataset.capturePollAfter || '0');
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const contentType = response.headers.get('content-type') || '';
+      if (!response.ok || !contentType.includes('application/json')) return;
+      const result = await response.json();
+      if (Array.isArray(result.html)) result.html.forEach(insert);
+      if (Number.isInteger(result.cursor)) root.dataset.capturePollAfter = String(result.cursor);
+    } catch {
+      // Polling is deliberately silent; the next interval retries.
+    } finally {
+      polling = false;
+      schedule();
+    }
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') schedule(250);
+  });
+  window.addEventListener('online', () => schedule(250));
+  schedule();
 }

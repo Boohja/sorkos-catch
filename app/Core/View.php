@@ -66,6 +66,7 @@ final class View
             'bulkFormId' => '','debugRequestHeading' => 'Incoming capture requests','debugRequestCard' => false,
             'isShareTarget' => false,'captureUrl' => '','shareError' => '','enableLaterDialog' => false,
             'enableMoveDialog' => false,
+            'capturePoll' => false,
         ];
         $data['currentPath'] = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
         $data['isAuthenticated'] = is_array($data['user']);
@@ -113,6 +114,9 @@ final class View
         $data['captureShowViewToggle'] ??= $data['captureCollectionVariant'] === 'switchable';
         $data['captureEmptyTitle'] ??= $data['status'] === 'trash' ? 'Trash is empty' : 'Nothing here yet';
         $data['captureEmptyText'] ??= $data['status'] === 'trash' ? 'Captures you move to Trash will appear here for 30 days.' : 'Captures matching this view will appear here.';
+        $data['capturePollAfter'] = $data['captures']
+            ? max(array_map(static fn (array $capture): int => (int) ($capture['catch_number'] ?? 0), $data['captures']))
+            : 0;
         $data['collectionListId'] = (string) ($data['list']['id'] ?? '');
         $data['heading'] = match ($data['status']) {
             'archived' => 'Archived','trash' => 'Trash',default => 'Inbox'
@@ -256,6 +260,12 @@ final class View
             'backLabel' => $isTrashed ? 'Trash' : ($capture['status'] === 'archived' ? 'Archived' : 'Inbox'),
             'assignedListIdsJson' => json_encode(array_column($capture['lists'] ?? [], 'id'), JSON_THROW_ON_ERROR),
             'deviceLabel' => $deviceLabel,'sourceUrl' => $sourceUrl,'sourceTitle' => $sourceTitle ?: $sourceDomain ?: $sourceUrl,
+            'emailInboxId' => (string) ($capture['email_inbox_id'] ?? ''),
+            'emailInboxName' => trim((string) ($capture['email_inbox_name'] ?? '')) ?: 'Email inbox',
+            'emailInboxAddress' => trim((string) ($capture['email_inbox_address'] ?? '')),
+            'emailFromAddress' => (string) ($capture['source'] ?? '') === 'email'
+                ? trim((string) ($metadata['from'] ?? ''))
+                : '',
             'linkedUrl' => $safeHttp($metadata['linked_url'] ?? null),
             'methodLabel' => match ($method) {
                 'browser-extension-context-menu' => 'Browser Extension, Context Menu','browser-extension' => 'Browser Extension','ios-shortcut' => 'iOS Shortcut','web' => 'Catch Web',default => ucwords(str_replace(['-', '_'], ' ', $method))

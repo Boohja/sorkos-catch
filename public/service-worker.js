@@ -1,4 +1,4 @@
-const CACHE = 'catch-shell-v43';
+const CACHE = 'catch-shell-v48';
 const SHELL = [
   '/offline.html',
   '/manifest.webmanifest',
@@ -8,7 +8,7 @@ const SHELL = [
   '/assets/css/devices.css?v=10',
   '/assets/css/device-detail.css?v=6',
   '/assets/css/device-provenance.css?v=1',
-  '/assets/css/capture-detail.css?v=13',
+  '/assets/css/capture-detail.css?v=17',
   '/assets/css/capture-collection.css?v=5',
   '/assets/css/capture-bulk.css?v=3',
   '/assets/css/tags.css?v=1',
@@ -19,13 +19,13 @@ const SHELL = [
   '/assets/css/account.css?v=6',
   '/assets/css/layout-compat.css?v=1',
   '/assets/css/share-target.css?v=1',
-  '/assets/js/app.js?v=45',
+  '/assets/js/app.js?v=50',
   '/assets/js/devices.js?v=7',
   '/assets/js/theme.js?v=2',
   '/assets/js/user-menu.js?v=2',
   '/assets/js/capture-view.js?v=3',
   '/assets/js/relative-time.js?v=2',
-  '/assets/js/capture-collection.js?v=3',
+  '/assets/js/capture-collection.js?v=4',
   '/assets/js/capture-bulk.js?v=6',
   '/assets/js/capture-create.js?v=2',
   '/assets/js/share-target.js?v=3',

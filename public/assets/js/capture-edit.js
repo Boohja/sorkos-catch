@@ -1,19 +1,19 @@
 function appendInlineMarkup(container, text) {
-  const pattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\n]+)\*/g;
+  const pattern = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|`([^`]+)`|\*([^*\n]+)\*/g;
   let offset = 0;
 
   for (const match of text.matchAll(pattern)) {
     container.append(document.createTextNode(text.slice(offset, match.index)));
     let element;
-    if (match[1] && match[2]) {
+    if (match[1]) {
+      element = document.createElement('strong');
+      appendInlineMarkup(element, match[1]);
+    } else if (match[2] && match[3]) {
       element = document.createElement('a');
-      element.href = match[2];
+      element.href = match[3];
       element.target = '_blank';
       element.rel = 'noopener noreferrer';
-      element.textContent = match[1];
-    } else if (match[3]) {
-      element = document.createElement('strong');
-      element.textContent = match[3];
+      appendInlineMarkup(element, match[2]);
     } else if (match[4]) {
       element = document.createElement('code');
       element.textContent = match[4];
@@ -101,6 +101,28 @@ function renderMarkup(element, raw) {
   }
 }
 
+function editableMarkupValue(element) {
+  let output = '';
+  const append = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      output += node.nodeValue || '';
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.nodeName === 'BR') {
+      output += '\n';
+      return;
+    }
+    if (['DIV', 'P'].includes(node.nodeName) && output !== '' && !output.endsWith('\n')) {
+      output += '\n';
+    }
+    node.childNodes.forEach(append);
+  };
+  element.childNodes.forEach(append);
+
+  return output.replace(/\r/g, '').trim();
+}
+
 export function initCaptureEditing() {
   const root = document.querySelector('[data-capture-detail]');
   if (!root) return;
@@ -116,11 +138,17 @@ export function initCaptureEditing() {
     status.textContent = message;
     status.classList.toggle('is-error', error);
   };
-  const valueOf = (element) => element.innerText.replace(/\r/g, '').trim();
+  const valueOf = (element) => element.dataset.markup !== undefined
+    ? editableMarkupValue(element)
+    : element.innerText.replace(/\r/g, '').trim();
   const initialValueOf = (element) => {
     const clone = element.cloneNode(true);
     clone.querySelectorAll('br').forEach((breakElement) => {
+      const next = breakElement.nextSibling;
       breakElement.replaceWith('\n');
+      if (next?.nodeType === Node.TEXT_NODE && next.nodeValue?.startsWith('\n')) {
+        next.nodeValue = next.nodeValue.slice(1);
+      }
     });
     return clone.textContent.replace(/\r/g, '').trim();
   };

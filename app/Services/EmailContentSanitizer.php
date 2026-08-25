@@ -26,7 +26,13 @@ final class EmailContentSanitizer
         }
 
         $text = $this->renderChildren($root);
+        // Marketing emails commonly pad preview text with invisible Unicode
+        // characters. They have no readable meaning and otherwise turn into
+        // pages of apparent whitespace in a capture.
+        $text = preg_replace('/[\x{00AD}\x{034F}\x{061C}\x{200B}-\x{200F}\x{202A}-\x{202E}\x{2060}-\x{206F}\x{FEFF}]/u', '', $text) ?? $text;
+        $text = preg_replace('/[\x{00A0}\x{2000}-\x{200A}\x{202F}\x{205F}\x{3000}]/u', ' ', $text) ?? $text;
         $text = preg_replace("/[ \t]+\n/", "\n", $text) ?? $text;
+        $text = preg_replace('/[ \t]{2,}/', ' ', $text) ?? $text;
         $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
 
         return trim($text);
@@ -71,20 +77,24 @@ final class EmailContentSanitizer
             preg_match('/^h[1-6]$/', $tag) === 1 => "\n" . str_repeat('#', (int) substr($tag, 1)) . ' ' . trim($content) . "\n\n",
             $tag === 'a' => $this->link($node, $content),
             in_array($tag, ['tr'], true) => trim($content) . "\n",
-            in_array($tag, ['td', 'th'], true) => trim($content) . ' | ',
+            in_array($tag, ['td', 'th'], true) => trim($content) . ' ',
             default => $content,
         };
     }
 
     private function link(DOMNode $node, string $content): string
     {
+        $content = trim($content);
+        if ($content === '') {
+            return '';
+        }
         $href = trim((string) $node->attributes?->getNamedItem('href')?->nodeValue);
         $scheme = strtolower((string) parse_url($href, PHP_URL_SCHEME));
         if (!in_array($scheme, ['http', 'https'], true)) {
             return $content;
         }
 
-        return '[' . trim($content) . '](' . $href . ')';
+        return '[' . $content . '](' . $href . ')';
     }
 
     private function listItem(DOMNode $node, string $content): string

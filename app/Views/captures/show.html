@@ -166,6 +166,21 @@
   <details class="capture-metadata">
     <summary>Captured from</summary>
     <dl>
+      <check if="{{ @emailInboxId }}">
+        <div>
+          <dt>Inbox</dt>
+          <dd><a href="/settings/email/{{ urlencode(@emailInboxId) }}">{{ @emailInboxName }}</a>
+            <check if="{{ @emailInboxAddress }}"><small class="metadata-email-address">{{ @emailInboxAddress }}</small></check>
+          </dd>
+        </div>
+      </check>
+      <check if="{{ @emailFromAddress }}">
+        <div>
+          <dt>From</dt>
+          <dd class="metadata-email-address">{{ @emailFromAddress }}</dd>
+        </div>
+      </check>
+      <check if="{{ @capture.device_id || !@emailInboxId }}">
       <div>
         <dt>Device</dt>
         <dd class="metadata-device"><i class="glyph glyph-{{ @capture.device_type?:'pc' }}" aria-hidden="true"></i>
@@ -175,6 +190,7 @@
           </check>
         </dd>
       </div>
+      </check>
       <check if="{{ @sourceUrl }}">
         <div>
           <dt>Web</dt>

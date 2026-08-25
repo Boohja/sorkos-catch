@@ -206,9 +206,12 @@ final class CaptureRepository
         $sql = <<<'SQL'
             SELECT c.*, d.name device_name, d.device_type,
                 d.client_type device_client_type, d.platform device_platform,
-                d.status device_status
+                d.status device_status, i.id email_inbox_id,
+                i.name email_inbox_name, i.address email_inbox_address
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_email_imports e ON e.capture_id = c.id
+            LEFT JOIN catch_email_inboxes i ON i.id = e.inbox_id AND i.user_id = c.user_id
             WHERE c.id = :id AND c.user_id = :user
             LIMIT 1
             SQL;
@@ -231,6 +234,37 @@ final class CaptureRepository
         $capture['lists'] = $this->listsForCapture($id, $userId);
 
         return $capture;
+    }
+
+    public function listNewerInboxCaptures(string $userId, int $afterNumber, int $limit = 50): array
+    {
+        $limit = max(1, min($limit, 100));
+        $this->releaseDueLater($userId);
+        $sql = <<<SQL
+            SELECT c.*, d.name device_name, d.client_type device_client_type,
+                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
+                (SELECT a.id FROM catch_attachments a
+                    WHERE a.capture_id = c.id
+                        AND a.mime_type LIKE 'image/%'
+                        AND a.kind IN ('preview', 'source')
+                    ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
+                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
+                    FROM catch_capture_lists cl
+                    WHERE cl.capture_id = c.id) assigned_list_ids
+            FROM catch_captures c
+            LEFT JOIN catch_devices d ON d.id = c.device_id
+            WHERE c.user_id = :user
+                AND c.status = 'inbox'
+                AND c.deleted_at IS NULL
+                AND c.catch_number > :after_number
+            ORDER BY c.catch_number ASC
+            LIMIT {$limit}
+            SQL;
+        $query = $this->db->prepare($sql);
+        $query->execute(['user' => $userId, 'after_number' => max(0, $afterNumber)]);
+
+        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
     }
 
     public function findCollectionItem(string $id, string $userId): ?array
@@ -622,6 +656,9 @@ final class CaptureRepository
             throw new InvalidArgumentException('This field cannot be edited.');
         }
 
+        if (in_array($field, ['text', 'extracted_text'], true)) {
+            $value = str_replace(["\r\n", "\r"], "\n", $value);
+        }
         $value = trim($value);
         if (mb_strlen($value) > $limits[$field]) {
             $label = ucfirst(str_replace('_', ' ', $field));
