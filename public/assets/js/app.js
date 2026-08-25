@@ -14,7 +14,7 @@ import { initCapturePreview } from './capture-preview.js?v=2';
 import { initCaptureCreate } from './capture-create.js?v=2';
 import { initCaptureCollection } from './capture-collection.js?v=4';
 import { initUserMenu } from './user-menu.js?v=2';
-import { initMobileNavigation } from './mobile-navigation.js?v=1';
+import { initMobileNavigation } from './mobile-navigation.js?v=3';
 import { initCaptureMove } from './capture-move.js?v=1';
 
 initTheme();

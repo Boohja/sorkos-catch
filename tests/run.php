@@ -615,6 +615,9 @@ $test('Capture detail supports quiet in-place editing and global request progres
     if (!str_contains($progress, 'window.fetch=async') || !str_contains($compactStyle, 'position:fixed;inset:00auto') || !str_contains($compactStyle, 'height:4px')) {
         throw new RuntimeException('Global async progress indicator is incomplete');
     }
+    if (!str_contains($compactStyle, '.capture-editable.prose[data-markup]a{cursor:pointer}')) {
+        throw new RuntimeException('Links inside editable capture prose do not advertise navigation');
+    }
 });
 $test('Capture lists use membership truth and a batch assignment dialog', function () use ($root) {
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
@@ -762,7 +765,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v48','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v50','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }
@@ -826,12 +829,27 @@ $test('Requested interface icons and danger outline are used consistently', func
 $test('Scrolling remains browser-native and progress uses the primary color', function () use ($root) {
     $layout = (string)file_get_contents($root . '/app/Views/layout.html');
     $app = (string)file_get_contents($root . '/public/assets/js/app.js');
+    $appStyle = (string)file_get_contents($root . '/public/assets/css/app.css');
+    $mobileNavigation = (string)file_get_contents($root . '/public/assets/js/mobile-navigation.js');
     $style = (string)file_get_contents($root . '/public/assets/css/capture-detail.css');
     if (str_contains($layout . $app, 'page-scrollbar')) {
         throw new RuntimeException('Custom page scrolling is still installed');
     }$compactStyle = preg_replace('/\s+/', '', $style);
     if (!str_contains($compactStyle, 'background:var(--primary)')) {
         throw new RuntimeException('Request progress does not use the primary color');
+    }
+    foreach (['width: 1px', 'height: 1px', 'clip: rect(0 0 0 0)'] as $required) {
+        if (!str_contains($appStyle, $required)) {
+            throw new RuntimeException('The inbox file input can widen the mobile viewport: ' . $required);
+        }
+    }
+    foreach (['downwardTravel += delta', 'upwardTravel -= delta', 'downwardTravel >= HIDE_DISTANCE', 'upwardTravel >= SHOW_DISTANCE', "mobileNavHidden = 'true'"] as $required) {
+        if (!str_contains($mobileNavigation, $required)) {
+            throw new RuntimeException('The mobile navigation does not respond to accumulated scroll direction: ' . $required);
+        }
+    }
+    if (str_contains($mobileNavigation, 'atBottom')) {
+        throw new RuntimeException('The mobile navigation still depends on reaching the document end');
     }
 });
 $test('View data can expose capture status without colliding with the HTTP status', function () use ($root) {

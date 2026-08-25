@@ -471,6 +471,10 @@
   white-space: pre-wrap
 }
 
+.capture-editable.prose[data-markup] a {
+  cursor: pointer
+}
+
 .capture-editable.prose[data-markup]>:first-child {
   margin-top: 0
 }
