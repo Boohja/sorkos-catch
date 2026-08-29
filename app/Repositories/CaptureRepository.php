@@ -29,10 +29,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
-                    FROM catch_capture_lists cl
-                    WHERE cl.capture_id = c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.user_id = :user
@@ -58,10 +55,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
-                    FROM catch_capture_lists cl
-                    WHERE cl.capture_id = c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.user_id = :user
@@ -93,10 +87,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(assigned.list_id ORDER BY assigned.list_id)
-                    FROM catch_capture_lists assigned
-                    WHERE assigned.capture_id = c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             JOIN catch_capture_tags ct ON ct.capture_id = c.id
             LEFT JOIN catch_devices d ON d.id = c.device_id
@@ -113,36 +104,6 @@ final class CaptureRepository
         return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
     }
 
-    public function listByList(string $userId, string $listId, int $limit = 100): array
-    {
-        $limit = max(1, min($limit, 200));
-        $sql = <<<SQL
-            SELECT c.*, d.name device_name, d.client_type device_client_type,
-                (SELECT COUNT(*) FROM catch_attachments a WHERE a.capture_id = c.id AND a.kind = 'source') attachment_count,
-                (SELECT a.id FROM catch_attachments a
-                    WHERE a.capture_id = c.id
-                        AND a.mime_type LIKE 'image/%'
-                        AND a.kind IN ('preview', 'source')
-                    ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(assigned.list_id ORDER BY assigned.list_id)
-                    FROM catch_capture_lists assigned
-                    WHERE assigned.capture_id = c.id) assigned_list_ids
-            FROM catch_captures c
-            JOIN catch_capture_lists cl ON cl.capture_id = c.id
-            LEFT JOIN catch_devices d ON d.id = c.device_id
-            WHERE c.user_id = :user
-                AND c.deleted_at IS NULL
-                AND cl.list_id = :list
-            ORDER BY cl.assigned_at DESC, c.created_at DESC
-            LIMIT {$limit}
-            SQL;
-        $query = $this->db->prepare($sql);
-        $query->execute(['user' => $userId, 'list' => $listId]);
-
-        return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
-    }
-
     public function listByDevice(string $userId, string $deviceId, int $limit = 200): array
     {
         $limit = max(1, min($limit, 500));
@@ -154,10 +115,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
-                    FROM catch_capture_lists cl
-                    WHERE cl.capture_id = c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.user_id = :user
@@ -182,10 +140,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
-                    FROM catch_capture_lists cl
-                    WHERE cl.capture_id = c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_email_imports e
             JOIN catch_email_inboxes i ON i.id = e.inbox_id
             JOIN catch_captures c ON c.id = e.capture_id
@@ -231,7 +186,6 @@ final class CaptureRepository
         $attachments->execute(['id' => $id]);
         $capture['attachments'] = $attachments->fetchAll();
         $capture['tags'] = $this->tagsForCapture($id, $userId);
-        $capture['lists'] = $this->listsForCapture($id, $userId);
 
         return $capture;
     }
@@ -248,10 +202,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
-                    FROM catch_capture_lists cl
-                    WHERE cl.capture_id = c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.user_id = :user
@@ -278,10 +229,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id)
-                    FROM catch_capture_lists cl
-                    WHERE cl.capture_id = c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id = c.device_id
             WHERE c.id = :id AND c.user_id = :user
@@ -331,8 +279,7 @@ final class CaptureRepository
                         AND a.mime_type LIKE 'image/%'
                         AND a.kind IN ('preview', 'source')
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
-                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id,
-                (SELECT GROUP_CONCAT(cl.list_id ORDER BY cl.list_id) FROM catch_capture_lists cl WHERE cl.capture_id=c.id) assigned_list_ids
+                        a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             LEFT JOIN catch_devices d ON d.id=c.device_id
             WHERE c.user_id=:user AND {$statusClause}
@@ -586,16 +533,6 @@ final class CaptureRepository
         $sql = <<<'SQL'
             UPDATE catch_captures c
             SET deleted_at = NULL,
-                status = IF(
-                    EXISTS(SELECT 1 FROM catch_capture_lists cl WHERE cl.capture_id = c.id),
-                    'archived',
-                    'inbox'
-                ),
-                archived_at = IF(
-                    EXISTS(SELECT 1 FROM catch_capture_lists cl WHERE cl.capture_id = c.id),
-                    COALESCE(c.archived_at, UTC_TIMESTAMP(6)),
-                    NULL
-                ),
                 later_until = NULL,
                 updated_at = UTC_TIMESTAMP(6)
             WHERE c.id = :id AND c.user_id = :user AND c.deleted_at IS NOT NULL
@@ -814,33 +751,6 @@ final class CaptureRepository
                 . '-' . $tag['slug'] . '/captures';
 
             return $tag;
-        }, $query->fetchAll());
-    }
-
-    private function listsForCapture(string $id, string $userId): array
-    {
-        $sql = <<<'SQL'
-            SELECT l.id, l.title
-            FROM catch_lists l
-            JOIN catch_capture_lists cl ON cl.list_id = l.id
-            JOIN catch_captures c ON c.id = cl.capture_id
-            WHERE cl.capture_id = :capture AND c.user_id = :user
-            ORDER BY l.title
-            SQL;
-        $query = $this->db->prepare($sql);
-        $query->execute(['capture' => $id, 'user' => $userId]);
-
-        return array_map(static function (array $list): array {
-            $ascii = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', (string) $list['title'])
-                ?: $list['title'];
-            $list['slug'] = trim(
-                (string) preg_replace('/[^a-z0-9]+/', '-', mb_strtolower((string) $ascii)),
-                '-',
-            ) ?: 'list';
-            $list['url'] = '/lists/' . rawurlencode((string) $list['id'])
-                . '-' . $list['slug'] . '/captures';
-
-            return $list;
         }, $query->fetchAll());
     }
 

@@ -69,12 +69,6 @@ async function animateRemoval(item) {
 function shouldLeaveCollection(root, transition) {
   const nextStatus = transition.status;
   const currentStatus = root.dataset.collectionStatus;
-  const listId = root.dataset.collectionListId;
-
-  if (listId && nextStatus && nextStatus !== 'archived') return true;
-  if (listId && Array.isArray(transition.listIds)) {
-    return !transition.listIds.includes(listId);
-  }
   if (currentStatus === 'inbox') return nextStatus && nextStatus !== 'inbox';
   if (currentStatus === 'archived') return nextStatus && nextStatus !== 'archived';
   if (currentStatus === 'trash') return nextStatus && nextStatus !== 'trash';

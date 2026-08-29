@@ -1,23 +1,29 @@
 <dialog class="confirm-dialog tag-dialog" data-tag-dialog aria-labelledby="tag-dialog-title">
-  <form method="post" action="/captures/{{ urlencode(@capture.id) }}/tags" data-tag-form><input type="hidden"
-      name="_csrf" value="{{ @csrf }}">
-    <h2 id="tag-dialog-title">Tags</h2><label class="tag-dialog-field" for="capture-tag-name"><span class="sr-only">Find
-        or create a tag</span><input id="capture-tag-name" name="name" type="text" list="capture-tag-options"
-        maxlength="100" autocomplete="off" placeholder="Find or create a tag" data-tag-input></label><datalist
-      id="capture-tag-options" data-tag-options>
-      <repeat group="{{ @availableTags }}" value="{{ @availableTag }}">
-        <option value="{{ @availableTag.name }}"></option>
-      </repeat>
-    </datalist>
-    <div class="tag-dialog-assigned">
-      <div class="assigned-tags" data-assigned-tags aria-label="Assigned tags">
-        <repeat group="{{ @capture.tags }}" value="{{ @tag }}"><span class="assigned-tag" data-tag-id="{{ @tag.id }}"><a
-              href="{{ @tag.url }}">{{ @tag.name }}</a><button type="button" data-remove-tag
-              aria-label="Remove {{ @tag.name }}">&times;</button></span></repeat>
+  <div class="tag-dialog-content"><input type="hidden" name="_csrf" value="{{ @csrf }}" data-tag-csrf>
+    <h2 id="tag-dialog-title">Tags</h2>
+    <label class="tag-dialog-field" for="capture-tag-filter"><span class="sr-only">Filter tags</span><input
+        id="capture-tag-filter" type="search" maxlength="100" autocomplete="off" placeholder="Filter tags"
+        data-tag-filter></label>
+    <section class="tag-dialog-section" aria-labelledby="selected-tags-title">
+      <h3 id="selected-tags-title">Selected</h3>
+      <div class="assigned-tags" data-assigned-tags>
+        <repeat group="{{ @capture.tags }}" value="{{ @tag }}"><button
+            class="tag-dialog-option tag-dialog-option-selected" type="button" data-remove-tag
+            data-tag-id="{{ @tag.id }}" aria-label="Remove {{ @tag.name }}"><span>{{ @tag.name }}</span></button>
+        </repeat>
       </div>
-      <p class="tag-dialog-empty" data-tag-empty<check if="{{ @capture.tags }}"> hidden</check>>No tags assigned.</p>
-    </div>
+      <p class="tag-dialog-empty" data-tag-empty<check if="{{ @capture.tags }}"> hidden</check>>No tags selected.</p>
+    </section>
+    <section class="tag-dialog-section" aria-labelledby="available-tags-title">
+      <h3 id="available-tags-title">All tags</h3>
+      <div class="tag-dialog-options" data-tag-options>
+        <repeat group="{{ @availableTags }}" value="{{ @availableTag }}"><button class="tag-dialog-option" type="button"
+            data-add-tag data-tag-id="{{ @availableTag.id }}"
+            data-tag-name="{{ @availableTag.name }}"><span>{{ @availableTag.name }}</span></button></repeat>
+      </div>
+      <p class="tag-dialog-empty" data-tag-no-results hidden>No matching tags.</p>
+    </section>
     <div class="confirm-dialog-actions"><button class="button button-secondary" type="button"
         data-close-tag-dialog>Close</button></div>
-  </form>
+  </div>
 </dialog>

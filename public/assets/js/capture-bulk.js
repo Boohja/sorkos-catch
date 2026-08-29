@@ -4,7 +4,6 @@ export function initCaptureBulk() {
 
   const count = form.querySelector('[data-bulk-count]');
   const open = form.querySelector('[data-open-bulk-delete]');
-  const openLists = form.querySelector('[data-open-bulk-lists]');
   const openLater = form.querySelector('[data-open-bulk-later]');
   const openMove = form.querySelector('[data-open-bulk-move]');
   const dialog = document.querySelector('[data-bulk-delete-dialog]');
@@ -56,17 +55,6 @@ export function initCaptureBulk() {
     } else if (window.confirm(message)) {
       form.requestSubmit();
     }
-  });
-
-  openLists?.addEventListener('click', () => {
-    const ids = selected().map((box) => box.value);
-    if (!ids.length) return;
-
-    window.Catch?.openListDialog?.({
-      captureIds: ids,
-      assignedListIds: [],
-      mode: 'bulk',
-    });
   });
 
   openLater?.addEventListener('click', () => {

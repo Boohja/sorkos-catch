@@ -10,7 +10,6 @@ use Catch\Http\ByteRange;
 use Catch\Http\Request;
 use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
-use Catch\Repositories\ListRepository;
 use Catch\Repositories\TagRepository;
 use Catch\Services\AuthService;
 use Catch\Services\CaptureDebugService;
@@ -27,7 +26,6 @@ final class CaptureController
         private readonly AuthService $auth,
         private readonly CaptureRepository $captures,
         private readonly TagRepository $tags,
-        private readonly ListRepository $lists,
         private readonly CaptureService $service,
         private readonly CaptureDebugService $debug,
         private readonly Csrf $csrf,
@@ -132,8 +130,6 @@ final class CaptureController
             'user' => $user,
             'captures' => $captures,
             'status' => $status,
-            'availableLists' => $this->lists->list($user['id']),
-            'enableListDialog' => $status !== 'trash',
             'enableCaptureActionMenu' => $status !== 'trash',
             'enableLaterDialog' => $status === 'inbox',
             'enableMoveDialog' => $status !== 'trash',
@@ -246,8 +242,6 @@ final class CaptureController
             'user' => $user,
             'capture' => $capture,
             'availableTags' => $this->tags->list($user['id']),
-            'availableLists' => $this->lists->list($user['id']),
-            'enableListDialog' => empty($capture['deleted_at']),
             'enableTagDialog' => empty($capture['deleted_at']),
             'enableLaterDialog' => empty($capture['deleted_at']) && $capture['status'] === 'inbox',
             'enableMoveDialog' => empty($capture['deleted_at']),

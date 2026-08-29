@@ -2,7 +2,6 @@ export function initCaptureActions() {
   const menu = document.querySelector('[data-capture-action-menu]');
   if (!menu) return;
 
-  const listButton = menu.querySelector('[data-menu-list]');
   const laterButton = menu.querySelector('[data-menu-later]');
   const archiveForm = menu.querySelector('[data-menu-archive]');
   const trashForm = menu.querySelector('[data-menu-trash]');
@@ -73,19 +72,6 @@ export function initCaptureActions() {
     }
 
     if (!menu.hidden && !menu.contains(event.target)) close();
-  });
-
-  listButton?.addEventListener('click', () => {
-    if (!trigger) return;
-    let assignedListIds = [];
-    try {
-      assignedListIds = JSON.parse(trigger.dataset.listIds || '[]');
-    } catch {
-      assignedListIds = [];
-    }
-    const captureIds = [trigger.dataset.captureId];
-    close();
-    window.Catch?.openListDialog?.({ captureIds, assignedListIds, mode: 'single' });
   });
 
   laterButton?.addEventListener('click', () => {

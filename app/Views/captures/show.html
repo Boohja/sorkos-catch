@@ -1,6 +1,6 @@
 <a class="back-link" href="{{ @backRoute }}">&larr; Back to {{ @backLabel }}</a>
-<article class="detail" data-capture-detail data-capture-lists data-capture-id="{{ @capture.id }}"
-  data-csrf="{{ @csrf }}" <check if="{{ @capture.title }}"> data-has-title="true"</check>
+<article class="detail" data-capture-detail data-capture-id="{{ @capture.id }}" data-csrf="{{ @csrf }}" <check
+  if="{{ @capture.title }}"> data-has-title="true"</check>
   <check if="{{ @previewFetchDue }}"> data-preview-fetch-due</check>> <header class="capture-detail-heading">
     <div>
       <h1><span class="<check if=" {{ !@isTrashed }}">capture-editable</check>
@@ -10,11 +10,8 @@
         </span></h1>
       <p class="capture-heading-meta"><span class="capture-heading-number">#{{ (int)@capture.catch_number }}</span><span
           aria-hidden="true">·</span><time datetime="{{ @utcCreatedAt }}" data-relative-time
-          title="UTC {{ @capture.created_at }}">{{ @relativeTime }}</time><span class="capture-heading-lists"
-          data-assigned-lists>
-          <repeat group="{{ @capture.lists }}" value="{{ @list }}"><a data-list-id="{{ @list.id }}"
-              href="{{ @list.url }}">{{ @list.title }}</a></repeat>
-        </span><span class="capture-heading-tags" data-heading-tags>
+          title="UTC {{ @capture.created_at }}">{{ @relativeTime }}</time><span class="capture-heading-tags"
+          data-heading-tags>
           <repeat group="{{ @capture.tags }}" value="{{ @tag }}"><a data-heading-tag-id="{{ @tag.id }}"
               href="{{ @tag.url }}">#{{ @tag.name }}</a></repeat>
         </span></p>
@@ -150,9 +147,7 @@
         </form>
       </true>
       <false><button class="button button-secondary" type="button" data-open-tag-dialog><i class="glyph glyph-tag"
-            aria-hidden="true"></i>Tags</button><button class="button button-secondary" type="button"
-          data-open-list-dialog data-capture-id="{{ @capture.id }}" data-list-ids="{{ @assignedListIdsJson }}"><i
-            class="glyph glyph-list" aria-hidden="true"></i>List</button>
+            aria-hidden="true"></i>Tags</button>
         <check if="{{ @capture.status=='inbox' }}"><button class="button button-secondary" type="button" data-open-later
             data-capture-id="{{ @capture.id }}"><i class="glyph glyph-resubmission"
               aria-hidden="true"></i>Later</button></check>
@@ -170,7 +165,8 @@
         <div>
           <dt>Inbox</dt>
           <dd><a href="/settings/email/{{ urlencode(@emailInboxId) }}">{{ @emailInboxName }}</a>
-            <check if="{{ @emailInboxAddress }}"><small class="metadata-email-address">{{ @emailInboxAddress }}</small></check>
+            <check if="{{ @emailInboxAddress }}"><small class="metadata-email-address">{{ @emailInboxAddress }}</small>
+            </check>
           </dd>
         </div>
       </check>
@@ -181,15 +177,15 @@
         </div>
       </check>
       <check if="{{ @capture.device_id || !@emailInboxId }}">
-      <div>
-        <dt>Device</dt>
-        <dd class="metadata-device"><i class="glyph glyph-{{ @capture.device_type?:'pc' }}" aria-hidden="true"></i>
-          <check if="{{ @capture.device_id }}">
-            <true><a href="/devices/{{ urlencode(@capture.device_id) }}">{{ @deviceLabel }}</a></true>
-            <false>{{ @deviceLabel }}</false>
-          </check>
-        </dd>
-      </div>
+        <div>
+          <dt>Device</dt>
+          <dd class="metadata-device"><i class="glyph glyph-{{ @capture.device_type?:'pc' }}" aria-hidden="true"></i>
+            <check if="{{ @capture.device_id }}">
+              <true><a href="/devices/{{ urlencode(@capture.device_id) }}">{{ @deviceLabel }}</a></true>
+              <false>{{ @deviceLabel }}</false>
+            </check>
+          </dd>
+        </div>
       </check>
       <check if="{{ @sourceUrl }}">
         <div>

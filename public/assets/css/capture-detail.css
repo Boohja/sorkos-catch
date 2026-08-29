@@ -512,7 +512,6 @@
   gap: 8px
 }
 
-.capture-heading-lists,
 .capture-heading-tags {
   display: inline-flex;
   align-items: center;
@@ -520,18 +519,15 @@
   gap: 8px
 }
 
-.capture-heading-lists:not(:has(a)),
 .capture-heading-tags:not(:has(a)) {
   display: none
 }
 
-.capture-heading-lists:has(a)::before,
 .capture-heading-tags:has(a)::before {
   content: '·';
   color: var(--muted)
 }
 
-.capture-heading-lists a,
 .capture-heading-tags a {
   color: var(--accent);
   text-decoration: underline;
@@ -539,7 +535,6 @@
   text-underline-offset: 3px
 }
 
-.capture-heading-lists a:hover,
 .capture-heading-tags a:hover {
   text-decoration-color: currentColor
 }
@@ -555,56 +550,7 @@
   font-size: 17px
 }
 
-.list-dialog form {
-  padding: 24px
-}
-
-.list-dialog-description {
-  margin: -2px 0 0;
-  color: var(--muted)
-}
-
-.list-checklist {
-  display: grid;
-  gap: 2px;
-  max-height: min(52vh, 420px);
-  margin: 16px 0;
-  overflow: auto
-}
-
-.list-checklist label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 8px;
-  border-radius: 8px;
-  cursor: pointer
-}
-
-.list-checklist label:hover {
-  background: var(--surface-muted)
-}
-
-.list-checklist input {
-  width: 17px;
-  height: 17px;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--primary)
-}
-
-.list-status {
-  min-height: 1.4em;
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 13px
-}
-
-.list-status.is-error {
-  color: var(--danger)
-}
-
-.tag-dialog form {
+.tag-dialog-content {
   padding: 24px
 }
 
@@ -617,17 +563,75 @@
   width: 100%
 }
 
-.tag-dialog-assigned {
-  min-height: 34px;
-  margin-top: 14px
+.tag-dialog-section {
+  margin-top: 20px
+}
+
+.tag-dialog-section h3 {
+  margin: 0 0 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase
 }
 
 .tag-dialog .assigned-tags {
+  display: grid;
+  gap: 2px;
   margin: 0
 }
 
+.tag-dialog-options {
+  display: grid;
+  gap: 2px;
+  max-height: min(38vh, 320px);
+  overflow: auto;
+  scrollbar-color: var(--border) transparent
+}
+
+.tag-dialog-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer
+}
+
+.tag-dialog-option[hidden] {
+  display: none
+}
+
+.tag-dialog-option>span {
+  min-width: 0;
+  overflow-wrap: anywhere
+}
+
+.tag-dialog-option:hover,
+.tag-dialog-option:focus-visible {
+  background: var(--surface-muted)
+}
+
+.tag-dialog-option>.glyph {
+  color: var(--muted)
+}
+
+.tag-dialog-option:disabled {
+  cursor: wait;
+  opacity: .55
+}
+
 .tag-dialog-empty {
+  margin: 0;
   padding: 5px 0;
+  color: var(--muted);
   font-size: 13px
 }
 

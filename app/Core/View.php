@@ -58,9 +58,9 @@ final class View
         $data += [
             'title' => 'Catch','user' => null,'configured' => false,'csrf' => '','status' => '',
             'captures' => [],'capture' => null,'devices' => [],'device' => null,
-            'availableLists' => [],'availableTags' => [],'emailInboxes' => [],'emailInbox' => null,
+            'availableTags' => [],'emailInboxes' => [],'emailInbox' => null,
             'debugRequests' => [],'debugEnabled' => false,'enableCaptureActionMenu' => false,
-            'enableListDialog' => false,'enableTagDialog' => false,'error' => null,
+            'enableTagDialog' => false,'error' => null,
             'connected' => false,'request' => null,'pairing' => null,'list' => null,
             'tag' => null,'tags' => [],'lists' => [],'settingsTab' => 'general','login' => '','appUrl' => '',
             'bulkFormId' => '','debugRequestHeading' => 'Incoming capture requests','debugRequestCard' => false,
@@ -117,7 +117,6 @@ final class View
         $data['capturePollAfter'] = $data['captures']
             ? max(array_map(static fn (array $capture): int => (int) ($capture['catch_number'] ?? 0), $data['captures']))
             : 0;
-        $data['collectionListId'] = (string) ($data['list']['id'] ?? '');
         $data['heading'] = match ($data['status']) {
             'archived' => 'Archived','trash' => 'Trash',default => 'Inbox'
         };
@@ -161,8 +160,8 @@ final class View
     {
         $capture += [
             'title' => null,'text' => null,'url' => null,'extracted_text' => null,'deleted_at' => null,
-            'status' => 'inbox','created_at' => '','type' => 'text','tags' => [],'lists' => [],
-            'attachments' => [],'visual_attachment_id' => null,'assigned_list_ids' => '',
+            'status' => 'inbox','created_at' => '','type' => 'text','tags' => [],
+            'attachments' => [],'visual_attachment_id' => null,
         ];
         $metadata = is_array($capture['metadata'] ?? null) ? $capture['metadata'] : [];
         $status = !empty($capture['deleted_at']) ? 'trash' : (string) ($capture['status'] ?? 'inbox');
@@ -183,7 +182,6 @@ final class View
             'excerpt' => $excerpt ?: $title,
             'excerptHtml' => nl2br(htmlspecialchars($excerpt ?: $title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')),
             'host' => $host ?: 'Link',
-            'assignedListIdsJson' => json_encode(array_values(array_filter(explode(',', (string) ($capture['assigned_list_ids'] ?? '')))), JSON_THROW_ON_ERROR),
             'previewFetchDue' => empty($capture['visual_attachment_id']) && $status !== 'trash' && !empty($capture['url'])
                 && in_array((string) ($previewFetch['status'] ?? ''), ['pending', 'retry'], true)
                 && (int) ($previewFetch['attempts'] ?? 0) < 3 && ($retryAt === false || $retryAt <= time()),
@@ -258,7 +256,6 @@ final class View
             'remainingAttachments' => $remaining,'trashExpires' => $trashExpires,'utcTrashExpires' => $this->utc($trashExpires),
             'backRoute' => $isTrashed ? '/trash' : ($capture['status'] === 'archived' ? '/archive' : '/inbox'),
             'backLabel' => $isTrashed ? 'Trash' : ($capture['status'] === 'archived' ? 'Archived' : 'Inbox'),
-            'assignedListIdsJson' => json_encode(array_column($capture['lists'] ?? [], 'id'), JSON_THROW_ON_ERROR),
             'deviceLabel' => $deviceLabel,'sourceUrl' => $sourceUrl,'sourceTitle' => $sourceTitle ?: $sourceDomain ?: $sourceUrl,
             'emailInboxId' => (string) ($capture['email_inbox_id'] ?? ''),
             'emailInboxName' => trim((string) ($capture['email_inbox_name'] ?? '')) ?: 'Email inbox',

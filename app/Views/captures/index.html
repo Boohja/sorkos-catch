@@ -36,8 +36,6 @@
   data-permanent="{{ @permanent ? 'true' : 'false' }}" hidden><input type="hidden" name="_csrf"
     value="{{ @csrf }}"><input type="hidden" name="view" value="{{ @status }}"><span class="bulk-selection-count"
     data-bulk-count role="status" aria-live="polite"></span>
-  <check if="{{ !@permanent }}"><button class="button button-secondary" type="button" data-open-bulk-lists><i
-        class="glyph glyph-list" aria-hidden="true"></i>List</button></check>
   <check if="{{ @status=='inbox' }}"><button class="button button-secondary" type="button" data-open-bulk-later><i
         class="glyph glyph-resubmission" aria-hidden="true"></i>Later</button></check>
   <check if="{{ @permanent }}">

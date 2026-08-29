@@ -429,35 +429,26 @@ $test('Inbox bulk delete is confirmed and permanently removes related data', fun
         throw new RuntimeException('Bulk action bar is not fixed and right aligned');
     }
 });
-$test('Lists group captures many-to-many and appear in capture details', function () use ($root) {
-    $migration = (string)file_get_contents($root . '/database/migrations/005_lists.sql');
-    $application = (string)file_get_contents($root . '/app/Core/Application.php');
-    $repository = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
-    $captureRepository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $detail = (string)file_get_contents($root . '/app/Views/captures/show.html');
-    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.html');
-    $index = (string)file_get_contents($root . '/app/Views/lists/index.html');
-    foreach (['catch_lists','catch_capture_lists','PRIMARY KEY (capture_id, list_id)','ON DELETE CASCADE'] as $required) {
-        if (!str_contains($migration, $required)) {
-            throw new RuntimeException('List migration is incomplete: ' . $required);
+$test('Lists are absent from the active application', function () use ($root) {
+    foreach ([
+        '/app/Repositories/ListRepository.php',
+        '/app/Controllers/Web/ListController.php',
+        '/app/Views/captures/_list_dialog.html',
+        '/public/assets/js/capture-lists.js',
+        '/public/assets/css/lists.css',
+    ] as $removed) {
+        if (is_file($root . $removed)) {
+            throw new RuntimeException('Removed list feature file remains: ' . $removed);
         }
-    }foreach (['GET /lists','POST /captures/@id/lists','ListController'] as $required) {
-        if (!str_contains($application, $required)) {
-            throw new RuntimeException('List routes are incomplete: ' . $required);
-        }
-    }foreach (['top_capture_title','capture_count','INSERT IGNORE INTO catch_capture_lists'] as $required) {
-        if (!str_contains($repository, $required)) {
-            throw new RuntimeException('List repository is incomplete: ' . $required);
-        }
-    }if (!str_contains($captureRepository, 'listByList') || !str_contains($captureRepository, 'listsForCapture')) {
-        throw new RuntimeException('Captures do not expose their lists');
-    }foreach (['data-capture-lists','Add to list','availableLists'] as $required) {
-        if (!str_contains($detail . $dialog, $required)) {
-            throw new RuntimeException('Capture list selection is incomplete: ' . $required);
-        }
-    }foreach (['list-grid','top_capture_title','capture_count'] as $required) {
-        if (!str_contains($index, $required)) {
-            throw new RuntimeException('List cards are incomplete: ' . $required);
+    }
+    $active = (string)file_get_contents($root . '/app/Core/Application.php')
+        . (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php')
+        . (string)file_get_contents($root . '/app/Views/layout.html')
+        . (string)file_get_contents($root . '/app/Views/captures/show.html')
+        . (string)file_get_contents($root . '/app/Views/captures/index.html');
+    foreach (['/lists', 'ListRepository', 'ListController', 'catch_capture_lists', 'data-open-list-dialog'] as $removed) {
+        if (str_contains($active, $removed)) {
+            throw new RuntimeException('Active list feature reference remains: ' . $removed);
         }
     }
 });
@@ -495,28 +486,30 @@ $test('Capture detail keeps extracted text compact and manages tags in a modal',
     if (str_contains($detail, 'capture-tags-panel')) {
         throw new RuntimeException('The old inline tag panel remains');
     }
-    foreach (['data-tag-dialog','data-tag-input','<datalist','data-assigned-tags','data-remove-tag'] as $required) {
+    foreach (['data-tag-dialog','data-tag-filter','data-tag-options','data-assigned-tags','data-remove-tag','data-add-tag'] as $required) {
         if (!str_contains($dialog, $required)) {
             throw new RuntimeException('Tag dialog is incomplete: ' . $required);
         }
     }
-    if (str_contains($dialog, 'data-tag-status')) {
-        throw new RuntimeException('Tag feedback still renders inline instead of using toasts');
+    foreach (['<datalist', 'name="name"', 'Find or create'] as $removed) {
+        if (str_contains($dialog, $removed)) {
+            throw new RuntimeException('The tag filter still creates or suggests values: ' . $removed);
+        }
     }
     foreach (['enableTagDialog','_tag_dialog.html'] as $required) {
         if (!str_contains($detail . $layout, $required)) {
             throw new RuntimeException('Tag dialog is not enabled: ' . $required);
         }
     }
-    foreach (['dialog.showModal()', "input.value = ''", 'input.focus()', 'renderTag(json.tag)', 'pill.remove()', 'window.Catch?.notify', 'data-heading-tag-id', "event.key !== 'Enter'", 'form?.requestSubmit()'] as $required) {
+    foreach (['dialog.showModal()', "input.value = ''", 'input?.focus()', 'renderTag(json.tag)', 'option.remove()', 'window.Catch?.notify', 'data-heading-tag-id', "input?.addEventListener('input', sync)", "data.set('tag_id'"] as $required) {
         if (!str_contains($script, $required)) {
             throw new RuntimeException('Tag dialog behavior is incomplete: ' . $required);
         }
     }
-    if (!str_contains($controller, 'assignByName') || !str_contains($repository, 'function assignByName')) {
-        throw new RuntimeException('Tag names cannot be created and assigned in one action');
+    if (!str_contains($controller, "\$_POST['tag_id']") || !str_contains($repository, 'function assign')) {
+        throw new RuntimeException('Existing tags cannot be assigned by id');
     }
-    foreach (['.extracted-text-card','.tag-dialog-field','.tag-dialog-assigned'] as $required) {
+    foreach (['.extracted-text-card','.tag-dialog-field','.tag-dialog-section','.tag-dialog-options','.tag-dialog-option'] as $required) {
         if (!str_contains($style, $required)) {
             throw new RuntimeException('Capture detail styling is incomplete: ' . $required);
         }
@@ -579,17 +572,6 @@ $test('Trash is timestamp-based, recoverable, and expires after 30 days', functi
         }
     }
 });
-$test('List membership controls the active capture state', function () use ($root) {
-    $repository = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
-    $migration = (string)file_get_contents($root . '/database/migrations/007_reconcile_list_capture_states.sql');
-    foreach (["status='archived'",'archived_at=COALESCE','NOT EXISTS(SELECT 1 FROM catch_capture_lists',"status='inbox'",'archived_at=NULL'] as $required) {
-        if (!str_contains($repository, $required)) {
-            throw new RuntimeException('List state transition is incomplete: ' . $required);
-        }
-    }if (!str_contains($migration, 'EXISTS (SELECT 1 FROM catch_capture_lists')) {
-        throw new RuntimeException('Existing list members are not reconciled');
-    }
-});
 $test('Capture detail supports quiet in-place editing and global request progress', function () use ($root) {
     $application = (string)file_get_contents($root . '/app/Core/Application.php');
     $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
@@ -617,27 +599,6 @@ $test('Capture detail supports quiet in-place editing and global request progres
     }
     if (!str_contains($compactStyle, '.capture-editable.prose[data-markup]a{cursor:pointer}')) {
         throw new RuntimeException('Links inside editable capture prose do not advertise navigation');
-    }
-});
-$test('Capture lists use membership truth and a batch assignment dialog', function () use ($root) {
-    $repository = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $lists = (string)file_get_contents($root . '/app/Repositories/ListRepository.php');
-    $controller = (string)file_get_contents($root . '/app/Controllers/Web/ListController.php');
-    $view = (string)file_get_contents($root . '/app/Views/captures/show.html');
-    $dialog = (string)file_get_contents($root . '/app/Views/captures/_list_dialog.html');
-    $script = (string)file_get_contents($root . '/public/assets/js/capture-lists.js');
-    if (str_contains($repository, 'c.status=:status AND c.deleted_at IS NULL AND cl.list_id=:list')) {
-        throw new RuntimeException('List detail still hides members by capture status');
-    }foreach (['syncAssignments','list_ids','capture_status'] as $required) {
-        if (!str_contains($lists . $controller, $required)) {
-            throw new RuntimeException('Batch list assignment is incomplete: ' . $required);
-        }
-    }foreach (['data-list-dialog','data-list-form','data-assigned-lists','Add to list'] as $required) {
-        if (!str_contains($view . $dialog, $required)) {
-            throw new RuntimeException('List assignment dialog is incomplete: ' . $required);
-        }
-    }if (!str_contains($script, 'renderLists') || !str_contains($script, 'showModal')) {
-        throw new RuntimeException('List dialog behavior is incomplete');
     }
 });
 $test('Devices expose capture counts, last use time, and capture history', function () use ($root) {
@@ -765,7 +726,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v50','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v53','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }
@@ -808,11 +769,10 @@ $test('Device types drive icons and remain editable', function () use ($root) {
 $test('Requested interface icons and danger outline are used consistently', function () use ($root) {
     $capture = (string)file_get_contents($root . '/app/Views/captures/show.html');
     $inbox = (string)file_get_contents($root . '/app/Views/captures/index.html');
-    $list = (string)file_get_contents($root . '/app/Views/lists/captures.html');
     $views = '';
     foreach (glob($root . '/app/Views/*/*.html') as $path) {
         $views .= (string)file_get_contents($path);
-    }foreach (['glyph-list','glyph-move'] as $required) {
+    }foreach (['glyph-tag','glyph-move'] as $required) {
         if (!str_contains($capture, $required)) {
             throw new RuntimeException('Capture detail action icon is missing: ' . $required);
         }
@@ -820,8 +780,6 @@ $test('Requested interface icons and danger outline are used consistently', func
         if (!str_contains($inbox, $required)) {
             throw new RuntimeException('Capture tab icon is missing: ' . $required);
         }
-    }if (!str_contains($list, 'glyph-list')) {
-        throw new RuntimeException('List heading icon is missing');
     }if (preg_match('/button-danger(?!-outline)/', $views)) {
         throw new RuntimeException('A filled danger button remains');
     }
@@ -975,7 +933,7 @@ $test('Relative capture times update globally and expose full local tooltips', f
         }
     }
 
-    foreach (['<details class="capture-metadata">', '<summary>Captured from</summary>', 'capture-heading-number', 'data-assigned-lists', 'data-heading-tags'] as $required) {
+    foreach (['<details class="capture-metadata">', '<summary>Captured from</summary>', 'capture-heading-number', 'data-heading-tags'] as $required) {
         if (!str_contains($detail, $required)) {
             throw new RuntimeException('Capture detail metadata is incomplete: ' . $required);
         }
@@ -986,34 +944,32 @@ $test('Relative capture times update globally and expose full local tooltips', f
     if (preg_match('/<h1>(.*?)<\/h1>/s', $detail, $heading) !== 1 || str_contains($heading[1], 'capture-heading-number')) {
         throw new RuntimeException('The capture number is not isolated from the detail title');
     }
-    foreach (['.capture-heading-lists:has(a)::before', '.capture-heading-tags:has(a)::before', '.capture-heading-lists:not(:has(a))', '.capture-heading-tags:not(:has(a))'] as $required) {
+    foreach (['.capture-heading-tags:has(a)::before', '.capture-heading-tags:not(:has(a))'] as $required) {
         if (!str_contains($style, $required)) {
             throw new RuntimeException('Capture detail separators do not follow visible metadata: ' . $required);
         }
     }
 });
-$test('Capture menus and bulk actions share list assignment controls', function () use ($root) {
+$test('Capture menus and bulk actions expose archive, move, and trash controls', function () use ($root) {
     $application = (string) file_get_contents($root . '/app/Core/Application.php');
     $captureRepository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
-    $listRepository = (string) file_get_contents($root . '/app/Repositories/ListRepository.php');
     $collection = (string) file_get_contents($root . '/app/Views/captures/_list.html');
     $collectionItem = (string) file_get_contents($root . '/app/Views/captures/_item.html');
     $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.html');
-    $dialog = (string) file_get_contents($root . '/app/Views/captures/_list_dialog.html');
     $moveDialog = (string) file_get_contents($root . '/app/Views/captures/_move_dialog.html');
     $moveScript = (string) file_get_contents($root . '/public/assets/js/capture-move.js');
     $bulk = (string) file_get_contents($root . '/app/Views/captures/index.html');
 
-    foreach (['POST /captures/bulk-archive', 'POST /captures/bulk-lists'] as $required) {
+    foreach (['POST /captures/bulk-archive', 'POST /captures/bulk-delete'] as $required) {
         if (!str_contains($application, $required)) {
             throw new RuntimeException('Bulk action route is missing ' . $required);
         }
     }
-    if (!str_contains($captureRepository, 'archiveMany') || !str_contains($listRepository, 'assignMany')) {
-        throw new RuntimeException('Bulk archive or list assignment persistence is missing');
+    if (!str_contains($captureRepository, 'archiveMany') || !str_contains($captureRepository, 'trashMany')) {
+        throw new RuntimeException('Bulk archive or trash persistence is missing');
     }
-    foreach (['data-capture-actions', 'data-capture-action-menu', 'data-list-dialog', 'data-open-bulk-lists', 'glyph-archive', 'glyph-trash'] as $required) {
-        if (!str_contains($collection . $collectionItem . $menu . $dialog . $moveDialog . $bulk, $required)) {
+    foreach (['data-capture-actions', 'data-capture-action-menu', 'glyph-archive', 'glyph-trash'] as $required) {
+        if (!str_contains($collection . $collectionItem . $menu . $moveDialog . $bulk, $required)) {
             throw new RuntimeException('Capture action interface is missing ' . $required);
         }
     }
@@ -1259,10 +1215,9 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
     }
     $captureActions = (string) file_get_contents($root . '/public/assets/js/capture-actions.js');
     $captureBulk = (string) file_get_contents($root . '/public/assets/js/capture-bulk.js');
-    $captureLists = (string) file_get_contents($root . '/public/assets/js/capture-lists.js');
     $captureCollection = (string) file_get_contents($root . '/public/assets/js/capture-collection.js');
     foreach (['captureCollection?.transition', "Accept: 'application/json'", 'animateRemoval'] as $required) {
-        if (!str_contains($captureActions . $captureBulk . $captureLists . $captureCollection, $required)) {
+        if (!str_contains($captureActions . $captureBulk . $captureCollection, $required)) {
             throw new RuntimeException('Async capture collection actions are incomplete: ' . $required);
         }
     }
@@ -1286,7 +1241,6 @@ $test('Account settings and provider adapters remain decoupled', function () use
     $settings = (string) file_get_contents($root . '/app/Views/account/settings.html');
     $deviceTable = (string) file_get_contents($root . '/app/Views/devices/_table.html');
     $capture = (string) file_get_contents($root . '/app/Views/captures/show.html');
-    $listDialog = (string) file_get_contents($root . '/public/assets/js/capture-lists.js');
     $remote = (string) file_get_contents($root . '/app/Services/RemoteContentService.php');
     $registry = (string) file_get_contents($root . '/app/Services/LinkPreview/ProviderRegistry.php');
 
@@ -1308,8 +1262,7 @@ $test('Account settings and provider adapters remain decoupled', function () use
     if (!str_contains($deviceTable, 'data-relative-suffix=" ago"')) {
         throw new RuntimeException('Device use time is not relative');
     }
-    if (str_contains($capture, '<h2>Content</h2>')
-        || str_contains($listDialog, 'Choose every list this capture should belong to.')) {
+    if (str_contains($capture, '<h2>Content</h2>')) {
         throw new RuntimeException('Removed capture detail copy has returned');
     }
     foreach (['tiktok.com', 'apps.apple.com', 'itunes.apple.com'] as $providerDetail) {
@@ -1575,7 +1528,6 @@ $test('Inbox captures can be moved to Later and return when due', function () us
         CREATE TABLE catch_attachments (
             id TEXT PRIMARY KEY, capture_id TEXT, kind TEXT, mime_type TEXT, created_at TEXT
         );
-        CREATE TABLE catch_capture_lists (capture_id TEXT, list_id TEXT);
         CREATE TABLE catch_tags (id TEXT PRIMARY KEY, name TEXT);
         CREATE TABLE catch_capture_tags (capture_id TEXT, tag_id TEXT);
         INSERT INTO catch_captures VALUES

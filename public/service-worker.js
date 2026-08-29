@@ -1,4 +1,4 @@
-const CACHE = 'catch-shell-v50';
+const CACHE = 'catch-shell-v53';
 const SHELL = [
   '/offline.html',
   '/manifest.webmanifest',
@@ -8,18 +8,17 @@ const SHELL = [
   '/assets/css/devices.css?v=10',
   '/assets/css/device-detail.css?v=6',
   '/assets/css/device-provenance.css?v=1',
-  '/assets/css/capture-detail.css?v=18',
+  '/assets/css/capture-detail.css?v=21',
   '/assets/css/capture-collection.css?v=5',
   '/assets/css/capture-bulk.css?v=3',
   '/assets/css/tags.css?v=1',
-  '/assets/css/lists.css?v=2',
   '/assets/css/pair.css?v=1',
   '/assets/css/coming-soon.css?v=2',
   '/assets/css/shell.css?v=3',
   '/assets/css/account.css?v=6',
   '/assets/css/layout-compat.css?v=1',
   '/assets/css/share-target.css?v=1',
-  '/assets/js/app.js?v=52',
+  '/assets/js/app.js?v=54',
   '/assets/js/devices.js?v=7',
   '/assets/js/theme.js?v=2',
   '/assets/js/user-menu.js?v=2',
