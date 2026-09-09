@@ -67,6 +67,7 @@ final class View
             'isShareTarget' => false,'captureUrl' => '','shareError' => '','enableLaterDialog' => false,
             'enableMoveDialog' => false,
             'capturePoll' => false,
+            'targets' => [],'actions' => [],'availableActions' => [],'prsmBaseUrl' => '',
         ];
         $data['currentPath'] = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
         $data['isAuthenticated'] = is_array($data['user']);

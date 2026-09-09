@@ -11,6 +11,7 @@ use Catch\Controllers\Api\ShortcutController as ApiShortcut;
 use Catch\Controllers\Technical\EmailImportController;
 use Catch\Controllers\Web\AccountController;
 use Catch\Controllers\Web\AuthController;
+use Catch\Controllers\Web\AutomationController;
 use Catch\Controllers\Web\CaptureController as WebCaptures;
 use Catch\Controllers\Web\CliAuthController;
 use Catch\Controllers\Web\ComingSoonController;
@@ -18,13 +19,16 @@ use Catch\Controllers\Web\DeviceController;
 use Catch\Controllers\Web\HelpController;
 use Catch\Controllers\Web\PairController;
 use Catch\Controllers\Web\TagController;
+use Catch\Repositories\ActionRepository;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\CliAuthRepository;
 use Catch\Repositories\DeviceRepository;
 use Catch\Repositories\EmailImportRepository;
 use Catch\Repositories\EmailInboxRepository;
 use Catch\Repositories\TagRepository;
+use Catch\Repositories\TargetRepository;
 use Catch\Repositories\UserRepository;
+use Catch\Services\ActionExecutor;
 use Catch\Services\AuthService;
 use Catch\Services\CaptureDebugService;
 use Catch\Services\CaptureService;
@@ -33,6 +37,7 @@ use Catch\Services\EmailContentSanitizer;
 use Catch\Services\EmailImporter;
 use Catch\Services\EmailImportRunner;
 use Catch\Services\EmailMessageReader;
+use Catch\Services\PrsmTaskClient;
 use Catch\Services\RemoteContentService;
 use Catch\Services\SecretBox;
 use Catch\Services\UploadService;
@@ -62,9 +67,12 @@ final class Application
         }
         $pdo = $db->connection();
         $users = new UserRepository($pdo);
-        $devices = new DeviceRepository($pdo, new SecretBox($config));
+        $secretBox = new SecretBox($config);
+        $devices = new DeviceRepository($pdo, $secretBox);
         $captures = new CaptureRepository($pdo);
         $tags = new TagRepository($pdo);
+        $targets = new TargetRepository($pdo, $secretBox);
+        $actions = new ActionRepository($pdo);
         $auth = new AuthService($users, $config);
         $csrf = new Csrf();
         $access = new AccessPolicy($config);
@@ -98,7 +106,16 @@ final class Application
             $csrf,
         );
         $comingSoon = new ComingSoonController($view, $auth, $csrf);
-        $web = new WebCaptures($view, $auth, $captures, $tags, $service, $captureDebug, $csrf, $this->root . '/storage/uploads', $webDeviceId);
+        $web = new WebCaptures($view, $auth, $captures, $tags, $actions, $service, $captureDebug, $csrf, $this->root . '/storage/uploads', $webDeviceId);
+        $automationController = new AutomationController(
+            $view,
+            $auth,
+            $targets,
+            $actions,
+            new ActionExecutor($actions, $targets, $captures, $tags, new PrsmTaskClient($config)),
+            $config,
+            $csrf,
+        );
         $tagController = new TagController($view, $auth, $tags, $captures, $csrf);
         $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config, $captureDebug);
         $pairController = new PairController($view, $auth, $devices, $csrf);
@@ -141,6 +158,12 @@ final class Application
         $f3->route('POST /settings/email/@inbox/name', [$accountController, 'renameEmail']);
         $f3->route('GET /settings/email/@inbox/vcard', [$accountController, 'emailVcard']);
         $f3->route('POST /settings/email/@inbox/revoke', [$accountController, 'revokeEmail']);
+        $f3->route('GET /settings/targets', [$automationController, 'targets']);
+        $f3->route('POST /settings/targets', [$automationController, 'createTarget']);
+        $f3->route('POST /settings/targets/@target/delete', [$automationController, 'deleteTarget']);
+        $f3->route('GET /settings/actions', [$automationController, 'actions']);
+        $f3->route('POST /settings/actions', [$automationController, 'createAction']);
+        $f3->route('POST /settings/actions/@action/delete', [$automationController, 'deleteAction']);
         $f3->route('GET /inbox', [$web,'index']);
         $f3->route('GET /archive', [$web,'archiveIndex']);
         $f3->route('GET /trash', [$web,'trashIndex']);
@@ -159,6 +182,7 @@ final class Application
         $f3->route('POST /captures/@id/later', [$web,'later']);
         $f3->route('POST /captures/@id/restore', [$web,'restore']);
         $f3->route('POST /captures/@id/delete', [$web,'delete']);
+        $f3->route('POST /captures/@id/actions/@action', [$automationController, 'execute']);
         $f3->route('GET /tags', [$tagController,'index']);
         $f3->route('POST /tags', [$tagController,'create']);
         $f3->route('GET /tags/@tag/edit', [$tagController,'edit']);

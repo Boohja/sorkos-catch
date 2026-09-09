@@ -726,7 +726,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v53','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v59','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }
@@ -1553,6 +1553,113 @@ $test('Inbox captures can be moved to Later and return when due', function () us
         throw new RuntimeException('A future Later capture became visible before its return time');
     }
 });
+$test('Targets and ordered actions are wired through settings and captures', function () use ($root) {
+    $migration = (string) file_get_contents($root . '/database/migrations/018_targets_actions.sql');
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $settings = (string) file_get_contents($root . '/app/Views/account/settings.html');
+    $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.html');
+    $actionClient = (string) file_get_contents($root . '/public/assets/js/capture-actions.js');
+    $executor = (string) file_get_contents($root . '/app/Services/ActionExecutor.php');
+    $config = (string) file_get_contents($root . '/app/Core/Config.php');
+
+    foreach (['catch_targets', 'catch_actions', 'catch_action_steps', 'config_json', 'position'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Automation migration is incomplete: ' . $required);
+        }
+    }
+    foreach ([
+        'GET /settings/targets',
+        'POST /settings/actions',
+        'POST /captures/@id/actions/@action',
+        'ActionExecutor',
+        'TargetRepository',
+    ] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('Automation routing is incomplete: ' . $required);
+        }
+    }
+    foreach ([
+        "@settingsTab=='targets'",
+        "@settingsTab=='actions'",
+        'task:create',
+        'data-menu-custom-action',
+        'Run action',
+    ] as $required) {
+        if (!str_contains($settings . $menu . (string) file_get_contents($root . '/app/Views/captures/show.html'), $required)) {
+            throw new RuntimeException('Automation UI is incomplete: ' . $required);
+        }
+    }
+    foreach (['send_capture_to_target', 'add_tag', 'archive_capture', 'delete_capture'] as $step) {
+        if (!str_contains($executor, $step)) {
+            throw new RuntimeException('Action executor is missing step type: ' . $step);
+        }
+    }
+    foreach (['focusItem', 'tabIndex = -1', "event.key === 'Tab'", 'focusout'] as $required) {
+        if (!str_contains($actionClient, $required)) {
+            throw new RuntimeException('Capture action menu focus management is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($config, 'PRSM_BASE_URL') || !str_contains($config, 'PRSM_TLS_VERIFY')) {
+        throw new RuntimeException('Prsm configuration is incomplete.');
+    }
+
+    $payload = Catch\Services\PrsmTaskClient::taskPayload([
+        'title' => str_repeat('ä', 300),
+        'text' => 'Remember the full context',
+        'url' => 'https://example.com/item',
+        'extracted_text' => '',
+    ]);
+    if (mb_strlen($payload['title']) !== 240 || !str_contains($payload['description'], 'Remember the full context')) {
+        throw new RuntimeException('Prsm task payload does not respect the endpoint contract.');
+    }
+
+    if (!in_array('sqlite', PDO::getAvailableDrivers(), true)) {
+        return;
+    }
+    $database = new PDO('sqlite::memory:');
+    $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $database->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => '2026-08-29 12:00:00.000000', -1);
+    $database->exec(<<<'SQL'
+        CREATE TABLE catch_targets (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL,
+            config_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE TABLE catch_actions (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE TABLE catch_action_steps (
+            id TEXT PRIMARY KEY, action_id TEXT NOT NULL, position INTEGER NOT NULL,
+            type TEXT NOT NULL, config_json TEXT NOT NULL
+        );
+        SQL);
+    $targets = new Catch\Repositories\TargetRepository(
+        $database,
+        new Catch\Services\SecretBox(Catch\Core\Config::load($root)),
+    );
+    $target = $targets->createPrsmTask('user-1', 'secret-token');
+    if (isset($target['config']['token']) || !$target['configured']) {
+        throw new RuntimeException('Target list leaked or lost its encrypted credential state.');
+    }
+    $resolved = $targets->find($target['id'], 'user-1', true);
+    if (($resolved['config']['token'] ?? null) !== 'secret-token') {
+        throw new RuntimeException('Target token could not be decrypted for execution.');
+    }
+
+    $actions = new Catch\Repositories\ActionRepository($database);
+    $action = $actions->create('user-1', 'Create task', [
+        ['type' => 'send_capture_to_target', 'config' => ['target_id' => $target['id']]],
+        ['type' => 'add_tag', 'config' => ['name' => 'prsm']],
+        ['type' => 'archive_capture', 'config' => []],
+    ]);
+    if (
+        array_column($action['steps'], 'position') !== [1, 2, 3]
+        || !$actions->usesTarget($target['id'], 'user-1')
+    ) {
+        throw new RuntimeException('Action steps were not stored and returned in order.');
+    }
+});
+
 $test('Swagger UI is fully local', function () use ($root) {
     $index = (string)file_get_contents($root . '/public/docs/api/index.html');
     foreach (['swagger-ui.css','swagger-ui-bundle.js','swagger-ui-standalone-preset.js','LICENSE'] as $asset) {
@@ -1561,6 +1668,28 @@ $test('Swagger UI is fully local', function () use ($root) {
         }
     }if (!str_contains($index, '/vendor/swagger-ui/') || preg_match('/(?:src|href)=["\']https?:/i', $index)) {
         throw new RuntimeException('Swagger UI has an external runtime dependency');
+    }
+});
+
+$test('Installed app badge mirrors the known inbox count', function () use ($root) {
+    $badge = (string) file_get_contents($root . '/public/assets/js/app-badge.js');
+    $app = (string) file_get_contents($root . '/public/assets/js/app.js');
+    $layout = (string) file_get_contents($root . '/app/Views/layout.html');
+    $worker = (string) file_get_contents($root . '/public/service-worker.js');
+
+    foreach (['setAppBadge', 'clearAppBadge', 'capture:collection-changed', 'data-collection-status="inbox"', 'Notification.requestPermission', 'catch-inbox-count'] as $required) {
+        if (!str_contains($badge, $required)) {
+            throw new RuntimeException('App badge integration is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($app, 'initAppBadge') || !str_contains($layout, 'data-authenticated=')) {
+        throw new RuntimeException('App badge initialization is missing.');
+    }
+    if (!str_contains((string) file_get_contents($root . '/app/Views/account/settings.html'), 'data-enable-app-badge')) {
+        throw new RuntimeException('App badge permission control is missing.');
+    }
+    if (!str_contains($worker, '/assets/js/app-badge.js?v=2')) {
+        throw new RuntimeException('App badge module is missing from the offline shell.');
     }
 });
 exit($failures ? 1 : 0);

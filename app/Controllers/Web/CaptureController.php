@@ -9,6 +9,7 @@ use Catch\Core\View;
 use Catch\Http\ByteRange;
 use Catch\Http\Request;
 use Catch\Http\Response;
+use Catch\Repositories\ActionRepository;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\TagRepository;
 use Catch\Services\AuthService;
@@ -26,6 +27,7 @@ final class CaptureController
         private readonly AuthService $auth,
         private readonly CaptureRepository $captures,
         private readonly TagRepository $tags,
+        private readonly ActionRepository $actions,
         private readonly CaptureService $service,
         private readonly CaptureDebugService $debug,
         private readonly Csrf $csrf,
@@ -134,6 +136,7 @@ final class CaptureController
             'enableLaterDialog' => $status === 'inbox',
             'enableMoveDialog' => $status !== 'trash',
             'capturePoll' => $status === 'inbox',
+            'availableActions' => $status === 'trash' ? [] : $this->actions->all($user['id']),
             'csrf' => $this->csrf->token(),
         ]);
     }
@@ -245,6 +248,7 @@ final class CaptureController
             'enableTagDialog' => empty($capture['deleted_at']),
             'enableLaterDialog' => empty($capture['deleted_at']) && $capture['status'] === 'inbox',
             'enableMoveDialog' => empty($capture['deleted_at']),
+            'availableActions' => empty($capture['deleted_at']) ? $this->actions->all($user['id']) : [],
             'debugEnabled' => $this->debug->enabled(),
             'debugRequests' => $this->debug->forCapture($user['id'], $capture['id']),
             'csrf' => $this->csrf->token(),

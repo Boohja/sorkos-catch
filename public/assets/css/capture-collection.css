@@ -367,7 +367,11 @@
 .capture-action-menu button:hover,
 .capture-action-menu button:focus-visible {
   background: var(--surface-muted);
-  outline: 0;
+}
+
+.capture-action-menu button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--focus) 45%, transparent);
+  outline-offset: -2px;
 }
 
 .capture-action-menu .glyph {
@@ -380,6 +384,13 @@
 .capture-action-menu .capture-action-danger,
 .capture-action-menu .capture-action-danger .glyph {
   color: var(--danger);
+}
+
+.capture-action-menu-separator {
+  display: block;
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--border);
 }
 
 @media (max-width: 760px) {

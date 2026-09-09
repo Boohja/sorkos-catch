@@ -148,6 +148,20 @@
       </true>
       <false><button class="button button-secondary" type="button" data-open-tag-dialog><i class="glyph glyph-tag"
             aria-hidden="true"></i>Tags</button>
+        <check if="{{ @availableActions }}">
+          <details class="detail-action-picker">
+            <summary class="button button-primary"><i class="glyph glyph-move" aria-hidden="true"></i>Run action
+            </summary>
+            <div>
+              <repeat group="{{ @availableActions }}" value="{{ @action }}">
+                <form method="post" action="/captures/{{ urlencode(@capture.id) }}/actions/{{ urlencode(@action.id) }}">
+                  <input type="hidden" name="_csrf" value="{{ @csrf }}"><button
+                    type="submit">{{ @action.name }}</button>
+                </form>
+              </repeat>
+            </div>
+          </details>
+        </check>
         <check if="{{ @capture.status=='inbox' }}"><button class="button button-secondary" type="button" data-open-later
             data-capture-id="{{ @capture.id }}"><i class="glyph glyph-resubmission"
               aria-hidden="true"></i>Later</button></check>

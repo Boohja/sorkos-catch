@@ -1,13 +1,15 @@
 <header class="page-heading account-page-heading">
   <div>
     <h1>Settings</h1>
-    <p>Choose how Catch looks and works on this browser.</p>
+    <p>Choose how Catch looks, connects, and works for you.</p>
   </div>
 </header>
 <nav class="filter-tabs settings-tabs" aria-label="Settings sections"><a href="/settings" <check
     if="{{ @settingsTab=='general' }}"> aria-current="page"</check>>General</a><a href="/settings/devices" <check
     if="{{ @settingsTab=='devices' }}"> aria-current="page"</check>>Devices</a><a href="/settings/email" <check
-    if="{{ @settingsTab=='email' }}"> aria-current="page"</check>>Email</a></nav>
+    if="{{ @settingsTab=='email' }}"> aria-current="page"</check>>Email</a><a href="/settings/targets" <check
+    if="{{ @settingsTab=='targets' }}"> aria-current="page"</check>>Targets</a><a href="/settings/actions" <check
+    if="{{ @settingsTab=='actions' }}"> aria-current="page"</check>>Actions</a></nav>
 <check if="{{ @settingsTab=='devices' }}">
   <true>
     <header class="settings-section-heading">
@@ -25,8 +27,7 @@
           <div>
             <h2>Email addresses</h2>
             <p>Forward an email to a private address to create a Catch.</p>
-          </div>
-          <a class="button button-primary" href="/settings/email/new">Create address</a>
+          </div><a class="button button-primary" href="/settings/email/new">Create address</a>
         </header>
         <check if="{{ !@emailInboxes }}">
           <true>
@@ -37,42 +38,165 @@
           </true>
           <false>
             <div class="email-inboxes" role="table" aria-label="Email addresses">
-              <repeat group="{{ @emailInboxes }}" value="{{ @inbox }}">
-                <a class="email-inbox-row" role="row" href="{{ @inbox.url }}"><span class="email-inbox-icon"
-                    role="cell" aria-label="Email inbox"><i class="glyph glyph-mail" aria-hidden="true"></i></span><span
-                    class="email-inbox-main" role="cell"><strong>{{ @inbox.name }}</strong><code>{{ @inbox.address }}</code></span><span
+              <repeat group="{{ @emailInboxes }}" value="{{ @inbox }}"><a class="email-inbox-row" role="row"
+                  href="{{ @inbox.url }}"><span class="email-inbox-icon" role="cell" aria-label="Email inbox"><i
+                      class="glyph glyph-mail" aria-hidden="true"></i></span><span class="email-inbox-main"
+                    role="cell"><strong>{{ @inbox.name }}</strong><code>{{ @inbox.address }}</code></span><span
                     class="email-inbox-count" role="cell">{{ (int)@inbox.capture_count }}
                     {{ (int)@inbox.capture_count===1 ? 'capture' : 'captures' }}</span><span class="email-inbox-date"
-                    role="cell">Last used: <check if="{{ @inbox.last_used_at }}"><true><time
-                        datetime="{{ @inbox.view.utcLastUsedAt }}" data-relative-time data-relative-suffix=" ago">{{ @inbox.view.relativeLastUsedAt }} ago</time></true><false>not yet</false></check></span><span
-                    class="email-inbox-status<check if="{{ @inbox.active }}"> is-active</check>" role="cell"><span
-                      aria-hidden="true"></span>{{ @inbox.active ? 'Active' : 'Revoked' }}</span></a>
-        </repeat>
+                    role="cell">Last used: <check if="{{ @inbox.last_used_at }}">
+                      <true><time datetime="{{ @inbox.view.utcLastUsedAt }}" data-relative-time
+                          data-relative-suffix=" ago">{{ @inbox.view.relativeLastUsedAt }} ago</time></true>
+                      <false>not yet</false>
+                    </check></span><span class="email-inbox-status<check if=" {{ @inbox.active }}"> is-active
+        </check>" role="cell"><span aria-hidden="true"></span>{{ @inbox.active ? 'Active' :
+                    'Revoked' }}</span></a></repeat>
         </div>
   </false>
 </check>
 </true>
 <false>
-  <form class="preference-settings" data-preference-settings>
-    <fieldset>
-      <legend>Appearance</legend>
-      <p>Use the system setting or choose a theme for this browser.</p><label for="settings-theme">Theme</label><select
-        id="settings-theme" data-theme-select>
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </fieldset>
-    <fieldset>
-      <legend>Capture lists</legend>
-      <p>Choose the layout used when a capture collection opens.</p><label for="settings-capture-view">Preferred
-        layout</label><select id="settings-capture-view" data-capture-view-setting>
-        <option value="list">List</option>
-        <option value="grid">Grid</option>
-      </select>
-    </fieldset>
-    <p class="preference-status" data-preference-status role="status" aria-live="polite"></p>
-  </form>
+  <check if="{{ @settingsTab=='targets' }}">
+    <true>
+      <header class="settings-section-heading">
+        <div>
+          <h2>Targets</h2>
+          <p>Connect destinations that can receive a capture.</p>
+        </div>
+      </header>
+      <section class="automation-settings" aria-labelledby="new-target-title">
+        <form class="automation-create-form target-create-form" method="post" action="/settings/targets"><input
+            type="hidden" name="_csrf" value="{{ @csrf }}">
+          <div class="automation-form-heading">
+            <h3 id="new-target-title">Add a Prsm target</h3>
+            <p>Catch sends tasks to <code>{{ @prsmBaseUrl?:'the configured Prsm installation' }}</code>. The API token
+              needs the <code>task:create</code> scope.</p>
+          </div><label><span>API token</span><input type="password" name="token" maxlength="4096" required
+              autocomplete="off" spellcheck="false" placeholder="Paste token"></label><button
+            class="button button-primary" type="submit">Add target</button>
+        </form>
+        <check if="{{ !@targets }}">
+          <true>
+            <div class="automation-empty">
+              <h3>No targets yet</h3>
+              <p>Add a Prsm token above. Tokens are encrypted before they are stored.</p>
+            </div>
+          </true>
+          <false>
+            <div class="automation-list" role="list" aria-label="Targets">
+              <repeat group="{{ @targets }}" value="{{ @target }}">
+                <article class="automation-row" role="listitem">
+                  <div><strong>{{ @target.name }}</strong><span>{{ @target.type_label }}</span></div><span
+                    class="automation-status"><span aria-hidden="true"></span>Connected</span>
+                  <form method="post" action="/settings/targets/{{ urlencode(@target.id) }}/delete"
+                    onsubmit="return confirm('Delete this target?')"><input type="hidden" name="_csrf"
+                      value="{{ @csrf }}"><button class="button button-quiet" type="submit">Delete</button>
+                  </form>
+                </article>
+              </repeat>
+            </div>
+          </false>
+        </check>
+      </section>
+    </true>
+    <false>
+      <check if="{{ @settingsTab=='actions' }}">
+        <true>
+          <header class="settings-section-heading">
+            <div>
+              <h2>Actions</h2>
+              <p>Bundle ordered steps into one choice on every capture.</p>
+            </div>
+          </header>
+          <section class="automation-settings" aria-labelledby="new-action-title">
+            <check if="{{ @targets }}">
+              <true>
+                <form class="automation-create-form action-create-form" method="post" action="/settings/actions"><input
+                    type="hidden" name="_csrf" value="{{ @csrf }}">
+                  <div class="automation-form-heading">
+                    <h3 id="new-action-title">Create an action</h3>
+                    <p>The target step runs first. Catch only runs later steps when it succeeds.</p>
+                  </div><label><span>Name</span><input name="name" maxlength="120" required
+                      placeholder="Create task in Prsm"></label><label><span>Target</span><select name="target_id"
+                      required>
+                      <repeat group="{{ @targets }}" value="{{ @target }}">
+                        <option value="{{ @target.id }}">{{ @target.name }} · {{ @target.type_label }}</option>
+                      </repeat>
+                    </select></label><label><span>Add tag <small>optional</small></span><input name="tag"
+                      maxlength="100" placeholder="prsm"></label><label><span>Then</span><select name="after">
+                      <option value="keep">Keep capture where it is</option>
+                      <option value="archive">Archive capture</option>
+                      <option value="trash">Move capture to Trash</option>
+                    </select></label><button class="button button-primary" type="submit">Create action</button>
+                </form>
+              </true>
+              <false>
+                <div class="automation-empty automation-empty-prominent">
+                  <h3 id="new-action-title">An action needs a target</h3>
+                  <p>Add a destination first, then return here to assemble its steps.</p><a
+                    class="button button-primary" href="/settings/targets">Add target</a>
+                </div>
+              </false>
+            </check>
+            <check if="{{ @targets && !@actions }}">
+              <div class="automation-empty">
+                <h3>No actions yet</h3>
+                <p>Created actions appear in the action menu on every capture.</p>
+              </div>
+            </check>
+            <check if="{{ @targets && @actions }}">
+              <div class="automation-list" role="list" aria-label="Actions">
+                <repeat group="{{ @actions }}" value="{{ @action }}">
+                  <article class="automation-row action-row" role="listitem">
+                    <div><strong>{{ @action.name }}</strong>
+                      <ol>
+                        <repeat group="{{ @action.steps }}" value="{{ @step }}">
+                          <li>{{ @step.label }}</li>
+                        </repeat>
+                      </ol>
+                    </div>
+                    <form method="post" action="/settings/actions/{{ urlencode(@action.id) }}/delete"
+                      onsubmit="return confirm('Delete this action?')"><input type="hidden" name="_csrf"
+                        value="{{ @csrf }}"><button class="button button-quiet" type="submit">Delete</button>
+                    </form>
+                  </article>
+                </repeat>
+              </div>
+            </check>
+          </section>
+        </true>
+        <false>
+          <form class="preference-settings" data-preference-settings>
+            <fieldset>
+              <legend>Appearance</legend>
+              <p>Use the system setting or choose a theme for this browser.</p><label
+                for="settings-theme">Theme</label><select id="settings-theme" data-theme-select>
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </fieldset>
+            <fieldset>
+              <legend>Capture lists</legend>
+              <p>Choose the layout used when a capture collection opens.</p><label for="settings-capture-view">Preferred
+                layout</label><select id="settings-capture-view" data-capture-view-setting>
+                <option value="list">List</option>
+                <option value="grid">Grid</option>
+              </select>
+            </fieldset>
+            <fieldset data-app-badge-settings hidden>
+              <legend>App icon</legend>
+              <p>Show the last known number of inbox captures on the installed app icon. iPhone and iPad require
+                notification permission, but Catch does not send notifications yet.</p><button
+                class="button button-secondary" type="button" data-enable-app-badge>Enable app badge</button>
+              <p class="preference-status" data-app-badge-status role="status" aria-live="polite"></p>
+            </fieldset>
+            <p class="preference-status" data-preference-status role="status" aria-live="polite"></p>
+          </form>
+        </false>
+      </check>
+    </false>
+  </check>
 </false>
 </check>
 </false>

@@ -7,7 +7,7 @@ import { initCaptureTags } from './capture-tags.js?v=6';
 import { initCaptureBulk } from './capture-bulk.js?v=8';
 import { initCaptureView } from './capture-view.js?v=3';
 import { initRelativeTime } from './relative-time.js?v=2';
-import { initCaptureActions } from './capture-actions.js?v=3';
+import { initCaptureActions } from './capture-actions.js?v=6';
 import { initCaptureLater } from './capture-later.js?v=1';
 import { initCapturePreview } from './capture-preview.js?v=2';
 import { initCaptureCreate } from './capture-create.js?v=2';
@@ -15,6 +15,7 @@ import { initCaptureCollection } from './capture-collection.js?v=5';
 import { initUserMenu } from './user-menu.js?v=2';
 import { initMobileNavigation } from './mobile-navigation.js?v=3';
 import { initCaptureMove } from './capture-move.js?v=1';
+import { initAppBadge } from './app-badge.js?v=2';
 
 initTheme();
 initRequestProgress();
@@ -32,6 +33,7 @@ initCaptureCreate();
 initUserMenu();
 initMobileNavigation();
 initCaptureMove();
+initAppBadge();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js').catch(() => {});

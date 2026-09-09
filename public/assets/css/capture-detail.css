@@ -688,6 +688,54 @@
   border-bottom: 0
 }
 
+.detail-action-picker {
+  position: relative;
+}
+
+.detail-action-picker>summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.detail-action-picker>summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-action-picker>div {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  z-index: 7;
+  width: max-content;
+  min-width: 210px;
+  max-width: min(320px, calc(100vw - 28px));
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
+}
+
+.detail-action-picker form {
+  margin: 0;
+}
+
+.detail-action-picker form button {
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.detail-action-picker form button:hover,
+.detail-action-picker form button:focus-visible {
+  background: var(--surface-muted);
+}
+
 .detail .capture-metadata {
   border-bottom: 0
 }

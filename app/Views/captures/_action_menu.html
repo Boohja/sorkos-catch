@@ -1,5 +1,12 @@
-<div class="capture-action-menu" data-capture-action-menu role="menu" hidden><button type="button" role="menuitem"
-    data-menu-later><i class="glyph glyph-resubmission" aria-hidden="true"></i><span>Later</span></button>
+<div class="capture-action-menu" data-capture-action-menu role="menu" hidden>
+  <repeat group="{{ @availableActions }}" value="{{ @action }}">
+    <form method="post" data-menu-custom-action data-action-id="{{ @action.id }}"><input type="hidden" name="_csrf"
+        value="{{ @csrf }}"><button type="submit" role="menuitem"><i class="glyph glyph-move"
+          aria-hidden="true"></i><span>{{ @action.name }}</span></button></form>
+  </repeat>
+  <check if="{{ @availableActions }}"><span class="capture-action-menu-separator" role="separator"></span></check>
+  <button type="button" role="menuitem" data-menu-later><i class="glyph glyph-resubmission"
+      aria-hidden="true"></i><span>Later</span></button>
   <form method="post" data-menu-archive><input type="hidden" name="_csrf" value="{{ @csrf }}"><button type="submit"
       role="menuitem"><i class="glyph glyph-archive" aria-hidden="true"></i><span>Archive</span></button></form>
   <form method="post" data-menu-trash><input type="hidden" name="_csrf" value="{{ @csrf }}"><button type="submit"
