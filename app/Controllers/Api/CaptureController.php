@@ -9,6 +9,7 @@ use Catch\Http\Response;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\DeviceRepository;
 use Catch\Repositories\TagRepository;
+use Catch\Services\ActionExecutor;
 use Catch\Services\CaptureDebugService;
 use Catch\Services\CaptureService;
 use InvalidArgumentException;
@@ -21,6 +22,7 @@ final class CaptureController
         private readonly TagRepository $tags,
         private readonly CaptureService $service,
         private readonly CaptureDebugService $debug,
+        private readonly ActionExecutor $actions,
     ) {
     }
 
@@ -102,7 +104,10 @@ final class CaptureController
             $result = $this->service->create($user['id'], $input, $_FILES, $user['device_id']);
             $capture = $result['capture'];
             foreach ($tagNames as $tagName) {
-                $this->tags->assignByName((string) $capture['id'], $tagName, (string) $user['id']);
+                $tag = $this->tags->assignByName((string) $capture['id'], $tagName, (string) $user['id']);
+                if ($tag) {
+                    $this->actions->executeForAssignedTag($tag, (string) $capture['id'], (string) $user['id']);
+                }
             }
             $status = $result['created'] ? 201 : 200;
             $this->debug->finish(

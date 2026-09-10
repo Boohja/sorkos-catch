@@ -15,23 +15,24 @@ final class TagRepository
 
     public function list(string $userId): array
     {
-        $q = $this->db->prepare('SELECT t.*,(SELECT COUNT(*) FROM catch_capture_tags ct JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.tag_id=t.id AND c.deleted_at IS NULL) capture_count FROM catch_tags t WHERE t.user_id=:user ORDER BY t.name');
+        $q = $this->db->prepare('SELECT t.*,(SELECT name FROM catch_actions a WHERE a.id=t.action_id) action_name,(SELECT COUNT(*) FROM catch_capture_tags ct JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.tag_id=t.id AND c.deleted_at IS NULL) capture_count FROM catch_tags t WHERE t.user_id=:user ORDER BY t.name');
         $q->execute(['user' => $userId]);
         return array_map([$this,'hydrate'], $q->fetchAll());
     }
     public function find(string $id, string $userId): ?array
     {
-        $q = $this->db->prepare('SELECT t.*,(SELECT COUNT(*) FROM catch_capture_tags ct JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.tag_id=t.id AND c.deleted_at IS NULL) capture_count FROM catch_tags t WHERE t.id=:id AND t.user_id=:user');
+        $q = $this->db->prepare('SELECT t.*,(SELECT name FROM catch_actions a WHERE a.id=t.action_id) action_name,(SELECT COUNT(*) FROM catch_capture_tags ct JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.tag_id=t.id AND c.deleted_at IS NULL) capture_count FROM catch_tags t WHERE t.id=:id AND t.user_id=:user');
         $q->execute(['id' => $id,'user' => $userId]);
         $tag = $q->fetch();
         return $tag ? $this->hydrate($tag) : null;
     }
-    public function create(string $userId, string $name): array
+    public function create(string $userId, string $name, ?string $actionId = null): array
     {
         $name = mb_strtolower($this->name($name));
+        $actionId = $this->actionId($actionId, $userId);
         $id = Id::uuid();
         try {
-            $this->db->prepare('INSERT INTO catch_tags (id,user_id,name,created_at) VALUES (:id,:user,:name,UTC_TIMESTAMP(6))')->execute(['id' => $id,'user' => $userId,'name' => $name]);
+            $this->db->prepare('INSERT INTO catch_tags (id,user_id,name,action_id,created_at) VALUES (:id,:user,:name,:action,UTC_TIMESTAMP(6))')->execute(['id' => $id,'user' => $userId,'name' => $name,'action' => $actionId]);
         } catch (\PDOException $e) {
             if ((string)$e->getCode() === '23000') {
                 throw new \InvalidArgumentException('A tag with this name already exists.');
@@ -39,12 +40,13 @@ final class TagRepository
         }
         return $this->find($id, $userId) ?? throw new \RuntimeException('The tag could not be created.');
     }
-    public function update(string $id, string $userId, string $name): ?array
+    public function update(string $id, string $userId, string $name, ?string $actionId = null): ?array
     {
         $name = $this->name($name);
+        $actionId = $this->actionId($actionId, $userId);
         try {
-            $q = $this->db->prepare('UPDATE catch_tags SET name=:name WHERE id=:id AND user_id=:user');
-            $q->execute(['name' => $name,'id' => $id,'user' => $userId]);
+            $q = $this->db->prepare('UPDATE catch_tags SET name=:name,action_id=:action WHERE id=:id AND user_id=:user');
+            $q->execute(['name' => $name,'action' => $actionId,'id' => $id,'user' => $userId]);
         } catch (\PDOException $e) {
             if ((string)$e->getCode() === '23000') {
                 throw new \InvalidArgumentException('A tag with this name already exists.');
@@ -64,8 +66,12 @@ final class TagRepository
         if (!$tag || !$this->ownsCapture($captureId, $userId)) {
             return null;
         }
-        $q = $this->db->prepare('INSERT IGNORE INTO catch_capture_tags (capture_id,tag_id) VALUES (:capture,:tag)');
+        $insert = $this->db->getAttribute(PDO::ATTR_DRIVER_NAME) === 'sqlite'
+            ? 'INSERT OR IGNORE INTO catch_capture_tags (capture_id,tag_id) VALUES (:capture,:tag)'
+            : 'INSERT IGNORE INTO catch_capture_tags (capture_id,tag_id) VALUES (:capture,:tag)';
+        $q = $this->db->prepare($insert);
         $q->execute(['capture' => $captureId,'tag' => $tagId]);
+        $tag['newly_assigned'] = $q->rowCount() > 0;
         return $tag;
     }
     public function assignByName(string $captureId, string $name, string $userId): ?array
@@ -119,10 +125,23 @@ final class TagRepository
     }
     private function findByName(string $name, string $userId): ?array
     {
-        $q = $this->db->prepare('SELECT t.*,(SELECT COUNT(*) FROM catch_capture_tags ct JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.tag_id=t.id AND c.deleted_at IS NULL) capture_count FROM catch_tags t WHERE t.name=:name AND t.user_id=:user LIMIT 1');
+        $q = $this->db->prepare('SELECT t.*,(SELECT name FROM catch_actions a WHERE a.id=t.action_id) action_name,(SELECT COUNT(*) FROM catch_capture_tags ct JOIN catch_captures c ON c.id=ct.capture_id WHERE ct.tag_id=t.id AND c.deleted_at IS NULL) capture_count FROM catch_tags t WHERE t.name=:name AND t.user_id=:user LIMIT 1');
         $q->execute(['name' => $name,'user' => $userId]);
         $tag = $q->fetch();
         return $tag ? $this->hydrate($tag) : null;
+    }
+    private function actionId(?string $actionId, string $userId): ?string
+    {
+        $actionId = substr(trim((string) $actionId), 0, 36);
+        if ($actionId === '') {
+            return null;
+        }
+        $q = $this->db->prepare('SELECT 1 FROM catch_actions WHERE id=:id AND user_id=:user');
+        $q->execute(['id' => $actionId,'user' => $userId]);
+        if (!$q->fetchColumn()) {
+            throw new \InvalidArgumentException('Choose an action that belongs to your account.');
+        }
+        return $actionId;
     }
     private function name(string $name): string
     {

@@ -46,13 +46,7 @@ final class ActionRepository
 
     public function create(string $userId, string $name, array $steps): array
     {
-        $name = trim((string) preg_replace('/\s+/u', ' ', $name));
-        if ($name === '' || mb_strlen($name) > 120) {
-            throw new InvalidArgumentException('Enter an action name of up to 120 characters.');
-        }
-        if (!$steps) {
-            throw new InvalidArgumentException('Add at least one step to the action.');
-        }
+        $name = $this->validate($name, $steps);
 
         $id = Id::uuid();
         $this->db->beginTransaction();
@@ -63,26 +57,7 @@ final class ActionRepository
                 SQL);
             $query->execute(['id' => $id, 'user' => $userId, 'name' => $name]);
 
-            $stepQuery = $this->db->prepare(<<<'SQL'
-                INSERT INTO catch_action_steps (id,action_id,position,type,config_json)
-                VALUES (:id,:action,:position,:type,:config)
-                SQL);
-            foreach (array_values($steps) as $position => $step) {
-                $type = (string) ($step['type'] ?? '');
-                if (!in_array($type, self::TYPES, true)) {
-                    throw new InvalidArgumentException('Unknown action step type.');
-                }
-                $stepQuery->execute([
-                    'id' => Id::uuid(),
-                    'action' => $id,
-                    'position' => $position + 1,
-                    'type' => $type,
-                    'config' => json_encode(
-                        is_array($step['config'] ?? null) ? $step['config'] : [],
-                        JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-                    ),
-                ]);
-            }
+            $this->insertSteps($id, $steps);
             $this->db->commit();
         } catch (\Throwable $error) {
             if ($this->db->inTransaction()) {
@@ -92,6 +67,33 @@ final class ActionRepository
         }
 
         return $this->find($id, $userId) ?? throw new RuntimeException('The action could not be created.');
+    }
+
+    public function update(string $id, string $userId, string $name, array $steps): ?array
+    {
+        $name = $this->validate($name, $steps);
+        if (!$this->find($id, $userId)) {
+            return null;
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $query = $this->db->prepare(
+                'UPDATE catch_actions SET name=:name,updated_at=UTC_TIMESTAMP(6) WHERE id=:id AND user_id=:user',
+            );
+            $query->execute(['name' => $name, 'id' => $id, 'user' => $userId]);
+            $delete = $this->db->prepare('DELETE FROM catch_action_steps WHERE action_id=:action');
+            $delete->execute(['action' => $id]);
+            $this->insertSteps($id, $steps);
+            $this->db->commit();
+        } catch (\Throwable $error) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            throw $error;
+        }
+
+        return $this->find($id, $userId);
     }
 
     public function delete(string $id, string $userId): bool
@@ -141,5 +143,43 @@ final class ActionRepository
         $action['steps'] = $steps;
 
         return $action;
+    }
+
+    private function validate(string $name, array $steps): string
+    {
+        $name = trim((string) preg_replace('/\s+/u', ' ', $name));
+        if ($name === '' || mb_strlen($name) > 120) {
+            throw new InvalidArgumentException('Enter an action name of up to 120 characters.');
+        }
+        if (!$steps) {
+            throw new InvalidArgumentException('Add at least one step to the action.');
+        }
+        foreach ($steps as $step) {
+            if (!in_array((string) ($step['type'] ?? ''), self::TYPES, true)) {
+                throw new InvalidArgumentException('Unknown action step type.');
+            }
+        }
+
+        return $name;
+    }
+
+    private function insertSteps(string $actionId, array $steps): void
+    {
+        $query = $this->db->prepare(<<<'SQL'
+            INSERT INTO catch_action_steps (id,action_id,position,type,config_json)
+            VALUES (:id,:action,:position,:type,:config)
+            SQL);
+        foreach (array_values($steps) as $position => $step) {
+            $query->execute([
+                'id' => Id::uuid(),
+                'action' => $actionId,
+                'position' => $position + 1,
+                'type' => (string) $step['type'],
+                'config' => json_encode(
+                    is_array($step['config'] ?? null) ? $step['config'] : [],
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                ),
+            ]);
+        }
     }
 }

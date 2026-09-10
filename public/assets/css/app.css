@@ -278,9 +278,12 @@ p {
   line-height: 1.5
 }
 
-.capture-composer textarea::placeholder,
-input::placeholder {
-  color: color-mix(in srgb, var(--muted) 85%, var(--text))
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  font-style: italic;
+  font-weight: 400;
+  opacity: .88
 }
 
 .composer-actions {
@@ -558,11 +561,17 @@ label {
 }
 
 input,
-textarea {
+textarea,
+select {
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface);
   padding: 11px 12px
+}
+
+select {
+  min-height: 42px;
+  padding-right: 36px
 }
 
 .auth-form input {

@@ -5,9 +5,20 @@
   </div>
 </header>
 <section class="tag-create">
-  <form class="inline-form" method="post" action="/tags"><input type="hidden" name="_csrf"
-      value="{{ @csrf }}"><label>New tag<input name="name" maxlength="100" required autocomplete="off"
-        placeholder="Research"></label><button class="button button-primary">Create tag</button></form>
+  <form class="tag-form" method="post" action="/tags"><input type="hidden" name="_csrf" value="{{ @csrf }}">
+    <label><span>New tag</span><input name="name" maxlength="100" required value="{{ @tagForm.name }}"
+        placeholder="research"></label>
+    <div class="tag-form-field"><span class="tag-form-label">Automatic <a href="/settings/actions">action</a>
+        <small>optional</small></span><select name="action_id" aria-label="Automatic action">
+        <option value="">None</option>
+        <repeat group="{{ @actions }}" value="{{ @action }}">
+          <option value="{{ @action.id }}" {{ @tagForm.action_id===@action.id ? 'selected' : '' }}>{{ @action.name }}
+          </option>
+        </repeat>
+      </select><small>Runs once when this tag is newly added to a capture, including during capture creation.</small>
+    </div>
+    <button class="button button-primary">Create tag</button>
+  </form>
 </section>
 <section class="tag-list" aria-label="Tags">
   <check if="{{ !@tags }}">
@@ -19,7 +30,9 @@
   <repeat group="{{ @tags }}" value="{{ @tag }}">
     <article class="tag-row">
       <div><a href="{{ @tag.url }}"><strong>{{ @tag.name }}</strong></a><span>{{ (int)@tag.capture_count }}
-          {{ (int)@tag.capture_count===1 ? 'capture' : 'captures' }}</span></div>
+          {{ (int)@tag.capture_count===1 ? 'capture' : 'captures' }}
+          <check if="{{ @tag.action_name }}"> · Runs “{{ @tag.action_name }}”</check>
+        </span></div>
       <div class="tag-actions"><a class="button button-secondary"
           href="/tags/{{ rawurlencode(@tag.id.'-'.@tag.slug) }}/edit">Edit</a>
         <form method="post" action="/tags/{{ rawurlencode(@tag.id.'-'.@tag.slug) }}/delete"

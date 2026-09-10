@@ -64,138 +64,223 @@
           <p>Connect destinations that can receive a capture.</p>
         </div>
       </header>
-      <section class="automation-settings" aria-labelledby="new-target-title">
-        <form class="automation-create-form target-create-form" method="post" action="/settings/targets"><input
-            type="hidden" name="_csrf" value="{{ @csrf }}">
-          <div class="automation-form-heading">
-            <h3 id="new-target-title">Add a Prsm target</h3>
-            <p>Catch sends tasks to <code>{{ @prsmBaseUrl?:'the configured Prsm installation' }}</code>. The API token
-              needs the <code>task:create</code> scope.</p>
-          </div><label><span>API token</span><input type="password" name="token" maxlength="4096" required
-              autocomplete="off" spellcheck="false" placeholder="Paste token"></label><button
-            class="button button-primary" type="submit">Add target</button>
-        </form>
-        <check if="{{ !@targets }}">
-          <true>
-            <div class="automation-empty">
-              <h3>No targets yet</h3>
-              <p>Add a Prsm token above. Tokens are encrypted before they are stored.</p>
-            </div>
-          </true>
-          <false>
-            <div class="automation-list" role="list" aria-label="Targets">
-              <repeat group="{{ @targets }}" value="{{ @target }}">
-                <article class="automation-row" role="listitem">
-                  <div><strong>{{ @target.name }}</strong><span>{{ @target.type_label }}</span></div><span
-                    class="automation-status"><span aria-hidden="true"></span>Connected</span>
-                  <form method="post" action="/settings/targets/{{ urlencode(@target.id) }}/delete"
-                    onsubmit="return confirm('Delete this target?')"><input type="hidden" name="_csrf"
-                      value="{{ @csrf }}"><button class="button button-quiet" type="submit">Delete</button>
-                  </form>
-                </article>
-              </repeat>
-            </div>
-          </false>
-        </check>
-      </section>
+      <section class="automation-settings">
+        <form class="automation-create-form target-create-form" method="post"
+          action="{{ @editingTarget ? '/settings/targets/'.urlencode(@editingTarget.id).'/edit' : '/settings/targets' }}"
+          data-target-create-form<check if="{{ @editingTarget }}"> data-target-editing
+  </check> aria-label="{{ @editingTarget ? 'Edit target' : 'Add target' }}"><input type="hidden" name="_csrf"
+    value="{{ @csrf }}">
+  <div class="automation-primary-choice">
+    <label><span>Target type</span><select name="type" data-target-type<check if="{{ @editingTarget }}"> disabled
+        </check>> <option value="prsm_task" {{ @targetForm.type==='prsm_task' ? 'selected' : '' }}>Prsm Task</option>
+        <option value="generic_webhook" {{ @targetForm.type==='generic_webhook' ? 'selected' : '' }}>Generic Endpoint
+        </option>
+      </select></label>
+    <p data-target-form-description>Send tasks to the configured Prsm installation. The token needs the
+      <code>task:create</code> scope. </p>
+  </div>
+  <div class="automation-fields" data-target-fields="prsm_task">
+    <label><span>API token</span><input type="password" name="token" maxlength="4096" autocomplete="off"
+        spellcheck="false" placeholder="{{ @editingTarget ? 'Leave blank to keep current token' : 'Paste token' }}"
+        data-required-for="prsm_task"><small>Needs the <code>task:create</code> scope for
+        {{ @prsmBaseUrl?:'the configured Prsm installation' }}.</small></label>
+  </div>
+  <div class="automation-fields" data-target-fields="generic_webhook" hidden>
+    <label><span>Name</span><input name="name" maxlength="120" autocomplete="off" placeholder="GitHub Issues"
+        value="{{ @targetForm.name }}" data-required-for="generic_webhook"></label><label><span>HTTPS URL</span><input
+        type="url" name="url" value="{{ @targetForm.url }}" maxlength="2048" inputmode="url" autocomplete="off"
+        placeholder="https://example.com/api/issues"
+        data-required-for="generic_webhook"></label><label><span>Method</span><select name="method"
+        data-required-for="generic_webhook">
+        <repeat group="{{ @webhookMethods }}" value="{{ @method }}">
+          <option value="{{ @method }}" {{ @targetForm.method===@method ? 'selected' : '' }}>{{ @method }}</option>
+        </repeat>
+      </select></label><label><span>Authentication</span><select name="auth_type" data-webhook-auth-type>
+        <option value="none" {{ @targetForm.auth_type==='none' ? 'selected' : '' }}>None</option>
+        <option value="bearer" {{ @targetForm.auth_type==='bearer' ? 'selected' : '' }}>Bearer token</option>
+        <option value="api_key" {{ @targetForm.auth_type==='api_key' ? 'selected' : '' }}>API key header</option>
+      </select></label><label data-webhook-auth-header hidden><span>Header name</span><input name="auth_header"
+        maxlength="80" value="{{ @targetForm.auth_header }}" spellcheck="false"></label><label data-webhook-auth-secret
+      hidden><span>Secret</span><input type="password" name="secret" maxlength="4096" autocomplete="off"
+        spellcheck="false"
+        placeholder="{{ @editingTarget ? 'Leave blank to keep current secret' : 'Paste secret' }}"></label>
+  </div>
+  <div class="automation-form-actions"><button class="button button-primary" type="submit"
+      data-target-submit>{{ @editingTarget ? 'Save target' : 'Add target' }}</button>
+    <check if="{{ @editingTarget }}"><a class="button button-secondary" href="/settings/targets">Cancel</a>
+    </check>
+  </div>
+  </form>
+  <check if="{{ !@targets }}">
+    <true>
+      <div class="automation-empty">
+        <h3>No targets yet</h3>
+        <p>Add a Prsm connection or a generic HTTPS endpoint above. Secrets are encrypted before storage.</p>
+      </div>
     </true>
     <false>
-      <check if="{{ @settingsTab=='actions' }}">
-        <true>
-          <header class="settings-section-heading">
-            <div>
-              <h2>Actions</h2>
-              <p>Bundle ordered steps into one choice on every capture.</p>
-            </div>
-          </header>
-          <section class="automation-settings" aria-labelledby="new-action-title">
-            <check if="{{ @targets }}">
-              <true>
-                <form class="automation-create-form action-create-form" method="post" action="/settings/actions"><input
-                    type="hidden" name="_csrf" value="{{ @csrf }}">
-                  <div class="automation-form-heading">
-                    <h3 id="new-action-title">Create an action</h3>
-                    <p>The target step runs first. Catch only runs later steps when it succeeds.</p>
-                  </div><label><span>Name</span><input name="name" maxlength="120" required
-                      placeholder="Create task in Prsm"></label><label><span>Target</span><select name="target_id"
-                      required>
-                      <repeat group="{{ @targets }}" value="{{ @target }}">
-                        <option value="{{ @target.id }}">{{ @target.name }} · {{ @target.type_label }}</option>
+      <div class="automation-list" role="list" aria-label="Targets">
+        <repeat group="{{ @targets }}" value="{{ @target }}">
+          <article class="automation-row" role="listitem">
+            <div><strong>{{ @target.name }}</strong><span>{{ @target.type_label }}
+                <check if="{{ @target.summary }}"> · {{ @target.summary }}</check>
+              </span></div><span class="automation-status"><span aria-hidden="true"></span>Connected</span><a
+              class="button button-quiet" href="/settings/targets/{{ urlencode(@target.id) }}/edit">Edit</a>
+            <form method="post" action="/settings/targets/{{ urlencode(@target.id) }}/delete"
+              onsubmit="return confirm('Delete this target?')"><input type="hidden" name="_csrf"
+                value="{{ @csrf }}"><button class="button button-quiet" type="submit">Delete</button>
+            </form>
+          </article>
+        </repeat>
+      </div>
+    </false>
+  </check>
+  </section>
+  </true>
+  <false>
+    <check if="{{ @settingsTab=='actions' }}">
+      <true>
+        <header class="settings-section-heading">
+          <div>
+            <h2>Actions</h2>
+            <p>Bundle ordered steps into one choice on every capture.</p>
+          </div>
+        </header>
+        <section class="automation-settings" aria-labelledby="new-action-title">
+          <check if="{{ @targets }}">
+            <true>
+              <form class="automation-create-form action-create-form" method="post"
+                action="{{ @editingAction ? '/settings/actions/'.urlencode(@editingAction.id).'/edit' : '/settings/actions' }}">
+                <input type="hidden" name="_csrf" value="{{ @csrf }}">
+                <div class="automation-form-heading">
+                  <h3 id="new-action-title">{{ @editingAction ? 'Edit action' : 'Create an action' }}</h3>
+                  <p>The target step runs first. Catch only runs later steps when it succeeds.</p>
+                </div><label><span>Name</span><input name="name" maxlength="120" required value="{{ @actionForm.name }}"
+                    placeholder="Create task in Prsm"></label><label><span>Target</span><select name="target_id"
+                    required data-action-target>
+                    <repeat group="{{ @targets }}" value="{{ @target }}">
+                      <option value="{{ @target.id }}" data-target-type="{{ @target.type }}" {{
+                          @actionForm.target_id===@target.id ? 'selected' : '' }}>{{ @target.name }} ·
+                        {{ @target.type_label }}
+                      </option>
+                    </repeat>
+                  </select></label>
+                <div class="webhook-template-fields" data-webhook-template-fields hidden>
+                  <label class="webhook-content-type"><span>Content type</span><select name="content_type"
+                      data-webhook-content-type>
+                      <repeat group="{{ @webhookContentTypes }}" key="{{ @contentType }}" value="{{ @label }}">
+                        <option value="{{ @contentType }}" {{ @actionForm.content_type===@contentType ? 'selected' : ''
+                            }}>{{ @label }}</option>
                       </repeat>
-                    </select></label><label><span>Add tag <small>optional</small></span><input name="tag"
-                      maxlength="100" placeholder="prsm"></label><label><span>Then</span><select name="after">
-                      <option value="keep">Keep capture where it is</option>
-                      <option value="archive">Archive capture</option>
-                      <option value="trash">Move capture to Trash</option>
-                    </select></label><button class="button button-primary" type="submit">Create action</button>
-                </form>
-              </true>
-              <false>
-                <div class="automation-empty automation-empty-prominent">
-                  <h3 id="new-action-title">An action needs a target</h3>
-                  <p>Add a destination first, then return here to assemble its steps.</p><a
-                    class="button button-primary" href="/settings/targets">Add target</a>
-                </div>
-              </false>
-            </check>
-            <check if="{{ @targets && !@actions }}">
-              <div class="automation-empty">
-                <h3>No actions yet</h3>
-                <p>Created actions appear in the action menu on every capture.</p>
-              </div>
-            </check>
-            <check if="{{ @targets && @actions }}">
-              <div class="automation-list" role="list" aria-label="Actions">
-                <repeat group="{{ @actions }}" value="{{ @action }}">
-                  <article class="automation-row action-row" role="listitem">
-                    <div><strong>{{ @action.name }}</strong>
-                      <ol>
-                        <repeat group="{{ @action.steps }}" value="{{ @step }}">
-                          <li>{{ @step.label }}</li>
-                        </repeat>
-                      </ol>
+                    </select></label>
+                  <label class="automation-body-template"><span data-webhook-body-label>JSON body</span><textarea
+                      name="body_template" rows="13" maxlength="65536" spellcheck="false"
+                      data-webhook-template>{{ @actionForm.body_template }}</textarea><small
+                      data-webhook-body-help>Variables used as a complete JSON value retain their native
+                      type.</small></label>
+                  <textarea hidden aria-hidden="true" tabindex="-1"
+                    data-webhook-default-body="application/json">{{ @webhookDefaultJson }}</textarea><textarea hidden
+                    aria-hidden="true" tabindex="-1"
+                    data-webhook-default-body="text/plain">{{ @webhookDefaultText }}</textarea><textarea hidden
+                    aria-hidden="true" tabindex="-1"
+                    data-webhook-default-body="multipart/form-data">{{ @webhookDefaultMultipart }}</textarea>
+                  <div class="template-variables" aria-label="Available capture variables">
+                    <strong>Insert variable</strong>
+                    <div>
+                      <repeat group="{{ @webhookVariables }}" key="{{ @variable }}" value="{{ @description }}"><button
+                          type="button" data-template-variable="{{ @variable }}"
+                          title="{{ @description }}"><code>&#123;&#123;{{ @variable }}&#125;&#125;</code></button>
+                      </repeat>
                     </div>
+                  </div><label class="automation-check" data-webhook-omit-empty><input type="checkbox" name="omit_empty"
+                      value="1" {{ @actionForm.omit_empty ? 'checked' : '' }}><span data-webhook-omit-empty-label>Omit
+                      empty object fields</span></label>
+                </div><label><span>Add tag <small>optional</small></span><input name="tag" maxlength="100"
+                    value="{{ @actionForm.tag }}" placeholder="prsm"></label><label><span>Then</span><select
+                    name="after">
+                    <option value="keep" {{ @actionForm.after==='keep' ? 'selected' : '' }}>Keep capture where it is
+                    </option>
+                    <option value="archive" {{ @actionForm.after==='archive' ? 'selected' : '' }}>Archive capture
+                    </option>
+                    <option value="trash" {{ @actionForm.after==='trash' ? 'selected' : '' }}>Move capture to Trash
+                    </option>
+                  </select></label>
+                <div class="automation-form-actions"><button class="button button-primary"
+                    type="submit">{{ @editingAction ? 'Save action' : 'Create action' }}</button>
+                  <check if="{{ @editingAction }}"><a class="button button-secondary"
+                      href="/settings/actions">Cancel</a></check>
+                </div>
+              </form>
+            </true>
+            <false>
+              <div class="automation-empty automation-empty-prominent">
+                <h3 id="new-action-title">An action needs a target</h3>
+                <p>Add a destination first, then return here to assemble its steps.</p><a class="button button-primary"
+                  href="/settings/targets">Add target</a>
+              </div>
+            </false>
+          </check>
+          <check if="{{ @targets && !@actions }}">
+            <div class="automation-empty">
+              <h3>No actions yet</h3>
+              <p>Created actions appear in the action menu on every capture.</p>
+            </div>
+          </check>
+          <check if="{{ @targets && @actions }}">
+            <div class="automation-list" role="list" aria-label="Actions">
+              <repeat group="{{ @actions }}" value="{{ @action }}">
+                <article class="automation-row action-row" role="listitem">
+                  <div><strong>{{ @action.name }}</strong>
+                    <ol>
+                      <repeat group="{{ @action.steps }}" value="{{ @step }}">
+                        <li>{{ @step.label }}</li>
+                      </repeat>
+                    </ol>
+                  </div>
+                  <div class="automation-row-actions"><a class="button button-quiet"
+                      href="/settings/actions/{{ urlencode(@action.id) }}/edit">Edit</a>
                     <form method="post" action="/settings/actions/{{ urlencode(@action.id) }}/delete"
                       onsubmit="return confirm('Delete this action?')"><input type="hidden" name="_csrf"
                         value="{{ @csrf }}"><button class="button button-quiet" type="submit">Delete</button>
                     </form>
-                  </article>
-                </repeat>
-              </div>
-            </check>
-          </section>
-        </true>
-        <false>
-          <form class="preference-settings" data-preference-settings>
-            <fieldset>
-              <legend>Appearance</legend>
-              <p>Use the system setting or choose a theme for this browser.</p><label
-                for="settings-theme">Theme</label><select id="settings-theme" data-theme-select>
-                <option value="system">System</option>
-                <option value="light">Light</option>
-                <option value="dark">Dark</option>
-              </select>
-            </fieldset>
-            <fieldset>
-              <legend>Capture lists</legend>
-              <p>Choose the layout used when a capture collection opens.</p><label for="settings-capture-view">Preferred
-                layout</label><select id="settings-capture-view" data-capture-view-setting>
-                <option value="list">List</option>
-                <option value="grid">Grid</option>
-              </select>
-            </fieldset>
-            <fieldset data-app-badge-settings hidden>
-              <legend>App icon</legend>
-              <p>Show the last known number of inbox captures on the installed app icon. iPhone and iPad require
-                notification permission, but Catch does not send notifications yet.</p><button
-                class="button button-secondary" type="button" data-enable-app-badge>Enable app badge</button>
-              <p class="preference-status" data-app-badge-status role="status" aria-live="polite"></p>
-            </fieldset>
-            <p class="preference-status" data-preference-status role="status" aria-live="polite"></p>
-          </form>
-        </false>
-      </check>
-    </false>
+                  </div>
+                </article>
+              </repeat>
+            </div>
+          </check>
+        </section>
+      </true>
+      <false>
+        <form class="preference-settings" data-preference-settings>
+          <fieldset>
+            <legend>Appearance</legend>
+            <p>Use the system setting or choose a theme for this browser.</p><label
+              for="settings-theme">Theme</label><select id="settings-theme" data-theme-select>
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </fieldset>
+          <fieldset>
+            <legend>Capture lists</legend>
+            <p>Choose the layout used when a capture collection opens.</p><label for="settings-capture-view">Preferred
+              layout</label><select id="settings-capture-view" data-capture-view-setting>
+              <option value="list">List</option>
+              <option value="grid">Grid</option>
+            </select>
+          </fieldset>
+          <fieldset data-app-badge-settings hidden>
+            <legend>App icon</legend>
+            <p>Show the last known number of inbox captures on the installed app icon. iPhone and iPad require
+              notification permission, but Catch does not send notifications yet.</p><button
+              class="button button-secondary" type="button" data-enable-app-badge>Enable app badge</button>
+            <p class="preference-status" data-app-badge-status role="status" aria-live="polite"></p>
+          </fieldset>
+          <p class="preference-status" data-preference-status role="status" aria-live="polite"></p>
+        </form>
+      </false>
+    </check>
+  </false>
   </check>
 </false>
 </check>

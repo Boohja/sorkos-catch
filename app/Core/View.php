@@ -25,12 +25,14 @@ final class View
         http_response_code($httpStatus);
         $data = $this->prepare($data, $template === 'captures/show');
         $data['content'] = $template . '.html';
-        echo \Template::instance()->render('layout.html', 'text/html', $data);
+        echo $this->withoutAutocomplete(\Template::instance()->render('layout.html', 'text/html', $data));
     }
 
     public function partial(string $template, array $data = []): string
     {
-        return \Template::instance()->render($template . '.html', 'text/html', $this->prepare($data));
+        return $this->withoutAutocomplete(
+            \Template::instance()->render($template . '.html', 'text/html', $this->prepare($data)),
+        );
     }
 
     public function relativeTime(?string $value, ?DateTimeImmutable $now = null): string
@@ -68,6 +70,9 @@ final class View
             'enableMoveDialog' => false,
             'capturePoll' => false,
             'targets' => [],'actions' => [],'availableActions' => [],'prsmBaseUrl' => '',
+            'webhookMethods' => [],'webhookContentTypes' => [],'webhookVariables' => [],
+            'webhookDefaultJson' => '','webhookDefaultText' => '','webhookDefaultMultipart' => '',
+            'actionForm' => [],'targetForm' => [],'tagForm' => [],'editingAction' => null,'editingTarget' => null,
         ];
         $data['currentPath'] = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
         $data['isAuthenticated'] = is_array($data['user']);
@@ -124,6 +129,26 @@ final class View
         $data['permanent'] = $data['status'] === 'trash';
 
         return $data;
+    }
+
+    private function withoutAutocomplete(string $html): string
+    {
+        return (string) preg_replace_callback(
+            '/<(?:form|input|textarea|select)\b[^>]*>/i',
+            static function (array $match): string {
+                $tag = $match[0];
+                if (preg_match('/\sautocomplete\s*=/i', $tag)) {
+                    return (string) preg_replace(
+                        "/\sautocomplete\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)/i",
+                        ' autocomplete="off"',
+                        $tag,
+                    );
+                }
+
+                return (string) preg_replace('/^<([a-z]+)/i', '<$1 autocomplete="off"', $tag, 1);
+            },
+            $html,
+        );
     }
 
     private function prepareDevice(array $device): array

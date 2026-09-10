@@ -726,7 +726,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v59','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v66','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }
@@ -1065,7 +1065,7 @@ $test('URL captures store immutable WebP preview attachments', function () use (
     if (in_array('sqlite', PDO::getAvailableDrivers(), true)) {
         $database = new PDO('sqlite::memory:');
         $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $database->sqliteCreateFunction(
+        @$database->sqliteCreateFunction(
             'UTC_TIMESTAMP',
             static fn (): string => '2026-08-12 12:00:00.000000',
             -1,
@@ -1357,7 +1357,7 @@ $test('Email inbox addresses are compact and stored for repeated use', function 
     }
     $database = new PDO('sqlite::memory:');
     $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $database->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => '2026-08-17 12:00:00.000000', -1);
+    @$database->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => '2026-08-17 12:00:00.000000', -1);
     $database->exec(<<<'SQL'
         CREATE TABLE catch_email_inboxes (
             id TEXT PRIMARY KEY,
@@ -1513,7 +1513,7 @@ $test('Inbox captures can be moved to Later and return when due', function () us
 
     $database = new PDO('sqlite::memory:');
     $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $database->sqliteCreateFunction(
+    @$database->sqliteCreateFunction(
         'UTC_TIMESTAMP',
         static fn (): string => '2026-08-22 12:00:00.000000',
         -1,
@@ -1554,22 +1554,29 @@ $test('Inbox captures can be moved to Later and return when due', function () us
     }
 });
 $test('Targets and ordered actions are wired through settings and captures', function () use ($root) {
-    $migration = (string) file_get_contents($root . '/database/migrations/018_targets_actions.sql');
+    $migration = (string) file_get_contents($root . '/database/migrations/018_targets_actions.sql')
+        . (string) file_get_contents($root . '/database/migrations/019_tag_actions.sql');
     $application = (string) file_get_contents($root . '/app/Core/Application.php');
     $settings = (string) file_get_contents($root . '/app/Views/account/settings.html');
     $menu = (string) file_get_contents($root . '/app/Views/captures/_action_menu.html');
     $actionClient = (string) file_get_contents($root . '/public/assets/js/capture-actions.js');
     $executor = (string) file_get_contents($root . '/app/Services/ActionExecutor.php');
+    $automationController = (string) file_get_contents($root . '/app/Controllers/Web/AutomationController.php');
     $config = (string) file_get_contents($root . '/app/Core/Config.php');
+    $tagViews = (string) file_get_contents($root . '/app/Views/tags/index.html')
+        . (string) file_get_contents($root . '/app/Views/tags/edit.html');
+    $view = (string) file_get_contents($root . '/app/Core/View.php');
 
-    foreach (['catch_targets', 'catch_actions', 'catch_action_steps', 'config_json', 'position'] as $required) {
+    foreach (['catch_targets', 'catch_actions', 'catch_action_steps', 'config_json', 'position', 'action_id', 'ON DELETE SET NULL'] as $required) {
         if (!str_contains($migration, $required)) {
             throw new RuntimeException('Automation migration is incomplete: ' . $required);
         }
     }
     foreach ([
         'GET /settings/targets',
+        'GET /settings/targets/@target/edit',
         'POST /settings/actions',
+        'GET /settings/actions/@action/edit',
         'POST /captures/@id/actions/@action',
         'ActionExecutor',
         'TargetRepository',
@@ -1578,10 +1585,29 @@ $test('Targets and ordered actions are wired through settings and captures', fun
             throw new RuntimeException('Automation routing is incomplete: ' . $required);
         }
     }
+    if (!str_contains($automationController, '$target = $this->targets->find')) {
+        throw new RuntimeException('Action creation does not retain the selected target type.');
+    }
+    foreach (["\$_SESSION['action_form'] = \$form", "'body_template' => (string) (\$_POST['body_template']"] as $required) {
+        if (!str_contains($automationController, $required)) {
+            throw new RuntimeException('Action validation errors do not preserve the submitted form state.');
+        }
+    }
+    $actionsMethod = substr(
+        $automationController,
+        (int) strpos($automationController, 'public function actions(): void'),
+        (int) strpos($automationController, 'public function createAction(): never')
+            - (int) strpos($automationController, 'public function actions(): void'),
+    );
+    if (str_contains($actionsMethod, "unset(\$_SESSION['action_form'])")) {
+        throw new RuntimeException('Rendering the action form prematurely discards its retained state.');
+    }
     foreach ([
         "@settingsTab=='targets'",
         "@settingsTab=='actions'",
         'task:create',
+        '/settings/targets/{{ urlencode(@target.id) }}/edit',
+        '/settings/actions/{{ urlencode(@action.id) }}/edit',
         'data-menu-custom-action',
         'Run action',
     ] as $required) {
@@ -1592,6 +1618,24 @@ $test('Targets and ordered actions are wired through settings and captures', fun
     foreach (['send_capture_to_target', 'add_tag', 'archive_capture', 'delete_capture'] as $step) {
         if (!str_contains($executor, $step)) {
             throw new RuntimeException('Action executor is missing step type: ' . $step);
+        }
+    }
+    foreach (['executeForAssignedTag', 'newly_assigned', 'activeExecutions'] as $required) {
+        if (!str_contains($executor . (string) file_get_contents($root . '/app/Repositories/TagRepository.php'), $required)) {
+            throw new RuntimeException('Tag-triggered actions are incomplete: ' . $required);
+        }
+    }
+    foreach (['name="action_id"', 'newly added to a capture', '@tag.action_name', 'href="/settings/actions"', 'placeholder="research"'] as $required) {
+        if (!str_contains($tagViews, $required)) {
+            throw new RuntimeException('Tag action settings are incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($settings, 'class="automation-row-actions"')) {
+        throw new RuntimeException('Action edit and delete controls are not grouped.');
+    }
+    foreach (['withoutAutocomplete', "autocomplete=\"off\"", 'form|input|textarea|select'] as $required) {
+        if (!str_contains($view, $required)) {
+            throw new RuntimeException('Global autocomplete suppression is incomplete: ' . $required);
         }
     }
     foreach (['focusItem', 'tabIndex = -1', "event.key === 'Tab'", 'focusout'] as $required) {
@@ -1618,7 +1662,7 @@ $test('Targets and ordered actions are wired through settings and captures', fun
     }
     $database = new PDO('sqlite::memory:');
     $database->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $database->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => '2026-08-29 12:00:00.000000', -1);
+    @$database->sqliteCreateFunction('UTC_TIMESTAMP', static fn (): string => '2026-08-29 12:00:00.000000', -1);
     $database->exec(<<<'SQL'
         CREATE TABLE catch_targets (
             id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, type TEXT NOT NULL,
@@ -1631,6 +1675,16 @@ $test('Targets and ordered actions are wired through settings and captures', fun
         CREATE TABLE catch_action_steps (
             id TEXT PRIMARY KEY, action_id TEXT NOT NULL, position INTEGER NOT NULL,
             type TEXT NOT NULL, config_json TEXT NOT NULL
+        );
+        CREATE TABLE catch_captures (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, deleted_at TEXT NULL
+        );
+        CREATE TABLE catch_tags (
+            id TEXT PRIMARY KEY, user_id TEXT NOT NULL, name TEXT NOT NULL, action_id TEXT NULL,
+            created_at TEXT NOT NULL, UNIQUE (user_id, name)
+        );
+        CREATE TABLE catch_capture_tags (
+            capture_id TEXT NOT NULL, tag_id TEXT NOT NULL, PRIMARY KEY (capture_id, tag_id)
         );
         SQL);
     $targets = new Catch\Repositories\TargetRepository(
@@ -1645,6 +1699,128 @@ $test('Targets and ordered actions are wired through settings and captures', fun
     if (($resolved['config']['token'] ?? null) !== 'secret-token') {
         throw new RuntimeException('Target token could not be decrypted for execution.');
     }
+    $targets->updatePrsmTask($target['id'], 'user-1', '');
+    $preservedTarget = $targets->find($target['id'], 'user-1', true);
+    if (($preservedTarget['config']['token'] ?? null) !== 'secret-token') {
+        throw new RuntimeException('Editing a Prsm target without a new token discarded its credential.');
+    }
+
+    $webhook = $targets->createGenericWebhook(
+        'user-1',
+        'Issue endpoint',
+        'https://hooks.example.com/issues',
+        'post',
+        'api_key',
+        'webhook-secret',
+        'X-Hook-Key',
+    );
+    if (
+        $webhook['type'] !== 'generic_webhook'
+        || ($webhook['config']['method'] ?? null) !== 'POST'
+        || isset($webhook['config']['secret_encrypted'])
+        || !$webhook['configured']
+    ) {
+        throw new RuntimeException('Generic webhook target was not stored safely.');
+    }
+    $resolvedWebhook = $targets->find($webhook['id'], 'user-1', true);
+    if (($resolvedWebhook['config']['secret'] ?? null) !== 'webhook-secret') {
+        throw new RuntimeException('Webhook secret could not be decrypted for execution.');
+    }
+    $targets->updateGenericWebhook(
+        $webhook['id'],
+        'user-1',
+        'Renamed endpoint',
+        'https://hooks.example.com/updated',
+        'PATCH',
+        'api_key',
+        '',
+        'X-Updated-Key',
+    );
+    $updatedWebhook = $targets->find($webhook['id'], 'user-1', true);
+    if (
+        ($updatedWebhook['name'] ?? null) !== 'Renamed endpoint'
+        || ($updatedWebhook['config']['method'] ?? null) !== 'PATCH'
+        || ($updatedWebhook['config']['secret'] ?? null) !== 'webhook-secret'
+    ) {
+        throw new RuntimeException('Editing an endpoint did not preserve its secret and updated fields.');
+    }
+    try {
+        $targets->createGenericWebhook(
+            'user-1',
+            'Injected header',
+            'https://hooks.example.com/issues',
+            'POST',
+            'api_key',
+            "secret\r\nX-Injected: value",
+            'X-Hook-Key',
+        );
+        throw new RuntimeException('A webhook secret containing a header injection was accepted.');
+    } catch (InvalidArgumentException) {
+        // Expected.
+    }
+
+    $template = Catch\Services\GenericWebhookClient::parseTemplate(<<<'JSON'
+        {
+          "title": "{{capture.display_title}}",
+          "reference": "Catch #{{capture.number}}",
+          "tags": "{{capture.tags}}",
+          "owner": "{{user.display_name}}",
+          "email": "{{user.email}}",
+          "empty": "{{capture.url}}"
+        }
+        JSON);
+    $rendered = Catch\Services\GenericWebhookClient::renderTemplate($template, [
+        'id' => 'capture-1',
+        'catch_number' => 42,
+        'title' => 'Ship webhook support',
+        'text' => 'Keep arrays typed',
+        'url' => null,
+        'type' => 'text',
+        'source' => 'web',
+        'status' => 'inbox',
+        'created_at' => '2026-09-10 10:00:00',
+        'tags' => [['name' => 'api'], ['name' => 'next']],
+        'attachments' => [],
+    ], 'https://catch.example.com', true, [
+        'display_name' => 'Matt',
+        'email' => 'matt@example.com',
+    ]);
+    if (
+        ($rendered['reference'] ?? null) !== 'Catch #42'
+        || ($rendered['tags'] ?? null) !== ['api', 'next']
+        || ($rendered['owner'] ?? null) !== 'Matt'
+        || ($rendered['email'] ?? null) !== 'matt@example.com'
+        || array_key_exists('empty', $rendered)
+    ) {
+        throw new RuntimeException('Webhook variables were not rendered with their JSON types.');
+    }
+    try {
+        Catch\Services\GenericWebhookClient::parseTemplate('{"value":"{{capture.unknown}}"}');
+        throw new RuntimeException('Unknown webhook variables were accepted.');
+    } catch (InvalidArgumentException) {
+        // Expected.
+    }
+    $plainTemplate = Catch\Services\GenericWebhookClient::parseBodyTemplate(
+        "{{capture.display_title}}\n{{capture.content}}",
+        'text/plain',
+    );
+    $multipartTemplate = Catch\Services\GenericWebhookClient::parseBodyTemplate(
+        '{"title":"{{capture.display_title}}","tags":"{{capture.tags}}"}',
+        'multipart/form-data',
+    );
+    if (
+        !is_string($plainTemplate)
+        || ($multipartTemplate['tags'] ?? null) !== '{{capture.tags}}'
+        || count(Catch\Services\GenericWebhookClient::contentTypes()) !== 3
+    ) {
+        throw new RuntimeException('Webhook content types were not parsed correctly.');
+    }
+    try {
+        Catch\Services\GenericWebhookClient::parseBodyTemplate('["value"]', 'multipart/form-data');
+        throw new RuntimeException('A multipart list was accepted instead of a field object.');
+    } catch (InvalidArgumentException) {
+        // Expected.
+    }
 
     $actions = new Catch\Repositories\ActionRepository($database);
     $action = $actions->create('user-1', 'Create task', [
@@ -1657,6 +1833,48 @@ $test('Targets and ordered actions are wired through settings and captures', fun
         || !$actions->usesTarget($target['id'], 'user-1')
     ) {
         throw new RuntimeException('Action steps were not stored and returned in order.');
+    }
+    $updatedAction = $actions->update('user-1-action-does-not-exist', 'user-1', 'No action', [
+        ['type' => 'archive_capture', 'config' => []],
+    ]);
+    if ($updatedAction !== null) {
+        throw new RuntimeException('An action belonging to another account could be updated.');
+    }
+    $updatedAction = $actions->update($action['id'], 'user-1', 'Updated action', [
+        ['type' => 'send_capture_to_target', 'config' => ['target_id' => $target['id']]],
+        ['type' => 'delete_capture', 'config' => []],
+    ]);
+    if (($updatedAction['name'] ?? null) !== 'Updated action' || array_column($updatedAction['steps'], 'position') !== [1, 2]) {
+        throw new RuntimeException('Action editing did not replace its ordered steps.');
+    }
+    $database->prepare('INSERT INTO catch_captures (id,user_id,deleted_at) VALUES (:id,:user,NULL)')
+        ->execute(['id' => 'capture-1', 'user' => 'user-1']);
+    $tags = new Catch\Repositories\TagRepository($database);
+    $tag = $tags->create('user-1', 'Automatic', $action['id']);
+    $firstAssignment = $tags->assign('capture-1', $tag['id'], 'user-1');
+    $secondAssignment = $tags->assign('capture-1', $tag['id'], 'user-1');
+    if (
+        ($tag['action_id'] ?? null) !== $action['id']
+        || empty($firstAssignment['newly_assigned'])
+        || !empty($secondAssignment['newly_assigned'])
+    ) {
+        throw new RuntimeException('Tag actions do not distinguish new assignments from existing tags.');
+    }
+
+    $webhookAction = $actions->create('user-1', 'Create issue', [[
+        'type' => 'send_capture_to_target',
+        'config' => [
+            'target_id' => $webhook['id'],
+            'content_type' => 'application/json',
+            'body_template' => $template,
+            'omit_empty' => true,
+        ],
+    ]]);
+    if (
+        ($webhookAction['steps'][0]['config']['content_type'] ?? null) !== 'application/json'
+        || ($webhookAction['steps'][0]['config']['body_template']['title'] ?? null) !== '{{capture.display_title}}'
+    ) {
+        throw new RuntimeException('Webhook body template was not persisted on the action step.');
     }
 });
 

@@ -42,6 +42,8 @@ final class Config
             'MAIL_ADDRESS_DOMAIN' => 'mail.address_domain', 'MAIL_MAX_BYTES' => 'mail.max_bytes',
             'MAIL_CRON_SECRET' => 'mail.cron_secret',
             'PRSM_BASE_URL' => 'prsm.base_url', 'PRSM_TLS_VERIFY' => 'prsm.tls_verify',
+            'WEBHOOK_ALLOW_PRIVATE' => 'webhook.allow_private',
+            'WEBHOOK_TLS_VERIFY' => 'webhook.tls_verify',
         ];
         foreach ($map as $environment => $key) {
             $value = getenv($environment);

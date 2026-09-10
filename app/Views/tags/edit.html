@@ -5,7 +5,19 @@
       <h1>Edit tag</h1>
     </div>
   </header>
-  <form class="inline-form" method="post" action="/tags/{{ rawurlencode(@tag.id.'-'.@tag.slug) }}/edit"><input
-      type="hidden" name="_csrf" value="{{ @csrf }}"><label>Name<input name="name" value="{{ @tag.name }}"
-        maxlength="100" required autofocus></label><button class="button button-primary">Save</button></form>
+  <form class="tag-form" method="post" action="/tags/{{ rawurlencode(@tag.id.'-'.@tag.slug) }}/edit"><input
+      type="hidden" name="_csrf" value="{{ @csrf }}"><label><span>Name</span><input name="name"
+        value="{{ @tagForm.name }}" maxlength="100" required autofocus></label>
+    <div class="tag-form-field"><span class="tag-form-label">Automatic <a href="/settings/actions">action</a>
+        <small>optional</small></span><select name="action_id" aria-label="Automatic action">
+        <option value="">None</option>
+        <repeat group="{{ @actions }}" value="{{ @action }}">
+          <option value="{{ @action.id }}" {{ @tagForm.action_id===@action.id ? 'selected' : '' }}>{{ @action.name }}
+          </option>
+        </repeat>
+      </select><small>Runs once when this tag is newly added to a capture, including during capture creation.</small>
+    </div>
+    <div class="tag-form-actions"><button class="button button-primary">Save tag</button><a
+        class="button button-secondary" href="/tags">Cancel</a></div>
+  </form>
 </section>

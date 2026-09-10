@@ -369,9 +369,10 @@
   grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.5fr) auto;
   gap: 18px;
   align-items: end;
-  padding: 24px 0 28px;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
 }
 
 .action-create-form {
@@ -419,10 +420,140 @@
 }
 
 .automation-create-form input,
-.automation-create-form select {
+.automation-create-form select,
+.automation-create-form textarea {
   width: 100%;
   min-width: 0;
   min-height: 42px;
+}
+
+.automation-create-form textarea {
+  resize: vertical;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.automation-create-form [hidden] {
+  display: none;
+}
+
+.automation-fields:not([hidden]) {
+  display: contents;
+}
+
+.target-create-form {
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.automation-primary-choice {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.automation-primary-choice label {
+  max-width: 360px;
+}
+
+.automation-primary-choice p {
+  max-width: 70ch;
+  margin: 0;
+  color: var(--muted);
+}
+
+.automation-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.webhook-template-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.webhook-template-fields[hidden] {
+  display: none;
+}
+
+.webhook-content-type {
+  max-width: 320px;
+}
+
+.automation-body-template small {
+  color: var(--muted);
+}
+
+.template-variables {
+  display: grid;
+  gap: 8px;
+}
+
+.template-variables>strong {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.template-variables>div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.template-variables button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.template-variables button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.template-variables button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.template-variables code {
+  font-size: 12px;
+}
+
+.automation-create-form .automation-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+}
+
+.automation-create-form .automation-check[hidden] {
+  display: none;
+}
+
+.automation-create-form .automation-check input {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+}
+
+.automation-create-form .automation-check>span {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .action-create-form .button {
@@ -439,7 +570,7 @@
 
 .automation-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 22px;
   align-items: center;
   min-height: 72px;
@@ -509,6 +640,12 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.automation-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .action-row ol {
   margin: 8px 0 0;
   padding-left: 22px;
@@ -535,15 +672,25 @@
   .action-create-form,
   .target-create-form {
     grid-template-columns: minmax(0, 1fr);
+    padding: 20px;
   }
 
   .automation-form-heading {
     grid-column: 1;
   }
 
+  .webhook-template-fields {
+    padding: 18px 0;
+  }
+
   .automation-create-form .button,
   .action-create-form .button {
     width: 100%;
+  }
+
+  .automation-form-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .automation-row {
@@ -556,7 +703,7 @@
     grid-row: 2;
   }
 
-  .automation-row form {
+  .automation-row>form {
     grid-column: 2;
     grid-row: 1 / span 2;
   }

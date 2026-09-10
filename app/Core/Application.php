@@ -37,6 +37,7 @@ use Catch\Services\EmailContentSanitizer;
 use Catch\Services\EmailImporter;
 use Catch\Services\EmailImportRunner;
 use Catch\Services\EmailMessageReader;
+use Catch\Services\GenericWebhookClient;
 use Catch\Services\PrsmTaskClient;
 use Catch\Services\RemoteContentService;
 use Catch\Services\SecretBox;
@@ -80,6 +81,8 @@ final class Application
         $remote = new RemoteContentService((int)$config->get('uploads.max_bytes', 15728640));
         $service = new CaptureService($db, new CaptureValidator(), $uploads, $remote);
         $captureDebug = new CaptureDebugService($pdo, $config);
+        $webhooks = new GenericWebhookClient($config);
+        $executor = new ActionExecutor($actions, $targets, $captures, $tags, new PrsmTaskClient($config), $webhooks, $users);
         $currentUser = $auth->user();
         if ($currentUser && !$access->allowsUser($currentUser)) {
             $auth->logout();
@@ -112,11 +115,11 @@ final class Application
             $auth,
             $targets,
             $actions,
-            new ActionExecutor($actions, $targets, $captures, $tags, new PrsmTaskClient($config)),
+            $executor,
             $config,
             $csrf,
         );
-        $tagController = new TagController($view, $auth, $tags, $captures, $csrf);
+        $tagController = new TagController($view, $auth, $tags, $captures, $actions, $executor, $csrf);
         $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config, $captureDebug);
         $pairController = new PairController($view, $auth, $devices, $csrf);
         $cliAuth = new CliAuthRepository($pdo);
@@ -137,7 +140,7 @@ final class Application
             ),
             $this->root . '/storage/logs/import-mail.log',
         );
-        $api = new ApiCaptures($devices, $captures, $tags, $service, $captureDebug);
+        $api = new ApiCaptures($devices, $captures, $tags, $service, $captureDebug, $executor);
         $apiShortcut = new ApiShortcut($devices, $config);
         $apiExtension = new ApiExtension($devices, $config);
         $apiCli = new ApiCli($cliAuth, $devices, $config);
@@ -160,9 +163,13 @@ final class Application
         $f3->route('POST /settings/email/@inbox/revoke', [$accountController, 'revokeEmail']);
         $f3->route('GET /settings/targets', [$automationController, 'targets']);
         $f3->route('POST /settings/targets', [$automationController, 'createTarget']);
+        $f3->route('GET /settings/targets/@target/edit', [$automationController, 'editTarget']);
+        $f3->route('POST /settings/targets/@target/edit', [$automationController, 'updateTarget']);
         $f3->route('POST /settings/targets/@target/delete', [$automationController, 'deleteTarget']);
         $f3->route('GET /settings/actions', [$automationController, 'actions']);
         $f3->route('POST /settings/actions', [$automationController, 'createAction']);
+        $f3->route('GET /settings/actions/@action/edit', [$automationController, 'editAction']);
+        $f3->route('POST /settings/actions/@action/edit', [$automationController, 'updateAction']);
         $f3->route('POST /settings/actions/@action/delete', [$automationController, 'deleteAction']);
         $f3->route('GET /inbox', [$web,'index']);
         $f3->route('GET /archive', [$web,'archiveIndex']);

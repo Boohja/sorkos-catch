@@ -1,8 +1,8 @@
-const CACHE = 'catch-shell-v59';
+const CACHE = 'catch-shell-v66';
 const SHELL = [
   '/offline.html',
   '/manifest.webmanifest',
-  '/assets/css/app.css?v=6',
+  '/assets/css/app.css?v=8',
   '/assets/css/components.css?v=4',
   '/assets/css/auth.css?v=2',
   '/assets/css/devices.css?v=10',
@@ -11,15 +11,16 @@ const SHELL = [
   '/assets/css/capture-detail.css?v=22',
   '/assets/css/capture-collection.css?v=9',
   '/assets/css/capture-bulk.css?v=3',
-  '/assets/css/tags.css?v=1',
+  '/assets/css/tags.css?v=3',
   '/assets/css/pair.css?v=1',
   '/assets/css/coming-soon.css?v=2',
   '/assets/css/shell.css?v=3',
-  '/assets/css/account.css?v=9',
+  '/assets/css/account.css?v=16',
   '/assets/css/layout-compat.css?v=1',
   '/assets/css/share-target.css?v=1',
-  '/assets/js/app.js?v=59',
+  '/assets/js/app.js?v=64',
   '/assets/js/app-badge.js?v=2',
+  '/assets/js/automation-settings.js?v=5',
   '/assets/js/devices.js?v=7',
   '/assets/js/theme.js?v=2',
   '/assets/js/user-menu.js?v=2',
@@ -114,7 +115,7 @@ async function stageShare(request) {
 
 function sharePage(title = 'Saved for later', message = 'You’re offline. Catch will finish this capture when a connection returns.', isError = false) {
   const state = isError ? 'error' : 'queued';
-  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#18181b"><meta name="csrf-token" content=""><link rel="stylesheet" href="/assets/css/app.css?v=4"><link rel="stylesheet" href="/assets/css/components.css?v=4"><link rel="stylesheet" href="/assets/css/share-target.css?v=1"><title>${title} | Catch</title></head><body><main class="share-main"><section class="share-target" data-share-target data-state="${state}" data-capture-url=""><div class="share-target-inner"><div class="share-target-mark" aria-hidden="true"><span class="share-target-glyph"></span></div><h1 data-share-title>${title}</h1><p data-share-message>${message}</p><p class="sr-only" role="status" aria-live="polite" data-share-status>${message}</p><div class="share-target-actions"><button class="button button-secondary" type="button" data-share-retry hidden>Retry</button><a class="button button-primary" href="/inbox" data-share-inbox hidden>Open inbox</a><a class="button button-primary" href="/inbox" data-share-open hidden>Open capture</a></div></div></section></main><script type="module" src="/assets/js/share-target.js?v=3"></script></body></html>`, {
+  return new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#18181b"><meta name="csrf-token" content=""><link rel="stylesheet" href="/assets/css/app.css?v=8"><link rel="stylesheet" href="/assets/css/components.css?v=4"><link rel="stylesheet" href="/assets/css/share-target.css?v=1"><title>${title} | Catch</title></head><body><main class="share-main"><section class="share-target" data-share-target data-state="${state}" data-capture-url=""><div class="share-target-inner"><div class="share-target-mark" aria-hidden="true"><span class="share-target-glyph"></span></div><h1 data-share-title>${title}</h1><p data-share-message>${message}</p><p class="sr-only" role="status" aria-live="polite" data-share-status>${message}</p><div class="share-target-actions"><button class="button button-secondary" type="button" data-share-retry hidden>Retry</button><a class="button button-primary" href="/inbox" data-share-inbox hidden>Open inbox</a><a class="button button-primary" href="/inbox" data-share-open hidden>Open capture</a></div></div></section></main><script type="module" src="/assets/js/share-target.js?v=3"></script></body></html>`, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
   });
 }

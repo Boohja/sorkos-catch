@@ -16,6 +16,7 @@ import { initUserMenu } from './user-menu.js?v=2';
 import { initMobileNavigation } from './mobile-navigation.js?v=3';
 import { initCaptureMove } from './capture-move.js?v=1';
 import { initAppBadge } from './app-badge.js?v=2';
+import { initAutomationSettings } from './automation-settings.js?v=5';
 
 initTheme();
 initRequestProgress();
@@ -34,6 +35,7 @@ initUserMenu();
 initMobileNavigation();
 initCaptureMove();
 initAppBadge();
+initAutomationSettings();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/service-worker.js').catch(() => {});

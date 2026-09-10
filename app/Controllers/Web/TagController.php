@@ -6,14 +6,16 @@ namespace Catch\Controllers\Web;
 
 use Catch\Core\View;
 use Catch\Http\Response;
+use Catch\Repositories\ActionRepository;
 use Catch\Repositories\CaptureRepository;
 use Catch\Repositories\TagRepository;
+use Catch\Services\ActionExecutor;
 use Catch\Services\AuthService;
 use Catch\Services\Csrf;
 
 final class TagController
 {
-    public function __construct(private readonly View $view, private readonly AuthService $auth, private readonly TagRepository $tags, private readonly CaptureRepository $captures, private readonly Csrf $csrf)
+    public function __construct(private readonly View $view, private readonly AuthService $auth, private readonly TagRepository $tags, private readonly CaptureRepository $captures, private readonly ActionRepository $actionRepository, private readonly ActionExecutor $actions, private readonly Csrf $csrf)
     {
     }
     private function user(): array
@@ -26,15 +28,23 @@ final class TagController
     public function index(): void
     {
         $u = $this->user();
-        $this->view->render('tags/index', ['title' => 'Tags','user' => $u,'tags' => $this->tags->list($u['id']),'csrf' => $this->csrf->token()]);
+        $form = is_array($_SESSION['tag_form'] ?? null) && empty($_SESSION['tag_form']['tag_id'])
+            ? $_SESSION['tag_form']
+            : [];
+        $form += ['tag_id' => '', 'name' => '', 'action_id' => ''];
+        $this->view->render('tags/index', ['title' => 'Tags','user' => $u,'tags' => $this->tags->list($u['id']),'actions' => $this->actionRepository->all($u['id']),'tagForm' => $form,'csrf' => $this->csrf->token()]);
     }
     public function create(): never
     {
         $u = $this->user();
         $this->guard();
+        $form = ['tag_id' => '', 'name' => (string)($_POST['name'] ?? ''), 'action_id' => (string)($_POST['action_id'] ?? '')];
         try {
-            $this->tags->create($u['id'], (string)($_POST['name'] ?? ''));
+            $this->tags->create($u['id'], $form['name'], $form['action_id']);
+            unset($_SESSION['tag_form']);
+            $_SESSION['flash_success'] = 'Tag created.';
         } catch (\InvalidArgumentException $e) {
+            $_SESSION['tag_form'] = $form;
             $_SESSION['flash_error'] = $e->getMessage();
         }Response::redirect('/tags');
     }
@@ -45,15 +55,25 @@ final class TagController
         if (!$tag) {
             $this->view->render('errors/404', ['title' => 'Not found','user' => $u], 404);
             return;
-        }$this->view->render('tags/edit', ['title' => 'Edit ' . $tag['name'],'user' => $u,'tag' => $tag,'csrf' => $this->csrf->token()]);
+        }
+        $form = is_array($_SESSION['tag_form'] ?? null) && ($_SESSION['tag_form']['tag_id'] ?? null) === $tag['id']
+            ? $_SESSION['tag_form']
+            : [];
+        $form += ['tag_id' => $tag['id'], 'name' => $tag['name'], 'action_id' => (string)($tag['action_id'] ?? '')];
+        $this->view->render('tags/edit', ['title' => 'Edit ' . $tag['name'],'user' => $u,'tag' => $tag,'actions' => $this->actionRepository->all($u['id']),'tagForm' => $form,'csrf' => $this->csrf->token()]);
     }
     public function update(\Base $f, array $p): never
     {
         $u = $this->user();
         $this->guard();
+        $tagId = $this->tags->idFromRoute((string)$p['tag']);
+        $form = ['tag_id' => $tagId, 'name' => (string)($_POST['name'] ?? ''), 'action_id' => (string)($_POST['action_id'] ?? '')];
         try {
-            $this->tags->update($this->tags->idFromRoute((string)$p['tag']), $u['id'], (string)($_POST['name'] ?? ''));
+            $this->tags->update($tagId, $u['id'], $form['name'], $form['action_id']);
+            unset($_SESSION['tag_form']);
+            $_SESSION['flash_success'] = 'Tag updated.';
         } catch (\InvalidArgumentException $e) {
+            $_SESSION['tag_form'] = $form;
             $_SESSION['flash_error'] = $e->getMessage();
             Response::redirect('/tags/' . rawurlencode((string)$p['tag']) . '/edit');
         }Response::redirect('/tags');
@@ -89,7 +109,13 @@ final class TagController
         }
         if (!$tag) {
             Response::json(['error' => 'Capture or tag not found.'], 404);
-        }Response::json(['tag' => $tag]);
+        }
+        try {
+            $this->actions->executeForAssignedTag($tag, (string)$p['id'], $u['id']);
+        } catch (\Throwable $error) {
+            Response::json(['error' => trim($error->getMessage()) ?: 'The tag action could not be completed.'], 422);
+        }
+        Response::json(['tag' => $tag]);
     }
     public function unassign(\Base $f, array $p): never
     {
