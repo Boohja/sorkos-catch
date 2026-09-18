@@ -19,6 +19,9 @@
           <h1>Connect {{ @pairing.device_name }}</h1>
           <p>This gives the extension permission to add captures to your Catch inbox. It cannot read, archive, or delete
             existing captures.</p>
+          <check if="{{ @pairingError }}">
+            <p class="form-error" role="alert">{{ @pairingError }}</p>
+          </check>
           <dl>
             <div>
               <dt>Browser</dt>
@@ -29,15 +32,30 @@
               <dd>Capture only</dd>
             </div>
           </dl>
-          <form method="post" action="/pair"><input type="hidden" name="_csrf" value="{{ @csrf }}"><input type="hidden"
-              name="request" value="{{ @request }}"><button class="button button-primary button-full"
-              type="submit">Connect browser</button></form>
-        </true>
-        <false>
-          <h1>This connection link is no longer active</h1>
-          <p>Return to the Catch extension and start a new connection.</p>
-        </false>
-      </check>
-    </false>
+          <form class="pair-device-form" method="post" action="/pair"><input type="hidden" name="_csrf"
+              value="{{ @csrf }}"><input type="hidden" name="request" value="{{ @request }}"><label>Which device is this
+              extension on?<select name="device_id" required>
+                <repeat group="{{ @devices }}" value="{{ @device }}">
+                  <option value="{{ @device.id }}" <check if="{{ @device.id==@suggestedDeviceId }}">selected
+      </check>>{{ @device.name }}</option>
+      </repeat>
+      <option value="new" <check if="{{ !@devices }}">selected
+  </check>>New device…</option>
+  </select></label>
+  <div class="pair-new-device"><label>New device name<input name="new_device_name" maxlength="120"
+        placeholder="e.g. BooPC"></label><label>Device type<select name="new_device_type">
+        <option value="laptop">Laptop</option>
+        <option value="pc">Desktop PC</option>
+        <option value="phone">Phone</option>
+        <option value="tablet">Tablet</option>
+      </select></label></div><button class="button button-primary button-full" type="submit">Connect browser</button>
+  </form>
+  </true>
+  <false>
+    <h1>This connection link is no longer active</h1>
+    <p>Return to the Catch extension and start a new connection.</p>
+  </false>
+  </check>
+  </false>
   </check>
 </section>

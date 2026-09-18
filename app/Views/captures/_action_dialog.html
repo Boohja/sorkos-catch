@@ -1,0 +1,16 @@
+<dialog class="confirm-dialog action-dialog" data-action-dialog aria-labelledby="action-dialog-title"
+  aria-describedby="action-dialog-description">
+  <div class="action-dialog-content">
+    <h2 id="action-dialog-title">Run action</h2>
+    <p id="action-dialog-description">Choose an action for this capture.</p>
+    <div class="action-dialog-options">
+      <repeat group="{{ @availableActions }}" value="{{ @action }}">
+        <form method="post" action="/captures/{{ urlencode(@capture.id) }}/actions/{{ urlencode(@action.id) }}"><input
+            type="hidden" name="_csrf" value="{{ @csrf }}"><button type="submit"><i class="glyph glyph-action"
+              aria-hidden="true"></i><span>{{ @action.name }}</span></button></form>
+      </repeat>
+    </div>
+    <div class="confirm-dialog-actions"><button class="button button-secondary" type="button"
+        data-close-action-dialog>Cancel</button></div>
+  </div>
+</dialog>

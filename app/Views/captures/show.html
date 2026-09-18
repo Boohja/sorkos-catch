@@ -146,22 +146,11 @@
               class="glyph glyph-trash" aria-hidden="true"></i>Delete permanently</button>
         </form>
       </true>
-      <false><button class="button button-secondary" type="button" data-open-tag-dialog><i class="glyph glyph-tag"
+      <false>
+        <check if="{{ @availableActions }}"><button class="button button-secondary" type="button"
+            data-open-action-dialog><i class="glyph glyph-action" aria-hidden="true"></i>Run action</button></check>
+        <button class="button button-secondary" type="button" data-open-tag-dialog><i class="glyph glyph-tag"
             aria-hidden="true"></i>Tags</button>
-        <check if="{{ @availableActions }}">
-          <details class="detail-action-picker">
-            <summary class="button button-primary"><i class="glyph glyph-move" aria-hidden="true"></i>Run action
-            </summary>
-            <div>
-              <repeat group="{{ @availableActions }}" value="{{ @action }}">
-                <form method="post" action="/captures/{{ urlencode(@capture.id) }}/actions/{{ urlencode(@action.id) }}">
-                  <input type="hidden" name="_csrf" value="{{ @csrf }}"><button
-                    type="submit">{{ @action.name }}</button>
-                </form>
-              </repeat>
-            </div>
-          </details>
-        </check>
         <check if="{{ @capture.status=='inbox' }}"><button class="button button-secondary" type="button" data-open-later
             data-capture-id="{{ @capture.id }}"><i class="glyph glyph-resubmission"
               aria-hidden="true"></i>Later</button></check>
@@ -190,12 +179,12 @@
           <dd class="metadata-email-address">{{ @emailFromAddress }}</dd>
         </div>
       </check>
-      <check if="{{ @capture.device_id || !@emailInboxId }}">
+      <check if="{{ @capture.client_id || !@emailInboxId }}">
         <div>
           <dt>Device</dt>
           <dd class="metadata-device"><i class="glyph glyph-{{ @capture.device_type?:'pc' }}" aria-hidden="true"></i>
-            <check if="{{ @capture.device_id }}">
-              <true><a href="/devices/{{ urlencode(@capture.device_id) }}">{{ @deviceLabel }}</a></true>
+            <check if="{{ @capture.client_id }}">
+              <true><a href="/clients/{{ urlencode(@capture.client_id) }}">{{ @deviceLabel }}</a></true>
               <false>{{ @deviceLabel }}</false>
             </check>
           </dd>

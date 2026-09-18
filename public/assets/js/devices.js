@@ -1,4 +1,19 @@
 export function initDevices(){
+  document.querySelectorAll('[data-physical-device-picker],.pair-device-form').forEach((picker)=>{
+    const select=picker.querySelector('select[name="physical_device_id"],select[name="device_id"]');
+    const fields=picker.querySelector('.new-physical-device-fields,.pair-new-device');
+    if(!select||!fields)return;
+    const syncDeviceFields=()=>{
+      const isNew=select.value==='new';
+      fields.hidden=!isNew;
+      fields.querySelectorAll('input,select').forEach((input)=>{input.disabled=!isNew;});
+      const name=fields.querySelector('input[name="new_device_name"]');
+      if(name)name.required=isNew;
+    };
+    select.addEventListener('change',syncDeviceFields);
+    syncDeviceFields();
+  });
+
   const flow=document.querySelector('[data-add-catch-flow]');
   if(flow){
     const platformStep=flow.querySelector('[data-platform-step]');

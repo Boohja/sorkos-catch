@@ -1,0 +1,15 @@
+<div class="physical-device-picker" data-physical-device-picker><label>Physical device<select name="physical_device_id"
+      required>
+      <repeat group="{{ @devices }}" value="{{ @physicalDevice }}">
+        <option value="{{ @physicalDevice.id }}">{{ @physicalDevice.name }}</option>
+      </repeat>
+      <option value="new" <check if="{{ !@devices }}">selected</check>>New device…</option>
+    </select></label>
+  <div class="new-physical-device-fields"><label>New device name<input name="new_device_name" maxlength="120"
+        placeholder="e.g. BooPhone"></label><label>Device type<select name="new_device_type">
+        <option value="phone">Phone</option>
+        <option value="tablet">Tablet</option>
+        <option value="laptop">Laptop</option>
+        <option value="pc">Desktop PC</option>
+      </select></label></div>
+</div>

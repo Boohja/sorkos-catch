@@ -7,12 +7,13 @@ namespace Catch\Controllers\Web;
 use Catch\Core\View;
 use Catch\Http\Response;
 use Catch\Repositories\CliAuthRepository;
+use Catch\Repositories\DeviceRepository;
 use Catch\Services\AuthService;
 use Catch\Services\Csrf;
 
 final class CliAuthController
 {
-    public function __construct(private readonly View $view, private readonly AuthService $auth, private readonly CliAuthRepository $cli, private readonly Csrf $csrf)
+    public function __construct(private readonly View $view, private readonly AuthService $auth, private readonly CliAuthRepository $cli, private readonly DeviceRepository $devices, private readonly Csrf $csrf)
     {
     }
 
@@ -25,7 +26,8 @@ final class CliAuthController
             Response::redirect('/auth/start');
         }
         $request = $this->cli->find($login);
-        $this->view->render('cli/authorize', ['title' => 'Authorize Catch CLI', 'user' => $user, 'request' => $request, 'login' => $login, 'csrf' => $this->csrf->token()], $request ? 200 : 404);
+        $this->view->render('cli/authorize', ['title' => 'Authorize Catch CLI', 'user' => $user, 'request' => $request, 'login' => $login, 'devices' => $this->devices->physicalDevices($user['id']), 'pairingError' => $_SESSION['pairing_error'] ?? null, 'csrf' => $this->csrf->token()], $request ? 200 : 404);
+        unset($_SESSION['pairing_error']);
     }
 
     public function approve(): void
@@ -39,8 +41,12 @@ final class CliAuthController
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
             Response::redirect($this->returnPath($login));
         }
+        $deviceId = $this->resolveDevice($user['id']);
+        if ($deviceId === null) {
+            Response::redirect($this->returnPath($login));
+        }
         try {
-            $connected = $this->cli->approve($login, $user['id']);
+            $connected = $this->cli->approve($login, $user['id'], $deviceId);
         } catch (\Throwable) {
             $connected = null;
         }
@@ -50,5 +56,22 @@ final class CliAuthController
     private function returnPath(string $login): string
     {
         return '/cli/authorize?' . http_build_query(['login' => preg_match('/^[0-9a-f]{48}$/', $login) ? $login : ''], arg_separator: '&', encoding_type: PHP_QUERY_RFC3986);
+    }
+
+    private function resolveDevice(string $userId): ?string
+    {
+        $selected = (string) ($_POST['device_id'] ?? '');
+        if ($selected !== 'new' && $this->devices->findPhysicalDevice($selected, $userId)) {
+            return $selected;
+        }
+        if ($selected === 'new') {
+            try {
+                return $this->devices->createPhysicalDevice($userId, (string) ($_POST['new_device_name'] ?? ''), (string) ($_POST['new_device_type'] ?? ''))['id'];
+            } catch (\Throwable) {
+            }
+        }
+        $_SESSION['pairing_error'] = 'Choose an existing device or enter a name for a new one.';
+
+        return null;
     }
 }

@@ -105,12 +105,13 @@
             setup shortcut and entering a temporary pairing code.</p>
         </div>
       </header>
-      <form class="result-form" method="post" action="/devices"><input type="hidden" name="_csrf"
+      <form class="result-form" method="post" action="/clients"><input type="hidden" name="_csrf"
           value="{{ @csrf }}"><input type="hidden" name="kind" value="mobile"><input type="hidden" name="platform"
-          value="ios" data-shortcut-platform><label>What should Catch call this device?<input name="name"
-            maxlength="120" required placeholder="e.g. My iPhone / iPad"></label><button class="button button-primary"
-          type="submit">Continue to Shortcut setup</button></form>
-      <p class="result-followup"><strong>Already set up?</strong> <a href="/devices/shortcuts">Browse our shortcut
+          value="ios" data-shortcut-platform><input type="hidden" name="name" value="iOS Shortcut">
+        <include href="devices/_physical_device_fields.html" /><button class="button button-primary"
+          type="submit">Continue to Shortcut setup</button>
+      </form>
+      <p class="result-followup"><strong>Already set up?</strong> <a href="/clients/shortcuts">Browse our shortcut
           library</a></p>
     </section>
     <section data-result="pwa" hidden>
@@ -181,22 +182,25 @@
             capture-only device token.</p>
         </div>
       </header>
-      <form class="result-form" method="post" action="/devices"><input type="hidden" name="_csrf"
+      <form class="result-form" method="post" action="/clients"><input type="hidden" name="_csrf"
           value="{{ @csrf }}"><input type="hidden" name="kind" value="automation"><input type="hidden" name="platform"
           value="api"><label>Integration name<input name="name" maxlength="120" required
-            placeholder="e.g. Scanner workflow"></label><button class="button button-primary" type="submit">Continue to
-          API pairing</button></form><a class="result-doc-link" href="/help#capture">Review the capture API
-        reference</a>
+            placeholder="e.g. Scanner workflow"></label>
+        <include href="devices/_physical_device_fields.html" /><button class="button button-primary"
+          type="submit">Continue to API pairing</button>
+      </form><a class="result-doc-link" href="/help#capture">Review the capture API reference</a>
     </section>
   </div>
 </section>
 <noscript>
   <section class="no-script-setup">
     <h2>Set up an iPhone / iPad Shortcut</h2>
-    <form class="result-form" method="post" action="/devices"><input type="hidden" name="_csrf"
+    <form class="result-form" method="post" action="/clients"><input type="hidden" name="_csrf"
         value="{{ @csrf }}"><input type="hidden" name="kind" value="mobile"><label>Platform<select name="platform">
           <option value="ios">iPhone / iPad</option>
-        </select></label><label>Device name<input name="name" maxlength="120" required></label><button
-        class="button button-primary" type="submit">Continue to Shortcut setup</button></form>
+        </select></label><input type="hidden" name="name" value="iOS Shortcut">
+      <include href="devices/_physical_device_fields.html" /><button class="button button-primary"
+        type="submit">Continue to Shortcut setup</button>
+    </form>
   </section>
 </noscript>

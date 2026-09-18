@@ -3,7 +3,7 @@
   "info": {
     "title": "Catch Public API",
     "version": "0.1.0-prerelease",
-    "description": "The complete inventory of publicly reachable machine endpoints currently implemented by Catch. Pairing creates one device token. That token is used to submit captures for the account that owns the device.\n\n**Try it out sends real requests to the current Catch installation.** Pairing consumes a valid setup code, and capture requests store data.\n\nRoutes marked **Reserved** exist in the application, but pairing currently issues only `capture:write` tokens. Catch does not currently issue the `full` tokens required by those operations."
+    "description": "The complete inventory of publicly reachable machine endpoints currently implemented by Catch. Pairing creates one credential for a client, and the signed-in approval flow assigns that client to a physical device. The token is used to submit captures for the account that owns the client.\n\n**Try it out sends real requests to the current Catch installation.** Pairing consumes a valid setup code, and capture requests store data.\n\nRoutes marked **Reserved** exist in the application, but pairing currently issues only `capture:write` tokens. Catch does not currently issue the `full` tokens required by those operations."
   },
   "externalDocs": {
     "description": "iOS Shortcut setup guide",
@@ -65,12 +65,12 @@
         }
       }
     },
-    "/api/devices/pair": {
+    "/api/clients/pair": {
       "post": {
         "tags": ["Pairing"],
         "summary": "Pair any supported client",
         "operationId": "pairDevice",
-        "description": "Channel-neutral pairing endpoint intended for clients such as future Android apps or browser extensions. It does **not** list or manage devices. Device creation and listing remain signed-in frontend routes under `/devices`. A pairing code contains 10 numeric digits, expires after 15 minutes, and is consumed by a successful request. The response contains the only plaintext copy of the new device token.",
+        "description": "Channel-neutral pairing endpoint for clients. It does **not** list or manage physical devices. Client creation and listing remain signed-in frontend routes under `/clients`. A pairing code contains 10 numeric digits, expires after 15 minutes, and is consumed by a successful request. The response contains the only plaintext copy of the new client token.",
         "requestBody": { "$ref": "#/components/requestBodies/PairingRequest" },
         "responses": {
           "201": {
@@ -87,12 +87,28 @@
         }
       }
     },
+    "/api/devices/pair": {
+      "post": {
+        "deprecated": true,
+        "tags": ["Pairing"],
+        "summary": "Pair a client through the legacy URL",
+        "operationId": "pairLegacyDevice",
+        "description": "Deprecated compatibility alias. New integrations must use `/api/clients/pair`.",
+        "requestBody": { "$ref": "#/components/requestBodies/PairingRequest" },
+        "responses": {
+          "201": { "description": "Client paired.", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PairingResponse" } } } },
+          "401": { "$ref": "#/components/responses/InvalidPairingCode" },
+          "500": { "$ref": "#/components/responses/ApiFailure" },
+          "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
+        }
+      }
+    },
     "/api/shortcut/pair": {
       "post": {
         "tags": ["Shortcut"],
         "summary": "Pair an iOS Shortcut",
         "operationId": "pairShortcut",
-        "description": "iOS-specific alias of `/api/devices/pair`. It uses the same pairing service but returns the flat Shortcut response envelope. On success, `result` is the new device token.",
+        "description": "iOS-specific alias of `/api/clients/pair`. It uses the same pairing service but returns the flat Shortcut response envelope. On success, `result` is the new client token.",
         "requestBody": { "$ref": "#/components/requestBodies/PairingRequest" },
         "responses": {
           "201": {
@@ -123,7 +139,7 @@
         "tags": ["Pairing"],
         "summary": "Start browser extension pairing",
         "operationId": "startExtensionPairing",
-        "description": "Creates a short-lived browser pairing request. The client keeps the random verifier locally and sends only its SHA-256 base64url challenge here. Catch derives the user-facing browser/OS label from the request's ordinary User-Agent header. Open `pair_url` in a normal browser tab so the signed-in user can approve the device. No device token is placed in that URL.",
+        "description": "Creates a short-lived browser pairing request. The extension keeps the random verifier locally and sends only its SHA-256 base64url challenge here. Catch derives the user-facing browser/OS label from the request's ordinary User-Agent header. Open `pair_url` in a normal browser tab so the signed-in user can choose an existing physical device or create a new one and approve the extension client. No bearer token is placed in that URL.",
         "requestBody": { "$ref": "#/components/requestBodies/ExtensionPairingStartRequest" },
         "responses": {
           "201": {
@@ -163,7 +179,7 @@
         "tags": ["Pairing"],
         "summary": "Disconnect a browser extension",
         "operationId": "disconnectExtension",
-        "description": "Revokes the supplied device token by deleting its browser device. This endpoint accepts the extension's `capture:write` token.",
+        "description": "Revokes the supplied token for this browser extension client. Other clients on the same physical device remain connected.",
         "security": [{ "deviceToken": [] }],
         "responses": {
           "200": { "description": "Browser disconnected.", "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["disconnected"] } } }, "example": { "status": "disconnected" } } } },
@@ -177,10 +193,10 @@
         "tags": ["Pairing"],
         "summary": "Validate a browser extension connection",
         "operationId": "validateExtensionConnection",
-        "description": "Checks whether a device token still belongs to a connected browser device. Invalid and revoked tokens receive the same generic 401 response; the endpoint does not reveal token prefixes or partial matches.",
+        "description": "Checks whether a token still belongs to a connected browser extension client. Invalid and revoked tokens receive the same generic 401 response; the endpoint does not reveal token prefixes or partial matches.",
         "security": [{ "deviceToken": [] }],
         "responses": {
-          "200": { "description": "The browser is still connected.", "content": { "application/json": { "schema": { "type": "object", "required": ["status", "device"], "properties": { "status": { "type": "string", "enum": ["connected"] }, "device": { "type": "object", "required": ["id", "name", "platform", "client_type"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "platform": { "type": "string" }, "client_type": { "type": "string", "enum": ["extension"] } } } } } } } },
+          "200": { "description": "The browser extension client is still connected.", "content": { "application/json": { "schema": { "type": "object", "required": ["status", "client", "device"], "properties": { "status": { "type": "string", "enum": ["connected"] }, "client": { "type": "object", "required": ["id", "name", "platform", "os", "app", "client_type"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "platform": { "type": "string" }, "os": { "type": "string" }, "app": { "type": "string" }, "client_type": { "type": "string", "enum": ["extension"] } } }, "device": { "type": "object", "nullable": true, "required": ["id", "name"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" } } } } } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" },
           "503": { "$ref": "#/components/responses/DatabaseUnavailable" }
         }
@@ -639,10 +655,12 @@
       },
       "PairingResponse": {
         "type": "object",
-        "required": ["device_token", "token_type", "capture_endpoint"],
+        "required": ["device_token", "token_type", "client", "device", "capture_endpoint"],
         "properties": {
           "device_token": { "type": "string", "example": "catch_device_example-token" },
           "token_type": { "type": "string", "enum": ["Bearer"] },
+          "client": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string", "format": "uuid" } } },
+          "device": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string", "format": "uuid" } } },
           "capture_endpoint": { "type": "string", "format": "uri", "example": "https://catch.sorkos.net/api/shortcut/captures" }
         }
       },
@@ -673,11 +691,12 @@
       },
       "ExtensionPairingResponse": {
         "type": "object",
-        "required": ["status", "device_token", "token_type", "device", "capture_endpoint"],
+        "required": ["status", "device_token", "token_type", "client", "device", "capture_endpoint"],
         "properties": {
           "status": { "type": "string", "enum": ["connected"] },
           "device_token": { "type": "string", "example": "catch_device_example-token" },
           "token_type": { "type": "string", "enum": ["Bearer"] },
+          "client": { "type": "object", "required": ["id", "name", "os", "app"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" }, "os": { "type": "string" }, "app": { "type": "string" } } },
           "device": { "type": "object", "required": ["id", "name"], "properties": { "id": { "type": "string", "format": "uuid" }, "name": { "type": "string" } } },
           "capture_endpoint": { "type": "string", "format": "uri", "example": "https://catch.sorkos.net/api/v1/captures" }
         }

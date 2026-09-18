@@ -15,9 +15,17 @@
     <header class="settings-section-heading">
       <div>
         <h2>Devices</h2>
-        <p>Every browser, extension, shortcut, and client connected to Catch.</p>
-      </div><a class="button button-primary" href="/devices/new">Add device</a>
+        <p>Physical devices and the browsers, extensions, shortcuts, and clients connected from them.</p>
+      </div><a class="button button-primary" href="/clients/new">Connect client</a>
     </header>
+    <form class="physical-device-form" method="post" action="/settings/devices"><input type="hidden" name="_csrf"
+        value="{{ @csrf }}"><label>Device name<input name="name" maxlength="120" required
+          placeholder="e.g. BooPC"></label><label>Type<select name="device_type">
+          <option value="laptop">Laptop</option>
+          <option value="pc">Desktop PC</option>
+          <option value="phone">Phone</option>
+          <option value="tablet">Tablet</option>
+        </select></label><button class="button button-secondary" type="submit">Add physical device</button></form>
     <include href="devices/_table.html" />
   </true>
   <false>

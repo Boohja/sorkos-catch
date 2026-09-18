@@ -39,7 +39,7 @@ final class CliAuthRepository
         return $query->fetch() ?: null;
     }
 
-    public function approve(string $loginId, string $userId): ?array
+    public function approve(string $loginId, string $userId, string $deviceId): ?array
     {
         if (!$this->validId($loginId)) {
             return null;
@@ -53,17 +53,25 @@ final class CliAuthRepository
                 $this->db->commit();
                 return null;
             }
-            $deviceId = Id::uuid();
-            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,device_type,client_type,platform,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',\'cli\',\'cli\',:platform,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute([
-                'id' => $deviceId,
+            $device = $this->db->prepare('SELECT id FROM catch_devices WHERE id=:device AND user_id=:user LIMIT 1 FOR UPDATE');
+            $device->execute(['device' => $deviceId, 'user' => $userId]);
+            if (!$device->fetchColumn()) {
+                $this->db->commit();
+                return null;
+            }
+            $clientId = Id::uuid();
+            $this->db->prepare('INSERT INTO catch_clients (id,user_id,device_id,name,kind,device_type,client_type,platform,os,client_icon,status,created_at,connected_at) VALUES (:id,:user,:device,:name,\'desktop\',\'cli\',\'cli\',:platform,:os,\'cli\',\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute([
+                'id' => $clientId,
                 'user' => $userId,
+                'device' => $deviceId,
                 'name' => $this->suggestedDeviceName((string) $request['device_name']),
                 'platform' => $request['platform'],
+                'os' => $request['platform'],
             ]);
-            $this->db->prepare('UPDATE catch_cli_auth_requests SET status=\'approved\',user_id=:user,device_id=:device,approved_at=UTC_TIMESTAMP(6) WHERE login_id=:login')->execute(['user' => $userId, 'device' => $deviceId, 'login' => $loginId]);
+            $this->db->prepare('UPDATE catch_cli_auth_requests SET status=\'approved\',user_id=:user,client_id=:client,approved_at=UTC_TIMESTAMP(6) WHERE login_id=:login')->execute(['user' => $userId, 'client' => $clientId, 'login' => $loginId]);
             $this->db->commit();
 
-            return ['device_id' => $deviceId, 'device_name' => $request['device_name']];
+            return ['client_id' => $clientId, 'device_id' => $deviceId, 'device_name' => $request['device_name']];
         } catch (\Throwable $error) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
@@ -87,7 +95,7 @@ final class CliAuthRepository
                 return ['status' => 'invalid'];
             }
             if ((int) $request['expired'] === 1) {
-                $this->deleteRequestAndDevice($loginId, $request['device_id']);
+                $this->deleteRequestAndClient($loginId, $request['client_id']);
                 $this->db->commit();
                 return ['status' => 'expired'];
             }
@@ -100,16 +108,16 @@ final class CliAuthRepository
                 $this->db->commit();
                 return ['status' => 'pending'];
             }
-            if (!$request['device_id']) {
+            if (!$request['client_id']) {
                 $this->db->commit();
                 return ['status' => 'invalid'];
             }
             $token = 'catch_cli_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-            $this->db->prepare('INSERT INTO catch_device_tokens (id,device_id,token_hash,token_scope,created_at) VALUES (:id,:device,:hash,\'capture:read\',UTC_TIMESTAMP(6))')->execute(['id' => Id::uuid(), 'device' => $request['device_id'], 'hash' => hash('sha256', $token)]);
+            $this->db->prepare('INSERT INTO catch_client_tokens (id,client_id,token_hash,token_scope,created_at) VALUES (:id,:client,:hash,\'capture:read\',UTC_TIMESTAMP(6))')->execute(['id' => Id::uuid(), 'client' => $request['client_id'], 'hash' => hash('sha256', $token)]);
             $this->db->prepare('DELETE FROM catch_cli_auth_requests WHERE login_id=:login')->execute(['login' => $loginId]);
             $this->db->commit();
 
-            return ['status' => 'connected', 'device_token' => $token, 'device_id' => $request['device_id'], 'device_name' => $request['device_name']];
+            return ['status' => 'connected', 'device_token' => $token, 'client_id' => $request['client_id'], 'device_name' => $request['device_name']];
         } catch (\Throwable $error) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
@@ -138,14 +146,14 @@ final class CliAuthRepository
 
     private function deleteExpired(): void
     {
-        $this->db->exec('DELETE d FROM catch_devices d JOIN catch_cli_auth_requests r ON r.device_id=d.id WHERE r.expires_at<UTC_TIMESTAMP(6)');
+        $this->db->exec('DELETE d FROM catch_clients d JOIN catch_cli_auth_requests r ON r.client_id=d.id WHERE r.expires_at<UTC_TIMESTAMP(6)');
         $this->db->exec('DELETE FROM catch_cli_auth_requests WHERE expires_at<UTC_TIMESTAMP(6)');
     }
 
-    private function deleteRequestAndDevice(string $loginId, mixed $deviceId): void
+    private function deleteRequestAndClient(string $loginId, mixed $clientId): void
     {
-        if ($deviceId) {
-            $this->db->prepare('DELETE FROM catch_devices WHERE id=:device')->execute(['device' => $deviceId]);
+        if ($clientId) {
+            $this->db->prepare('DELETE FROM catch_clients WHERE id=:client')->execute(['client' => $clientId]);
         } else {
             $this->db->prepare('DELETE FROM catch_cli_auth_requests WHERE login_id=:login')->execute(['login' => $loginId]);
         }

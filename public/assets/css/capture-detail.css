@@ -682,47 +682,35 @@
 }
 
 .detail .detail-actions {
+  align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
   padding: 20px 0 26px;
   border-bottom: 0
 }
 
-.detail-action-picker {
-  position: relative;
+.action-dialog-content {
+  padding: 24px;
 }
 
-.detail-action-picker>summary {
-  list-style: none;
-  cursor: pointer;
+.action-dialog-options {
+  display: grid;
+  gap: 6px;
+  margin-top: 20px;
 }
 
-.detail-action-picker>summary::-webkit-details-marker {
-  display: none;
-}
-
-.detail-action-picker>div {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 7px);
-  z-index: 7;
-  width: max-content;
-  min-width: 210px;
-  max-width: min(320px, calc(100vw - 28px));
-  padding: 7px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-  box-shadow: 0 12px 30px rgb(0 0 0 / 22%);
-}
-
-.detail-action-picker form {
+.action-dialog-options form {
   margin: 0;
+  padding: 0;
 }
 
-.detail-action-picker form button {
+.action-dialog-options button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  padding: 9px 10px;
+  min-height: 44px;
+  padding: 10px 12px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -731,9 +719,15 @@
   cursor: pointer;
 }
 
-.detail-action-picker form button:hover,
-.detail-action-picker form button:focus-visible {
+.action-dialog-options button:hover,
+.action-dialog-options button:focus-visible {
   background: var(--surface-muted);
+}
+
+.action-dialog-options .glyph {
+  color: var(--muted);
+  font-size: 18px;
+  transform: translateY(.08em);
 }
 
 .detail .capture-metadata {

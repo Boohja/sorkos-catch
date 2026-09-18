@@ -31,7 +31,7 @@ final class CaptureRepository
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
                         a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             WHERE c.user_id = :user
                 AND c.status = :status
                 AND c.deleted_at IS NULL
@@ -57,7 +57,7 @@ final class CaptureRepository
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
                         a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             WHERE c.user_id = :user
                 AND c.deleted_at IS NOT NULL
             ORDER BY c.deleted_at DESC
@@ -90,7 +90,7 @@ final class CaptureRepository
                         a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
             JOIN catch_capture_tags ct ON ct.capture_id = c.id
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             WHERE c.user_id = :user
                 AND c.status = :status
                 AND c.deleted_at IS NULL
@@ -104,7 +104,7 @@ final class CaptureRepository
         return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
     }
 
-    public function listByDevice(string $userId, string $deviceId, int $limit = 200): array
+    public function listByClient(string $userId, string $clientId, int $limit = 200): array
     {
         $limit = max(1, min($limit, 500));
         $sql = <<<SQL
@@ -117,14 +117,14 @@ final class CaptureRepository
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
                         a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             WHERE c.user_id = :user
-                AND c.device_id = :device
+                AND c.client_id = :client
             ORDER BY c.created_at DESC
             LIMIT {$limit}
             SQL;
         $query = $this->db->prepare($sql);
-        $query->execute(['user' => $userId, 'device' => $deviceId]);
+        $query->execute(['user' => $userId, 'client' => $clientId]);
 
         return $this->withTags(array_map([$this, 'hydrate'], $query->fetchAll()), $userId);
     }
@@ -144,7 +144,7 @@ final class CaptureRepository
             FROM catch_email_imports e
             JOIN catch_email_inboxes i ON i.id = e.inbox_id
             JOIN catch_captures c ON c.id = e.capture_id
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             WHERE i.user_id = :user
                 AND i.id = :inbox
             ORDER BY e.created_at DESC
@@ -164,7 +164,7 @@ final class CaptureRepository
                 d.status device_status, i.id email_inbox_id,
                 i.name email_inbox_name, i.address email_inbox_address
             FROM catch_captures c
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             LEFT JOIN catch_email_imports e ON e.capture_id = c.id
             LEFT JOIN catch_email_inboxes i ON i.id = e.inbox_id AND i.user_id = c.user_id
             WHERE c.id = :id AND c.user_id = :user
@@ -204,7 +204,7 @@ final class CaptureRepository
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
                         a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             WHERE c.user_id = :user
                 AND c.status = 'inbox'
                 AND c.deleted_at IS NULL
@@ -231,7 +231,7 @@ final class CaptureRepository
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
                         a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
-            LEFT JOIN catch_devices d ON d.id = c.device_id
+            LEFT JOIN catch_clients d ON d.id = c.client_id
             WHERE c.id = :id AND c.user_id = :user
             LIMIT 1
             SQL;
@@ -281,7 +281,7 @@ final class CaptureRepository
                     ORDER BY CASE WHEN a.kind = 'preview' THEN 0 ELSE 1 END,
                         a.created_at DESC, a.id DESC LIMIT 1) visual_attachment_id
             FROM catch_captures c
-            LEFT JOIN catch_devices d ON d.id=c.device_id
+            LEFT JOIN catch_clients d ON d.id=c.client_id
             WHERE c.user_id=:user AND {$statusClause}
                 AND (:term='' OR c.title LIKE :title_pattern OR c.text LIKE :text_pattern OR c.url LIKE :url_pattern OR c.extracted_text LIKE :extracted_pattern OR CAST(c.catch_number AS CHAR)=:number_term)
             ORDER BY c.created_at DESC
@@ -339,11 +339,11 @@ final class CaptureRepository
     {
         $sql = <<<'SQL'
             INSERT INTO catch_captures (
-                id, user_id, device_id, catch_number, client_capture_id, type,
+                id, user_id, client_id, catch_number, client_capture_id, type,
                 title, text, url, extracted_text, source, metadata_json,
                 status, created_at, updated_at
             ) VALUES (
-                :id, :user_id, :device_id, :catch_number, :client_capture_id, :type,
+                :id, :user_id, :client_id, :catch_number, :client_capture_id, :type,
                 :title, :text, :url, :extracted_text, :source, :metadata_json,
                 'inbox', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
             )

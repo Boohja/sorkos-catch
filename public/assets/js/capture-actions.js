@@ -151,3 +151,15 @@ export function initCaptureActions() {
   window.addEventListener('scroll', close, { passive: true });
   window.addEventListener('resize', close);
 }
+
+export function initCaptureActionDialog() {
+  const dialog = document.querySelector('[data-action-dialog]');
+  const trigger = document.querySelector('[data-open-action-dialog]');
+  if (!dialog || !trigger) return;
+
+  trigger.addEventListener('click', () => dialog.showModal());
+  dialog.querySelector('[data-close-action-dialog]')?.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+}

@@ -19,15 +19,94 @@ final class DeviceRepository
     {
     }
 
+    public function physicalDevices(string $userId): array
+    {
+        $query = $this->db->prepare(
+            'SELECT * FROM catch_devices WHERE user_id=:user ORDER BY updated_at DESC,name',
+        );
+        $query->execute(['user' => $userId]);
+        $devices = $query->fetchAll();
+
+        $clients = $this->all($userId);
+        foreach ($devices as &$device) {
+            $device['clients'] = array_values(array_filter(
+                $clients,
+                static fn (array $client): bool => $client['device_id'] === $device['id'],
+            ));
+            $device['client_count'] = count($device['clients']);
+            $device['capture_count'] = array_sum(array_map(
+                static fn (array $client): int => (int) $client['capture_count'],
+                $device['clients'],
+            ));
+            $lastSeen = array_values(array_filter(array_map(
+                static fn (array $client): ?string => $client['last_used_at'] ?: $client['last_seen_at'] ?: null,
+                $device['clients'],
+            )));
+            $device['last_seen_at'] = $lastSeen ? max($lastSeen) : null;
+        }
+        unset($device);
+
+        return $devices;
+    }
+
+    public function unassignedClients(string $userId): array
+    {
+        return array_values(array_filter(
+            $this->all($userId),
+            static fn (array $client): bool => empty($client['device_id']),
+        ));
+    }
+
+    public function findPhysicalDevice(string $deviceId, string $userId): ?array
+    {
+        $query = $this->db->prepare('SELECT * FROM catch_devices WHERE id=:id AND user_id=:user LIMIT 1');
+        $query->execute(['id' => $deviceId, 'user' => $userId]);
+
+        return $query->fetch() ?: null;
+    }
+
+    public function createPhysicalDevice(string $userId, string $name, string $deviceType): array
+    {
+        $name = mb_substr(trim($name), 0, 120);
+        if ($name === '' || !in_array($deviceType, ['laptop', 'phone', 'pc', 'tablet'], true)) {
+            throw new \InvalidArgumentException('Enter a device name and choose a supported device type.');
+        }
+
+        $id = Id::uuid();
+        $query = $this->db->prepare(<<<'SQL'
+            INSERT INTO catch_devices (id,user_id,name,device_type,created_at,updated_at)
+            VALUES (:id,:user,:name,:type,UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
+            SQL);
+        $query->execute(['id' => $id, 'user' => $userId, 'name' => $name, 'type' => $deviceType]);
+
+        return $this->findPhysicalDevice($id, $userId)
+            ?? throw new \RuntimeException('The device could not be created.');
+    }
+
+    public function assignClient(string $clientId, string $userId, ?string $deviceId): bool
+    {
+        $client = $this->find($clientId, $userId);
+        if (!$client || $client['status'] === 'revoked'
+            || ($deviceId !== null && !$this->findPhysicalDevice($deviceId, $userId))) {
+            return false;
+        }
+        $query = $this->db->prepare(
+            'UPDATE catch_clients SET device_id=:device WHERE id=:client AND user_id=:user',
+        );
+        $query->execute(['device' => $deviceId, 'client' => $clientId, 'user' => $userId]);
+
+        return true;
+    }
+
     public function all(string $userId): array
     {
         $query = $this->db->prepare(<<<'SQL'
             SELECT d.*,
                 t.last_used_at,
-                (SELECT COUNT(*) FROM catch_captures c WHERE c.device_id = d.id) AS capture_count,
-                (SELECT MAX(c.created_at) FROM catch_captures c WHERE c.device_id = d.id) AS capture_last_used_at
-            FROM catch_devices d
-            LEFT JOIN catch_device_tokens t ON t.device_id = d.id
+                (SELECT COUNT(*) FROM catch_captures c WHERE c.client_id = d.id) AS capture_count,
+                (SELECT MAX(c.created_at) FROM catch_captures c WHERE c.client_id = d.id) AS capture_last_used_at
+            FROM catch_clients d
+            LEFT JOIN catch_client_tokens t ON t.client_id = d.id
             WHERE d.user_id = :user
                 AND d.status <> 'revoked'
             ORDER BY COALESCE(t.last_used_at, d.last_seen_at, d.created_at) DESC,
@@ -41,7 +120,7 @@ final class DeviceRepository
     public function find(string $deviceId, string $userId): ?array
     {
         $this->deleteExpiredPairingCode($deviceId, $userId);
-        $sql = 'SELECT d.*,p.code_encrypted,CASE WHEN p.created_at >= UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE THEN DATE_FORMAT(DATE_ADD(p.created_at,INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE),\'%Y-%m-%dT%H:%i:%sZ\') ELSE NULL END pairing_code_expires_at,t.last_used_at,(SELECT COUNT(*) FROM catch_captures c WHERE c.device_id=d.id) capture_count,(SELECT MAX(c.created_at) FROM catch_captures c WHERE c.device_id=d.id) capture_last_used_at FROM catch_devices d LEFT JOIN catch_device_pairing_codes p ON p.device_id=d.id LEFT JOIN catch_device_tokens t ON t.device_id=d.id WHERE d.id=:id AND d.user_id=:user LIMIT 1';
+        $sql = 'SELECT d.*,physical.device_type physical_device_type,physical.name physical_device_name,p.code_encrypted,CASE WHEN p.created_at >= UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE THEN DATE_FORMAT(DATE_ADD(p.created_at,INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE),\'%Y-%m-%dT%H:%i:%sZ\') ELSE NULL END pairing_code_expires_at,t.last_used_at,(SELECT COUNT(*) FROM catch_captures c WHERE c.client_id=d.id) capture_count,(SELECT COUNT(*) FROM catch_sessions s WHERE s.client_id=d.id AND s.expires_at>UTC_TIMESTAMP(6)) session_count,(SELECT MAX(c.created_at) FROM catch_captures c WHERE c.client_id=d.id) capture_last_used_at FROM catch_clients d LEFT JOIN catch_devices physical ON physical.id=d.device_id LEFT JOIN catch_client_pairing_codes p ON p.client_id=d.id LEFT JOIN catch_client_tokens t ON t.client_id=d.id WHERE d.id=:id AND d.user_id=:user LIMIT 1';
         $query = $this->db->prepare($sql);
         $query->execute(['id' => $deviceId,'user' => $userId]);
         $device = $query->fetch() ?: null;
@@ -67,38 +146,49 @@ final class DeviceRepository
         string $clientType = 'shortcut',
         ?string $userAgent = null,
         ?string $deviceType = null,
+        ?string $physicalDeviceId = null,
     ): array {
+        if ($physicalDeviceId !== null && !$this->findPhysicalDevice($physicalDeviceId, $userId)) {
+            throw new \InvalidArgumentException('Choose a device that belongs to this account.');
+        }
         $id = Id::uuid();
         $name = mb_substr(trim($name), 0, 120);
         $deviceType = $this->deviceType($deviceType, $kind, $platform, $userAgent);
+        $identity = $this->clientIdentity($clientType, $platform, $userAgent);
         $sql = <<<'SQL'
-            INSERT INTO catch_devices (
-                id, user_id, name, kind, device_type, client_type,
-                platform, user_agent, status, created_at
+            INSERT INTO catch_clients (
+                id, user_id, device_id, name, kind, device_type, client_type,
+                platform, os, client_icon, user_agent, status, created_at
             ) VALUES (
-                :id, :user, :name, :kind, :device_type, :client_type,
-                :platform, :user_agent, 'setup', UTC_TIMESTAMP(6)
+                :id, :user, :device, :name, :kind, :device_type, :client_type,
+                :platform, :os, :client_icon, :user_agent, 'setup', UTC_TIMESTAMP(6)
             )
             SQL;
         $query = $this->db->prepare($sql);
         $query->execute([
             'id' => $id,
             'user' => $userId,
+            'device' => $physicalDeviceId,
             'name' => $name,
             'kind' => $kind,
             'device_type' => $deviceType,
             'client_type' => $clientType,
             'platform' => $platform,
+            'os' => $identity['os'],
+            'client_icon' => $identity['client_app'],
             'user_agent' => $userAgent,
         ]);
 
         return [
             'id' => $id,
+            'device_id' => $physicalDeviceId,
             'name' => $name,
             'kind' => $kind,
             'device_type' => $deviceType,
             'client_type' => $clientType,
             'platform' => $platform,
+            'os' => $identity['os'],
+            'client_icon' => $identity['client_app'],
             'user_agent' => $userAgent,
             'status' => 'setup',
         ];
@@ -113,8 +203,8 @@ final class DeviceRepository
         [$plain,$display] = $this->newCode();
         $this->db->beginTransaction();
         try {
-            $this->db->prepare('DELETE FROM catch_device_pairing_codes WHERE device_id=:device')->execute(['device' => $deviceId]);
-            $this->db->prepare('INSERT INTO catch_device_pairing_codes (device_id,code_hash,code_encrypted,created_at) VALUES (:device,:hash,:encrypted,UTC_TIMESTAMP(6))')->execute(['device' => $deviceId,'hash' => hash('sha256', $plain),'encrypted' => $this->secrets->encrypt($display)]);
+            $this->db->prepare('DELETE FROM catch_client_pairing_codes WHERE client_id=:client')->execute(['client' => $deviceId]);
+            $this->db->prepare('INSERT INTO catch_client_pairing_codes (client_id,code_hash,code_encrypted,created_at) VALUES (:client,:hash,:encrypted,UTC_TIMESTAMP(6))')->execute(['client' => $deviceId,'hash' => hash('sha256', $plain),'encrypted' => $this->secrets->encrypt($display)]);
             $this->db->commit();
             return $display;
         } catch (\Throwable $error) {
@@ -128,15 +218,15 @@ final class DeviceRepository
     {
         $this->db->beginTransaction();
         try {
-            $owned = $this->db->prepare('SELECT id FROM catch_devices WHERE id=:id AND user_id=:user AND status<>\'revoked\' FOR UPDATE');
+            $owned = $this->db->prepare('SELECT id FROM catch_clients WHERE id=:id AND user_id=:user AND status<>\'revoked\' FOR UPDATE');
             $owned->execute(['id' => $deviceId,'user' => $userId]);
             if (!$owned->fetchColumn()) {
                 $this->db->commit();
                 return false;
             }
-            $this->db->prepare('DELETE FROM catch_device_tokens WHERE device_id=:device')->execute(['device' => $deviceId]);
-            $this->db->prepare('DELETE FROM catch_device_pairing_codes WHERE device_id=:device')->execute(['device' => $deviceId]);
-            $this->db->prepare('UPDATE catch_devices SET status=\'revoked\' WHERE id=:device')->execute(['device' => $deviceId]);
+            $this->db->prepare('DELETE FROM catch_client_tokens WHERE client_id=:client')->execute(['client' => $deviceId]);
+            $this->db->prepare('DELETE FROM catch_client_pairing_codes WHERE client_id=:client')->execute(['client' => $deviceId]);
+            $this->db->prepare('UPDATE catch_clients SET status=\'revoked\' WHERE id=:client')->execute(['client' => $deviceId]);
             $this->db->commit();
             return true;
         } catch (\Throwable $error) {
@@ -149,7 +239,7 @@ final class DeviceRepository
     public function status(string $deviceId, string $userId): ?array
     {
         $this->deleteExpiredPairingCode($deviceId, $userId);
-        $query = $this->db->prepare('SELECT d.status,d.connected_at,d.last_seen_at,EXISTS(SELECT 1 FROM catch_device_pairing_codes p WHERE p.device_id=d.id) pairing_code_active FROM catch_devices d WHERE d.id=:id AND d.user_id=:user LIMIT 1');
+        $query = $this->db->prepare('SELECT d.status,d.connected_at,d.last_seen_at,EXISTS(SELECT 1 FROM catch_client_pairing_codes p WHERE p.client_id=d.id) pairing_code_active FROM catch_clients d WHERE d.id=:id AND d.user_id=:user LIMIT 1');
         $query->execute(['id' => $deviceId,'user' => $userId]);
         return $query->fetch() ?: null;
     }
@@ -162,21 +252,21 @@ final class DeviceRepository
         }
         $this->db->beginTransaction();
         try {
-            $query = $this->db->prepare('SELECT d.id,d.user_id FROM catch_device_pairing_codes p JOIN catch_devices d ON d.id=p.device_id WHERE p.code_hash=:hash AND p.created_at >= UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE AND d.status=\'setup\' LIMIT 1 FOR UPDATE');
+            $query = $this->db->prepare('SELECT d.id,d.user_id,d.device_id FROM catch_client_pairing_codes p JOIN catch_clients d ON d.id=p.client_id WHERE p.code_hash=:hash AND p.created_at >= UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE AND d.status=\'setup\' LIMIT 1 FOR UPDATE');
             $query->execute(['hash' => hash('sha256', $normalized)]);
             $device = $query->fetch() ?: null;
             if (!$device) {
-                $this->db->prepare('DELETE FROM catch_device_pairing_codes WHERE code_hash=:hash AND created_at < UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE')->execute(['hash' => hash('sha256', $normalized)]);
+                $this->db->prepare('DELETE FROM catch_client_pairing_codes WHERE code_hash=:hash AND created_at < UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE')->execute(['hash' => hash('sha256', $normalized)]);
                 $this->db->commit();
                 return null;
             }
             $token = 'catch_device_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
             $tokenId = Id::uuid();
-            $this->db->prepare('INSERT INTO catch_device_tokens (id,device_id,token_hash,token_scope,created_at) VALUES (:id,:device,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id' => $tokenId,'device' => $device['id'],'hash' => hash('sha256', $token)]);
-            $this->db->prepare('DELETE FROM catch_device_pairing_codes WHERE device_id=:device')->execute(['device' => $device['id']]);
-            $this->db->prepare('UPDATE catch_devices SET status=\'connected\',connected_at=UTC_TIMESTAMP(6) WHERE id=:device')->execute(['device' => $device['id']]);
+            $this->db->prepare('INSERT INTO catch_client_tokens (id,client_id,token_hash,token_scope,created_at) VALUES (:id,:client,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id' => $tokenId,'client' => $device['id'],'hash' => hash('sha256', $token)]);
+            $this->db->prepare('DELETE FROM catch_client_pairing_codes WHERE client_id=:client')->execute(['client' => $device['id']]);
+            $this->db->prepare('UPDATE catch_clients SET status=\'connected\',connected_at=UTC_TIMESTAMP(6) WHERE id=:client')->execute(['client' => $device['id']]);
             $this->db->commit();
-            return ['device_token' => $token,'device_id' => $device['id']];
+            return ['device_token' => $token,'client_id' => $device['id'],'device_id' => $device['device_id']];
         } catch (\Throwable $error) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
@@ -206,8 +296,12 @@ final class DeviceRepository
         return $query->fetch() ?: null;
     }
 
-    public function approveExtensionPairingRequest(string $requestId, string $userId, ?string $userAgent = null): ?array
-    {
+    public function approveExtensionPairingRequest(
+        string $requestId,
+        string $userId,
+        string $deviceId,
+        ?string $userAgent = null,
+    ): ?array {
         if (!preg_match('/^[0-9a-f]{48}$/', $requestId)) {
             return null;
         }
@@ -220,20 +314,32 @@ final class DeviceRepository
                 $this->db->commit();
                 return null;
             }
-            $deviceId = Id::uuid();
+            if (!$this->findPhysicalDevice($deviceId, $userId)) {
+                $this->db->commit();
+                return null;
+            }
+            $clientId = Id::uuid();
             $tokenId = Id::uuid();
             $token = 'catch_device_' . rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-            $this->db->prepare('INSERT INTO catch_devices (id,user_id,name,kind,device_type,client_type,platform,user_agent,status,created_at,connected_at) VALUES (:id,:user,:name,\'desktop\',\'extension\',\'extension\',:platform,:user_agent,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute([
-                'id' => $deviceId,
+            $identity = $this->clientIdentity(
+                'extension',
+                (string) $pairing['platform'],
+                $userAgent ?: $pairing['user_agent'],
+            );
+            $this->db->prepare('INSERT INTO catch_clients (id,user_id,device_id,name,kind,device_type,client_type,platform,os,client_icon,user_agent,status,created_at,connected_at) VALUES (:id,:user,:device,:name,\'desktop\',\'extension\',\'extension\',:platform,:os,:client_icon,:user_agent,\'connected\',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))')->execute([
+                'id' => $clientId,
                 'user' => $userId,
+                'device' => $deviceId,
                 'name' => $this->suggestedClientName((string) $pairing['device_name'], 'extension'),
                 'platform' => $pairing['platform'],
+                'os' => $identity['os'],
+                'client_icon' => $identity['client_app'],
                 'user_agent' => $userAgent ?: $pairing['user_agent'],
             ]);
-            $this->db->prepare('INSERT INTO catch_device_tokens (id,device_id,token_hash,token_scope,created_at) VALUES (:id,:device,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id' => $tokenId,'device' => $deviceId,'hash' => hash('sha256', $token)]);
-            $this->db->prepare('UPDATE catch_extension_pairing_requests SET status=\'approved\',user_id=:user,device_id=:device,token_encrypted=:token,approved_at=UTC_TIMESTAMP(6) WHERE request_id=:request')->execute(['user' => $userId,'device' => $deviceId,'token' => $this->secrets->encrypt($token),'request' => $requestId]);
+            $this->db->prepare('INSERT INTO catch_client_tokens (id,client_id,token_hash,token_scope,created_at) VALUES (:id,:client,:hash,\'capture:write\',UTC_TIMESTAMP(6))')->execute(['id' => $tokenId,'client' => $clientId,'hash' => hash('sha256', $token)]);
+            $this->db->prepare('UPDATE catch_extension_pairing_requests SET status=\'approved\',user_id=:user,client_id=:client,token_encrypted=:token,approved_at=UTC_TIMESTAMP(6) WHERE request_id=:request')->execute(['user' => $userId,'client' => $clientId,'token' => $this->secrets->encrypt($token),'request' => $requestId]);
             $this->db->commit();
-            return ['device_id' => $deviceId,'device_name' => $pairing['device_name'],'status' => 'approved'];
+            return ['client_id' => $clientId,'device_id' => $deviceId,'device_name' => $pairing['device_name'],'status' => 'approved'];
         } catch (\Throwable $error) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
@@ -256,8 +362,8 @@ final class DeviceRepository
                 return ['status' => 'invalid'];
             }
             if ((int)$pairing['expired'] === 1) {
-                if ($pairing['device_id']) {
-                    $this->db->prepare('DELETE FROM catch_devices WHERE id=:device')->execute(['device' => $pairing['device_id']]);
+                if ($pairing['client_id']) {
+                    $this->db->prepare('DELETE FROM catch_clients WHERE id=:client')->execute(['client' => $pairing['client_id']]);
                 } else {
                     $this->db->prepare('DELETE FROM catch_extension_pairing_requests WHERE request_id=:request')->execute(['request' => $requestId]);
                 }
@@ -273,14 +379,21 @@ final class DeviceRepository
                 $this->db->commit();
                 return ['status' => 'pending'];
             }
-            if (!$pairing['token_encrypted'] || !$pairing['device_id']) {
+            if (!$pairing['token_encrypted'] || !$pairing['client_id']) {
                 $this->db->commit();
                 return ['status' => 'invalid'];
             }
             $token = $this->secrets->decrypt((string)$pairing['token_encrypted']);
+            $identity = $this->db->prepare('SELECT c.id client_id,c.name client_name,c.os,c.client_icon,c.device_id,d.name physical_device_name FROM catch_clients c LEFT JOIN catch_devices d ON d.id=c.device_id WHERE c.id=:client LIMIT 1');
+            $identity->execute(['client' => $pairing['client_id']]);
+            $client = $identity->fetch() ?: null;
+            if (!$client) {
+                $this->db->commit();
+                return ['status' => 'invalid'];
+            }
             $this->db->prepare('DELETE FROM catch_extension_pairing_requests WHERE request_id=:request')->execute(['request' => $requestId]);
             $this->db->commit();
-            return ['status' => 'connected','device_token' => $token,'device_id' => $pairing['device_id'],'device_name' => $pairing['device_name']];
+            return ['status' => 'connected','device_token' => $token] + $client;
         } catch (\Throwable $error) {
             if ($this->db->inTransaction()) {
                 $this->db->rollBack();
@@ -293,7 +406,7 @@ final class DeviceRepository
         if (!str_starts_with($token, 'catch_device_') && !str_starts_with($token, 'catch_cli_')) {
             return false;
         }
-        $sql = 'SELECT t.device_id FROM catch_device_tokens t JOIN catch_devices d ON d.id=t.device_id WHERE t.token_hash=:hash AND t.revoked_at IS NULL';
+        $sql = 'SELECT t.client_id FROM catch_client_tokens t JOIN catch_clients d ON d.id=t.client_id WHERE t.token_hash=:hash AND t.revoked_at IS NULL';
         if ($clientType !== null) {
             $sql .= ' AND d.client_type=:client_type';
         }
@@ -304,12 +417,12 @@ final class DeviceRepository
             $parameters['client_type'] = $clientType;
         }
         $query->execute($parameters);
-        $deviceId = $query->fetchColumn();
-        if (!$deviceId) {
+        $clientId = $query->fetchColumn();
+        if (!$clientId) {
             return false;
         }
-        $this->db->prepare('UPDATE catch_device_tokens SET revoked_at=UTC_TIMESTAMP(6) WHERE device_id=:device')->execute(['device' => $deviceId]);
-        $this->db->prepare('UPDATE catch_devices SET status=\'revoked\' WHERE id=:device')->execute(['device' => $deviceId]);
+        $this->db->prepare('UPDATE catch_client_tokens SET revoked_at=UTC_TIMESTAMP(6) WHERE client_id=:client')->execute(['client' => $clientId]);
+        $this->db->prepare('UPDATE catch_clients SET status=\'revoked\' WHERE id=:client')->execute(['client' => $clientId]);
         return true;
     }
 
@@ -318,15 +431,15 @@ final class DeviceRepository
         if (!str_starts_with($token, 'catch_device_') && !str_starts_with($token, 'catch_cli_')) {
             return null;
         }
-        $query = $this->db->prepare('SELECT u.id,u.email,u.display_name,d.id device_id,d.name device_name,d.platform,d.client_type,t.id token_id,t.token_scope FROM catch_device_tokens t JOIN catch_devices d ON d.id=t.device_id AND d.status=\'connected\' JOIN catch_users u ON u.id=d.user_id WHERE t.token_hash=:hash AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at>UTC_TIMESTAMP(6)) LIMIT 1');
+        $query = $this->db->prepare('SELECT u.id,u.email,u.display_name,d.id client_id,d.device_id,d.name client_name,d.name device_name,d.platform,d.os,d.client_icon,d.client_type,p.name physical_device_name,t.id token_id,t.token_scope FROM catch_client_tokens t JOIN catch_clients d ON d.id=t.client_id AND d.status=\'connected\' JOIN catch_users u ON u.id=d.user_id LEFT JOIN catch_devices p ON p.id=d.device_id WHERE t.token_hash=:hash AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at>UTC_TIMESTAMP(6)) LIMIT 1');
         $query->execute(['hash' => hash('sha256', $token)]);
         $user = $query->fetch() ?: null;
         if ($user && !$this->scopeAllows((string) $user['token_scope'], $requiredScope)) {
             return null;
         }
         if ($user) {
-            $this->db->prepare('UPDATE catch_device_tokens SET last_used_at=UTC_TIMESTAMP(6) WHERE id=:token')->execute(['token' => $user['token_id']]);
-            $this->db->prepare('UPDATE catch_devices SET last_seen_at=UTC_TIMESTAMP(6) WHERE id=:device')->execute(['device' => $user['device_id']]);
+            $this->db->prepare('UPDATE catch_client_tokens SET last_used_at=UTC_TIMESTAMP(6) WHERE id=:token')->execute(['token' => $user['token_id']]);
+            $this->db->prepare('UPDATE catch_clients SET last_seen_at=UTC_TIMESTAMP(6) WHERE id=:client')->execute(['client' => $user['client_id']]);
         }
         return $user;
     }
@@ -341,17 +454,17 @@ final class DeviceRepository
         return in_array($required, $scopes, true);
     }
 
-    public function ensureWebDevice(string $userId, ?string $deviceId, string $userAgent): array
+    public function ensureWebClient(string $userId, ?string $clientId, string $userAgent): array
     {
-        if ($deviceId) {
-            $device = $this->find($deviceId, $userId);
-            if ($device && $device['status'] === 'connected' && $device['client_type'] === 'web') {
+        if ($clientId) {
+            $client = $this->find($clientId, $userId);
+            if ($client && $client['status'] === 'connected' && $client['client_type'] === 'web') {
                 $this->db->prepare(
-                    'UPDATE catch_devices SET last_seen_at = UTC_TIMESTAMP(6) WHERE id = :id',
-                )->execute(['id' => $deviceId]);
-                $device['last_seen_at'] = gmdate('Y-m-d H:i:s');
+                    'UPDATE catch_clients SET last_seen_at = UTC_TIMESTAMP(6) WHERE id = :id',
+                )->execute(['id' => $clientId]);
+                $client['last_seen_at'] = gmdate('Y-m-d H:i:s');
 
-                return $device;
+                return $client;
             }
         }
 
@@ -359,12 +472,12 @@ final class DeviceRepository
         $id = Id::uuid();
         $deviceType = $this->deviceType(null, 'desktop', '', $userAgent);
         $sql = <<<'SQL'
-            INSERT INTO catch_devices (
-                id, user_id, name, kind, device_type, client_type, platform,
-                user_agent, status, created_at, connected_at, last_seen_at
+            INSERT INTO catch_clients (
+                id, user_id, device_id, name, kind, device_type, client_type, platform,
+                os, client_icon, user_agent, status, created_at, connected_at, last_seen_at
             ) VALUES (
-                :id, :user, :name, 'desktop', :device_type, 'web', :platform,
-                :user_agent, 'connected', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
+                :id, :user, NULL, :name, 'desktop', :device_type, 'web', :platform,
+                :os, :client_icon, :user_agent, 'connected', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)
             )
             SQL;
         $query = $this->db->prepare($sql);
@@ -374,42 +487,98 @@ final class DeviceRepository
             'name' => $info['label'],
             'device_type' => $deviceType,
             'platform' => strtolower(str_replace(' ', '-', $info['browser'])),
+            'os' => $info['osKey'],
+            'client_icon' => $info['clientApp'],
             'user_agent' => mb_substr($userAgent, 0, 500),
         ]);
 
         return $this->find($id, $userId)
-            ?? throw new \RuntimeException('The web device could not be registered.');
+            ?? throw new \RuntimeException('The web client could not be registered.');
     }
 
-    public function rename(string $deviceId, string $userId, string $name, string $deviceType): bool
+    public function rename(string $clientId, string $userId, string $name, string $clientApp, string $os): bool
     {
         $name = mb_substr(trim($name), 0, 120);
-        if ($name === '' || !in_array($deviceType, ['laptop', 'phone', 'pc', 'tablet', 'extension', 'cli'], true)) {
+        if (
+            $name === ''
+            || !in_array($clientApp, ['chrome', 'firefox', 'edge', 'safari', 'chrome-extension', 'firefox-addon', 'browser-extension', 'installed-web-app', 'web-app', 'shortcut', 'cli', 'api'], true)
+            || !in_array($os, ['windows', 'macos', 'linux', 'ios', 'ipados', 'android', 'unknown'], true)
+        ) {
+            return false;
+        }
+        $client = $this->find($clientId, $userId);
+        if (!$client || $client['status'] === 'revoked') {
             return false;
         }
 
         $query = $this->db->prepare(
-            'UPDATE catch_devices SET name = :name, device_type = :device_type '
+            'UPDATE catch_clients SET name = :name, client_icon = :client_icon, os = :os '
             . "WHERE id = :id AND user_id = :user AND status <> 'revoked'",
         );
         $query->execute([
             'name' => $name,
-            'device_type' => $deviceType,
-            'id' => $deviceId,
+            'client_icon' => $clientApp,
+            'os' => $os,
+            'id' => $clientId,
             'user' => $userId,
         ]);
 
-        return $query->rowCount() === 1;
+        return true;
     }
 
-    public function refreshExtensionInfo(string $deviceId, string $name, string $userAgent): void
+    public function refreshExtensionInfo(string $clientId, string $name, string $userAgent): void
     {
-        $query = $this->db->prepare("UPDATE catch_devices SET user_agent=:user_agent,name=CASE WHEN name IN ('Firefox extension','Chrome extension','Chromium browser extension','Browser extension') THEN :name ELSE name END WHERE id=:id AND client_type='extension'");
+        $info = BrowserInfo::fromUserAgent($userAgent);
+        $query = $this->db->prepare("UPDATE catch_clients SET user_agent=:user_agent,os=:os,client_icon=:client_icon,name=CASE WHEN name IN ('Firefox extension','Chrome extension','Chromium browser extension','Browser extension') THEN :name ELSE name END WHERE id=:id AND client_type='extension'");
         $query->execute([
             'user_agent' => mb_substr($userAgent, 0, 500),
+            'os' => $info['osKey'],
+            'client_icon' => match ($info['clientApp']) {
+                'firefox' => 'firefox-addon',
+                'chrome' => 'chrome-extension',
+                default => 'browser-extension',
+            },
             'name' => $this->suggestedClientName($name, 'extension'),
-            'id' => $deviceId,
+            'id' => $clientId,
         ]);
+    }
+
+    /** @return array{os:string,client_app:string} */
+    private function clientIdentity(string $clientType, string $platform, ?string $userAgent): array
+    {
+        $info = BrowserInfo::fromUserAgent((string) $userAgent);
+        $os = $info['osKey'];
+        if ($os === 'unknown') {
+            $os = match (strtolower($platform)) {
+                'windows', 'linux', 'android', 'ios', 'ipados', 'macos' => strtolower($platform),
+                default => 'unknown',
+            };
+        }
+
+        $clientApp = match (true) {
+            $clientType === 'cli' => 'cli',
+            $clientType === 'shortcut' => 'shortcut',
+            $clientType === 'api' => 'api',
+            $clientType === 'extension' && strtolower($platform) === 'firefox' => 'firefox-addon',
+            $clientType === 'extension' && in_array(strtolower($platform), ['chrome', 'chromium'], true) => 'chrome-extension',
+            $clientType === 'extension' => 'browser-extension',
+            default => $info['clientApp'],
+        };
+
+        return ['os' => $os, 'client_app' => $clientApp];
+    }
+
+    public function sessionsForClient(string $clientId, string $userId): array
+    {
+        $query = $this->db->prepare(<<<'SQL'
+            SELECT id,ip_address,user_agent,created_at,updated_at,expires_at
+            FROM catch_sessions
+            WHERE client_id=:client AND user_id=:user AND expires_at>UTC_TIMESTAMP(6)
+            ORDER BY updated_at DESC
+            SQL);
+        $query->execute(['client' => $clientId, 'user' => $userId]);
+
+        return $query->fetchAll();
     }
 
     private function newCode(): array
@@ -476,13 +645,13 @@ final class DeviceRepository
 
     private function deleteExpiredPairingCode(string $deviceId, string $userId): void
     {
-        $query = $this->db->prepare('DELETE p FROM catch_device_pairing_codes p JOIN catch_devices d ON d.id=p.device_id WHERE p.device_id=:device AND d.user_id=:user AND p.created_at < UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE');
-        $query->execute(['device' => $deviceId,'user' => $userId]);
+        $query = $this->db->prepare('DELETE p FROM catch_client_pairing_codes p JOIN catch_clients d ON d.id=p.client_id WHERE p.client_id=:client AND d.user_id=:user AND p.created_at < UTC_TIMESTAMP(6) - INTERVAL ' . self::PAIRING_CODE_TTL_MINUTES . ' MINUTE');
+        $query->execute(['client' => $deviceId,'user' => $userId]);
     }
 
     private function deleteExpiredExtensionPairingRequests(): void
     {
-        $this->db->exec('DELETE d FROM catch_devices d JOIN catch_extension_pairing_requests p ON p.device_id=d.id WHERE p.expires_at<UTC_TIMESTAMP(6)');
+        $this->db->exec('DELETE d FROM catch_clients d JOIN catch_extension_pairing_requests p ON p.client_id=d.id WHERE p.expires_at<UTC_TIMESTAMP(6)');
         $this->db->exec('DELETE FROM catch_extension_pairing_requests WHERE expires_at<UTC_TIMESTAMP(6)');
     }
 }

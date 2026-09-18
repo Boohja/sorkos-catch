@@ -6,7 +6,7 @@ namespace Catch\Services;
 
 final class BrowserInfo
 {
-    /** @return array{browser:string,version:string,os:string,label:string} */
+    /** @return array{browser:string,version:string,os:string,osKey:string,clientApp:string,clientIcon:string,label:string} */
     public static function fromUserAgent(string $userAgent): array
     {
         $browser = 'Web browser';
@@ -34,6 +34,28 @@ final class BrowserInfo
             default => 'Unknown OS',
         };
 
-        return compact('browser', 'version', 'os') + ['label' => $browser . ' on ' . $os];
+        $osKey = match ($os) {
+            'Windows' => 'windows',
+            'Android' => 'android',
+            'iOS' => 'ios',
+            'macOS' => 'macos',
+            'Linux' => 'linux',
+            default => 'unknown',
+        };
+        $clientApp = match ($browser) {
+            'Chrome' => 'chrome',
+            'Firefox' => 'firefox',
+            'Microsoft Edge' => 'edge',
+            'Safari' => 'safari',
+            default => 'web-app',
+        };
+        $clientIcon = match ($clientApp) {
+            'chrome', 'edge' => 'brand-chrome',
+            'firefox' => 'brand-firefox',
+            default => 'app',
+        };
+
+        return compact('browser', 'version', 'os', 'osKey', 'clientApp', 'clientIcon')
+            + ['label' => $browser . ' on ' . $os];
     }
 }

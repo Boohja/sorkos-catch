@@ -41,37 +41,59 @@ final class DeviceController
         return substr($routeValue, 0, 36);
     }
 
-    private function url(array $device): string
+    private function url(array $client): string
     {
-        $asciiName = iconv('UTF-8', 'ASCII//TRANSLIT', $device['name']) ?: $device['name'];
+        $asciiName = iconv('UTF-8', 'ASCII//TRANSLIT', $client['name']) ?: $client['name'];
         $slug = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', $asciiName), '-'));
 
-        return '/devices/' . $device['id'] . '-' . ($slug ?: 'device');
+        return '/clients/' . $client['id'] . '-' . ($slug ?: 'client');
     }
 
     public function index(): void
     {
         $user = $this->user();
-        $devices = $this->devices->all($user['id']);
+        $devices = $this->devices->physicalDevices($user['id']);
+        $currentClientId = $this->currentClientId();
 
         foreach ($devices as &$device) {
-            $device['url'] = $this->url($device);
+            $device['current'] = false;
+            foreach ($device['clients'] as &$client) {
+                $client['url'] = $this->url($client);
+                $client['current'] = $client['id'] === $currentClientId;
+                $device['current'] = $device['current'] || $client['current'];
+            }
+            unset($client);
         }
         unset($device);
+        $unassignedClients = $this->devices->unassignedClients($user['id']);
+        foreach ($unassignedClients as &$client) {
+            $client['url'] = $this->url($client);
+            $client['current'] = $client['id'] === $currentClientId;
+        }
+        unset($client);
+        $unassignedCurrent = (bool) array_filter(
+            $unassignedClients,
+            static fn (array $client): bool => (bool) ($client['current'] ?? false),
+        );
 
         $this->view->render('devices/index', [
             'title' => 'Devices',
             'user' => $user,
             'devices' => $devices,
+            'unassignedClients' => $unassignedClients,
+            'currentClientId' => $currentClientId,
+            'unassignedCurrent' => $unassignedCurrent,
             'csrf' => $this->csrf->token(),
         ]);
     }
 
     public function new(): void
     {
+        $user = $this->user();
         $this->view->render('devices/new', [
             'title' => 'Add to Catch',
-            'user' => $this->user(),
+            'user' => $user,
+            'devices' => $this->devices->physicalDevices($user['id']),
             'error' => $_SESSION['device_error'] ?? null,
             'csrf' => $this->csrf->token(),
         ]);
@@ -94,7 +116,7 @@ final class DeviceController
     {
         $user = $this->user();
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
-            Response::redirect('/devices/new');
+            Response::redirect('/clients/new');
         }
 
         $kind = (string) ($_POST['kind'] ?? '');
@@ -107,47 +129,79 @@ final class DeviceController
             default => null,
         };
 
-        if ($clientType === null || $name === '') {
-            $_SESSION['device_error'] = 'Choose a supported setup and enter a name, then try again.';
-            Response::redirect('/devices/new');
+        $deviceId = $this->resolvePhysicalDevice($user['id']);
+        if ($clientType === null || $deviceId === null) {
+            $_SESSION['device_error'] = 'Choose a supported setup and assign it to a device.';
+            Response::redirect('/clients/new');
         }
 
-        $device = $this->devices->create($user['id'], $name, $kind, $platform, $clientType);
-        Response::redirect($this->url($device));
+        if ($name === '') {
+            $name = $clientType === 'shortcut' ? 'iOS Shortcut' : 'API client';
+        }
+
+        $client = $this->devices->create($user['id'], $name, $kind, $platform, $clientType, physicalDeviceId: $deviceId);
+        Response::redirect($this->url($client));
     }
 
     public function show(\Base $f3, array $params): void
     {
         $user = $this->user();
-        $device = $this->devices->find($this->id((string) $params['device']), $user['id']);
-        if (!$device) {
+        $client = $this->devices->find($this->routeId($params), $user['id']);
+        if (!$client) {
             Response::redirect('/settings/devices');
         }
+        $client['current'] = $client['id'] === $this->currentClientId();
 
         $appUrl = rtrim((string) $this->config->get('app.url'), '/');
         $debugEnabled = $this->debug->enabled();
 
-        $this->view->render('devices/show', [
-            'title' => $device['name'],
+        $sessions = $this->devices->sessionsForClient($client['id'], $user['id']);
+        foreach ($sessions as &$session) {
+            $session['current'] = hash_equals(session_id(), (string) $session['id']);
+            unset($session['id']);
+        }
+        unset($session);
+
+        $this->view->render('clients/show', [
+            'title' => $client['name'],
             'user' => $user,
-            'device' => $device,
-            'captures' => $this->captures->listByDevice($user['id'], $device['id']),
+            'client' => $client,
+            'sessions' => $sessions,
+            'captures' => $this->captures->listByClient($user['id'], $client['id']),
             'csrf' => $this->csrf->token(),
-            'deviceUrl' => $this->url($device),
+            'clientUrl' => $this->url($client),
             'shortcutUrl' => $appUrl . '/assets/shortcuts/Catch%20Setup.shortcut',
-            'apiPairUrl' => $appUrl . '/api/devices/pair',
+            'apiPairUrl' => $appUrl . '/api/clients/pair',
             'pairingCodeTtlMinutes' => DeviceRepository::PAIRING_CODE_TTL_MINUTES,
             'debugEnabled' => $debugEnabled,
             'debugRequests' => $debugEnabled
-                ? $this->debug->forDevice($user['id'], $device['id'])
+                ? $this->debug->forClient($user['id'], $client['id'])
                 : [],
+        ]);
+    }
+
+    public function edit(\Base $f3, array $params): void
+    {
+        $user = $this->user();
+        $client = $this->devices->find($this->routeId($params), $user['id']);
+        if (!$client || $client['status'] === 'revoked') {
+            Response::redirect('/settings/devices');
+        }
+
+        $this->view->render('clients/edit', [
+            'title' => 'Edit ' . $client['name'],
+            'user' => $user,
+            'client' => $client,
+            'devices' => $this->devices->physicalDevices($user['id']),
+            'clientUrl' => $this->url($client),
+            'csrf' => $this->csrf->token(),
         ]);
     }
 
     public function createPairingCode(\Base $f3, array $params): never
     {
         $user = $this->user();
-        $id = $this->id((string) $params['device']);
+        $id = $this->routeId($params);
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
             Response::redirect('/settings/devices');
         }
@@ -164,14 +218,21 @@ final class DeviceController
     public function rename(\Base $f3, array $params): never
     {
         $user = $this->user();
-        $id = $this->id((string) $params['device']);
+        $id = $this->routeId($params);
         if (!$this->csrf->valid($_POST['_csrf'] ?? null)) {
             Response::redirect('/settings/devices');
         }
 
         $name = trim((string) ($_POST['name'] ?? ''));
-        $deviceType = (string) ($_POST['device_type'] ?? '');
-        $this->devices->rename($id, $user['id'], $name, $deviceType);
+        $clientApp = (string) ($_POST['client_app'] ?? '');
+        $os = (string) ($_POST['os'] ?? '');
+        if (!$this->devices->rename($id, $user['id'], $name, $clientApp, $os)) {
+            $_SESSION['flash_error'] = 'Enter a client name and choose valid client and operating-system values.';
+        }
+        $physicalDeviceId = (string) ($_POST['physical_device_id'] ?? '');
+        if (!$this->devices->assignClient($id, $user['id'], $physicalDeviceId !== '' ? $physicalDeviceId : null)) {
+            $_SESSION['flash_error'] = 'Choose a physical device that belongs to this account.';
+        }
 
         $device = $this->devices->find($id, $user['id']);
         Response::redirect($device ? $this->url($device) : '/settings/devices');
@@ -180,12 +241,12 @@ final class DeviceController
     public function status(\Base $f3, array $params): never
     {
         $user = $this->user();
-        $status = $this->devices->status($this->id((string) $params['device']), $user['id']);
+        $status = $this->devices->status($this->routeId($params), $user['id']);
         if (!$status) {
             Response::json([
                 'error' => [
                     'code' => 'not_found',
-                    'message' => 'Device not found.',
+                    'message' => 'Client not found.',
                 ],
             ], 404);
         }
@@ -200,14 +261,71 @@ final class DeviceController
             Response::redirect('/settings/devices');
         }
 
-        $id = $this->id((string) $params['device']);
+        $id = $this->routeId($params);
         $this->devices->delete($id, $user['id']);
 
-        if (($_SESSION['catch_web_device_id'] ?? null) === $id) {
+        $currentClientId = $_COOKIE['catch_client_id'] ?? $_SESSION['catch_web_client_id'] ?? null;
+        if ($currentClientId === $id) {
+            setcookie('catch_client_id', '', [
+                'expires' => 1,
+                'path' => '/',
+                'secure' => $this->config->bool('session.secure', true),
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+            unset($_COOKIE['catch_client_id'], $_SESSION['catch_web_client_id']);
             $this->auth->logout();
             Response::redirect('/login');
         }
 
         Response::redirect('/settings/devices');
+    }
+
+    public function createPhysical(): never
+    {
+        $user = $this->user();
+        if ($this->csrf->valid($_POST['_csrf'] ?? null)) {
+            try {
+                $this->devices->createPhysicalDevice(
+                    $user['id'],
+                    (string) ($_POST['name'] ?? ''),
+                    (string) ($_POST['device_type'] ?? ''),
+                );
+                $_SESSION['flash_success'] = 'Device added.';
+            } catch (\Throwable) {
+                $_SESSION['flash_error'] = 'Enter a unique device name and choose a device type.';
+            }
+        }
+        Response::redirect('/settings/devices');
+    }
+
+    private function resolvePhysicalDevice(string $userId): ?string
+    {
+        $selected = (string) ($_POST['physical_device_id'] ?? '');
+        if ($selected !== 'new' && $this->devices->findPhysicalDevice($selected, $userId)) {
+            return $selected;
+        }
+        if ($selected !== 'new') {
+            return null;
+        }
+        try {
+            return $this->devices->createPhysicalDevice(
+                $userId,
+                (string) ($_POST['new_device_name'] ?? ''),
+                (string) ($_POST['new_device_type'] ?? ''),
+            )['id'];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function routeId(array $params): string
+    {
+        return $this->id((string) ($params['client'] ?? $params['device'] ?? ''));
+    }
+
+    private function currentClientId(): string
+    {
+        return (string) ($_SESSION['catch_web_client_id'] ?? $_COOKIE['catch_client_id'] ?? '');
     }
 }

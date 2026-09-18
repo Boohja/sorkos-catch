@@ -240,6 +240,7 @@ final class CaptureController
         }
         unset($attachment);
 
+        $availableActions = empty($capture['deleted_at']) ? $this->actions->all($user['id']) : [];
         $this->view->render('captures/show', [
             'title' => $capture['title'] ?: 'Capture',
             'user' => $user,
@@ -248,7 +249,8 @@ final class CaptureController
             'enableTagDialog' => empty($capture['deleted_at']),
             'enableLaterDialog' => empty($capture['deleted_at']) && $capture['status'] === 'inbox',
             'enableMoveDialog' => empty($capture['deleted_at']),
-            'availableActions' => empty($capture['deleted_at']) ? $this->actions->all($user['id']) : [],
+            'enableActionDialog' => (bool) $availableActions,
+            'availableActions' => $availableActions,
             'debugEnabled' => $this->debug->enabled(),
             'debugRequests' => $this->debug->forCapture($user['id'], $capture['id']),
             'csrf' => $this->csrf->token(),

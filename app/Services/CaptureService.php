@@ -16,7 +16,7 @@ final class CaptureService
     public function __construct(private readonly Database $database, private readonly CaptureValidator $validator, private readonly UploadService $uploads, private readonly ?RemoteContentService $remote = null)
     {
     }
-    public function create(string $userId, array $input, array $files = [], ?string $deviceId = null): array
+    public function create(string $userId, array $input, array $files = [], ?string $clientId = null): array
     {
         if (($input['type'] ?? '') === 'unknown') {
             $input = $this->normalizeUnknownInput($input, $files);
@@ -70,7 +70,7 @@ final class CaptureService
         $data = [
             'id' => $id,
             'user_id' => $userId,
-            'device_id' => $deviceId,
+            'client_id' => $clientId,
             'client_capture_id' => (string) $input['client_capture_id'],
             'type' => (string) $input['type'],
             'title' => $title,

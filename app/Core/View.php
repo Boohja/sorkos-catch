@@ -10,8 +10,12 @@ use DateTimeZone;
 
 final class View
 {
-    private const DEVICE_TYPE_LABELS = ['laptop' => 'Laptop','phone' => 'Phone','pc' => 'PC','tablet' => 'Tablet','extension' => 'Extension','cli' => 'CLI'];
+    private const DEVICE_TYPE_LABELS = ['laptop' => 'Laptop','phone' => 'Phone','pc' => 'PC','tablet' => 'Tablet'];
     private const CLIENT_LABELS = ['web' => 'Web session','extension' => 'Browser extension','shortcut' => 'Shortcut','api' => 'API client','cli' => 'CLI client'];
+    private const CLIENT_APP_LABELS = ['chrome' => 'Chrome','firefox' => 'Firefox','edge' => 'Microsoft Edge','safari' => 'Safari','chrome-extension' => 'Chrome extension','firefox-addon' => 'Firefox add-on','browser-extension' => 'Browser extension','installed-web-app' => 'Installed Catch app','web-app' => 'Other browser','shortcut' => 'iOS Shortcut','cli' => 'CLI','api' => 'API client'];
+    private const CLIENT_APP_ICONS = ['chrome' => 'brand-chrome','firefox' => 'brand-firefox','edge' => 'brand-chrome','safari' => 'app','chrome-extension' => 'brand-chrome','firefox-addon' => 'brand-firefox','browser-extension' => 'extension','installed-web-app' => 'app','web-app' => 'app','shortcut' => 'brand-apple','cli' => 'cli','api' => 'app'];
+    private const OS_LABELS = ['windows' => 'Windows','macos' => 'macOS','linux' => 'Linux','ios' => 'iOS','ipados' => 'iPadOS','android' => 'Android','unknown' => 'Unknown OS'];
+    private const OS_ICONS = ['windows' => 'brand-windows','macos' => 'brand-apple','linux' => 'brand-linux','ios' => 'brand-apple','ipados' => 'brand-apple','android' => 'brand-android','unknown' => 'app'];
 
     public function __construct(private readonly string $path)
     {
@@ -59,7 +63,9 @@ final class View
     {
         $data += [
             'title' => 'Catch','user' => null,'configured' => false,'csrf' => '','status' => '',
-            'captures' => [],'capture' => null,'devices' => [],'device' => null,
+            'captures' => [],'capture' => null,'devices' => [],'device' => null,'client' => null,'sessions' => [],
+            'unassignedClients' => [],'pairingError' => null,'suggestedDeviceId' => '',
+            'currentClientId' => '','unassignedCurrent' => false,
             'availableTags' => [],'emailInboxes' => [],'emailInbox' => null,
             'debugRequests' => [],'debugEnabled' => false,'enableCaptureActionMenu' => false,
             'enableTagDialog' => false,'error' => null,
@@ -67,7 +73,7 @@ final class View
             'tag' => null,'tags' => [],'lists' => [],'settingsTab' => 'general','login' => '','appUrl' => '',
             'bulkFormId' => '','debugRequestHeading' => 'Incoming capture requests','debugRequestCard' => false,
             'isShareTarget' => false,'captureUrl' => '','shareError' => '','enableLaterDialog' => false,
-            'enableMoveDialog' => false,
+            'enableMoveDialog' => false,'enableActionDialog' => false,
             'capturePoll' => false,
             'targets' => [],'actions' => [],'availableActions' => [],'prsmBaseUrl' => '',
             'webhookMethods' => [],'webhookContentTypes' => [],'webhookVariables' => [],
@@ -93,11 +99,45 @@ final class View
             $data['profileCreatedAt'] = '';
         }
 
-        $data['devices'] = array_map($this->prepareDevice(...), $data['devices']);
+        $data['devices'] = array_map(function (array $device): array {
+            if (array_key_exists('clients', $device)) {
+                $device['clients'] = array_map(function (array $client) use ($device): array {
+                    $client['physical_device_type'] = $device['device_type'] ?? 'pc';
+                    $client['physical_device_name'] = $device['name'] ?? '';
+
+                    return $this->prepareDevice($client);
+                }, $device['clients']);
+                $device['view'] = [
+                    'deviceType' => (string) ($device['device_type'] ?? 'pc'),
+                    'utcLastSeenAt' => $this->utc((string) ($device['last_seen_at'] ?? '')),
+                    'relativeLastSeenAt' => $this->relativeTime($device['last_seen_at'] ?? null),
+                ];
+
+                return $device;
+            }
+
+            return $this->prepareDevice($device);
+        }, $data['devices']);
+        $data['unassignedClients'] = array_map($this->prepareDevice(...), $data['unassignedClients']);
         $data['deviceTypes'] = self::DEVICE_TYPE_LABELS;
+        $data['clientApps'] = self::CLIENT_APP_LABELS;
+        $data['operatingSystems'] = self::OS_LABELS;
+        $data['osIcons'] = self::OS_ICONS;
         if (is_array($data['device'])) {
             $data['device'] = $this->prepareDevice($data['device']);
         }
+        if (is_array($data['client'])) {
+            $data['client'] = $this->prepareDevice($data['client']);
+        }
+        $data['sessions'] = array_map(function (array $session): array {
+            $session['view'] = [
+                'utcCreatedAt' => $this->utc((string) ($session['created_at'] ?? '')),
+                'utcUpdatedAt' => $this->utc((string) ($session['updated_at'] ?? '')),
+                'utcExpiresAt' => $this->utc((string) ($session['expires_at'] ?? '')),
+            ];
+
+            return $session;
+        }, $data['sessions']);
         $data['emailInboxes'] = array_map($this->prepareEmailInbox(...), $data['emailInboxes']);
         if (is_array($data['emailInbox'])) {
             $data['emailInbox'] = $this->prepareEmailInbox($data['emailInbox']);
@@ -156,11 +196,20 @@ final class View
         $info = BrowserInfo::fromUserAgent((string) ($device['user_agent'] ?? ''));
         $platform = (string) ($device['platform'] ?? '');
         $platformLabel = ['ios' => 'iOS','ipados' => 'iPadOS'][$platform] ?? ucfirst($platform);
-        $deviceType = array_key_exists((string) ($device['device_type'] ?? ''), self::DEVICE_TYPE_LABELS) ? (string) $device['device_type'] : 'pc';
+        $os = array_key_exists((string) ($device['os'] ?? ''), self::OS_LABELS) ? (string) $device['os'] : 'unknown';
+        $clientApp = $this->clientApp($device);
+        $physicalDeviceType = array_key_exists((string) ($device['physical_device_type'] ?? ''), self::DEVICE_TYPE_LABELS) ? (string) $device['physical_device_type'] : 'pc';
         $device['view'] = [
             'typeLabel' => self::CLIENT_LABELS[$device['client_type'] ?? 'shortcut'] ?? 'Device',
             'platformLabel' => !empty($device['user_agent']) ? $info['browser'] . ' on ' . $info['os'] : $platformLabel,
-            'deviceType' => $deviceType,
+            'physicalDeviceType' => $physicalDeviceType,
+            'os' => $os,
+            'osLabel' => self::OS_LABELS[$os],
+            'osIcon' => self::OS_ICONS[$os],
+            'clientApp' => $clientApp,
+            'clientAppLabel' => self::CLIENT_APP_LABELS[$clientApp],
+            'clientIcon' => self::CLIENT_APP_ICONS[$clientApp],
+            'browserVersion' => $info['version'] !== '' ? $info['browser'] . ' ' . $info['version'] : 'Not reported',
             'statusLabel' => match ((string) ($device['status'] ?? 'setup')) {
                 'connected' => 'Connected','revoked' => 'Access removed',default => 'Setup pending'
             },
@@ -169,6 +218,24 @@ final class View
             'relativeLastSeenAt' => $this->relativeTime($device['last_seen_at'] ?? null),
         ];
         return $device;
+    }
+
+    private function clientApp(array $client): string
+    {
+        $value = (string) ($client['client_icon'] ?? '');
+        if (array_key_exists($value, self::CLIENT_APP_LABELS)) {
+            return $value;
+        }
+
+        return match ($value) {
+            'brand-chrome' => ($client['client_type'] ?? '') === 'extension' ? 'chrome-extension' : 'chrome',
+            'brand-firefox' => ($client['client_type'] ?? '') === 'extension' ? 'firefox-addon' : 'firefox',
+            'extension' => 'browser-extension',
+            'cli' => 'cli',
+            default => match ((string) ($client['client_type'] ?? 'web')) {
+                'shortcut' => 'shortcut','api' => 'api','cli' => 'cli',default => 'web-app',
+            },
+        };
     }
 
     private function prepareEmailInbox(array $inbox): array

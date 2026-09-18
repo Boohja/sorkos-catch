@@ -66,7 +66,7 @@ final class ExtensionController
         if ($result['status'] !== 'connected') {
             Response::json(['error' => ['code' => 'pairing_not_found','message' => 'The pairing request was not found.']], 404);
         }
-        Response::json(['status' => 'connected','device_token' => $result['device_token'],'token_type' => 'Bearer','device' => ['id' => $result['device_id'],'name' => $result['device_name']],'capture_endpoint' => rtrim((string)$this->config->get('app.url'), '/') . '/api/v1/captures']);
+        Response::json(['status' => 'connected','device_token' => $result['device_token'],'token_type' => 'Bearer','client' => ['id' => $result['client_id'],'name' => $result['client_name'],'os' => $result['os'],'app' => $result['client_icon']],'device' => ['id' => $result['device_id'],'name' => $result['physical_device_name']],'capture_endpoint' => rtrim((string)$this->config->get('app.url'), '/') . '/api/v1/captures']);
     }
 
     public function disconnect(): never
@@ -88,13 +88,13 @@ final class ExtensionController
         $userAgent = trim((string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
         $info = BrowserInfo::fromUserAgent($userAgent);
         if ($userAgent !== '') {
-            $this->devices->refreshExtensionInfo($user['device_id'], $info['label'], $userAgent);
-            $device = $this->devices->find($user['device_id'], $user['id']);
-            if ($device) {
-                $user['device_name'] = $device['name'];
+            $this->devices->refreshExtensionInfo($user['client_id'], $info['label'], $userAgent);
+            $client = $this->devices->find($user['client_id'], $user['id']);
+            if ($client) {
+                $user['client_name'] = $client['name'];
             }
         }
-        Response::json(['status' => 'connected','device' => ['id' => $user['device_id'],'name' => $user['device_name'],'platform' => $user['platform'],'client_type' => $user['client_type']]]);
+        Response::json(['status' => 'connected','client' => ['id' => $user['client_id'],'name' => $user['client_name'],'platform' => $user['platform'],'os' => $user['os'],'app' => $user['client_icon'],'client_type' => $user['client_type']],'device' => $user['device_id'] ? ['id' => $user['device_id'],'name' => $user['physical_device_name']] : null]);
     }
 
     private function databaseFailure(string $stage, \PDOException $error): never

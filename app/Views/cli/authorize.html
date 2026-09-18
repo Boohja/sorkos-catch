@@ -18,6 +18,9 @@
           <p class="kicker">Catch CLI</p>
           <h1>Authorize {{ @request.device_name }}</h1>
           <p>This gives the CLI read-only access to your captures. It cannot create, edit, archive, or delete them.</p>
+          <check if="{{ @pairingError }}">
+            <p class="form-error" role="alert">{{ @pairingError }}</p>
+          </check>
           <dl>
             <div>
               <dt>Platform</dt>
@@ -28,15 +31,28 @@
               <dd>Read only</dd>
             </div>
           </dl>
-          <form method="post" action="/cli/authorize"><input type="hidden" name="_csrf" value="{{ @csrf }}"><input
-              type="hidden" name="login" value="{{ @login }}"><button class="button button-primary button-full"
-              type="submit">Authorize CLI</button></form>
-        </true>
-        <false>
-          <h1>This authorization link is no longer active</h1>
-          <p>Return to the Catch CLI and start a new login.</p>
-        </false>
-      </check>
-    </false>
+          <form class="pair-device-form" method="post" action="/cli/authorize"><input type="hidden" name="_csrf"
+              value="{{ @csrf }}"><input type="hidden" name="login" value="{{ @login }}"><label>Which device runs this
+              CLI?<select name="device_id" required>
+                <repeat group="{{ @devices }}" value="{{ @device }}">
+                  <option value="{{ @device.id }}">{{ @device.name }}</option>
+                </repeat>
+                <option value="new" <check if="{{ !@devices }}">selected
+      </check>>New device…</option></select></label>
+      <div class="pair-new-device"><label>New device name<input name="new_device_name" maxlength="120"
+            placeholder="e.g. BooPC"></label><label>Device type<select name="new_device_type">
+            <option value="laptop">Laptop</option>
+            <option value="pc">Desktop PC</option>
+            <option value="phone">Phone</option>
+            <option value="tablet">Tablet</option>
+          </select></label></div><button class="button button-primary button-full" type="submit">Authorize CLI</button>
+      </form>
+      </true>
+      <false>
+        <h1>This authorization link is no longer active</h1>
+        <p>Return to the Catch CLI and start a new login.</p>
+      </false>
+  </check>
+  </false>
   </check>
 </section>

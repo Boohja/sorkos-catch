@@ -14,8 +14,18 @@
 .tag-form {
   display: grid;
   grid-template-columns: minmax(180px, .8fr) minmax(260px, 1.2fr) auto;
-  align-items: end;
+  align-items: start;
   gap: 16px;
+}
+
+.tag-form input,
+.tag-form select,
+.tag-form>.button {
+  min-height: 46px;
+}
+
+.tag-form>.button {
+  margin-top: 26px;
 }
 
 .tag-form label,
@@ -157,6 +167,10 @@
 
   .tag-form {
     grid-template-columns: minmax(0, 1fr)
+  }
+
+  .tag-form>.button {
+    margin-top: 0
   }
 
   .tag-form-actions {

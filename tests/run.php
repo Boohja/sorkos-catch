@@ -317,16 +317,44 @@ $test('Extension pairing failures are logged and service-safe', function () use 
         }
     }
 });
-$test('Capture provenance migration links devices without deleting history', function () use ($root) {
+$test('Capture provenance keeps clients linked without deleting history', function () use ($root) {
     $migration = (string)file_get_contents($root . '/database/migrations/004_capture_provenance.sql');
     foreach (['client_type ENUM','user_agent VARCHAR(500)','device_id CHAR(36)','ON DELETE SET NULL'] as $required) {
         if (!str_contains($migration, $required)) {
             throw new RuntimeException('Capture provenance migration is missing ' . $required);
         }
+    }$clientMigration = (string)file_get_contents($root . '/database/migrations/020_client_device_model.sql');
+    foreach (['catch_devices TO catch_clients','CHANGE COLUMN device_id client_id','CREATE TABLE catch_devices'] as $required) {
+        if (!str_contains($clientMigration, $required)) {
+            throw new RuntimeException('Client/device split migration is missing ' . $required);
+        }
     }$repository = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
-    foreach (['DELETE FROM catch_device_tokens','UPDATE catch_devices SET status=','ensureWebDevice'] as $required) {
+    foreach (['DELETE FROM catch_client_tokens','UPDATE catch_clients SET status=','ensureWebClient'] as $required) {
         if (!str_contains($repository, $required)) {
             throw new RuntimeException('Device revocation or web registration is missing ' . $required);
+        }
+    }
+});
+$test('Every pairing approval assigns a client to a physical device', function () use ($root) {
+    $extension = (string) file_get_contents($root . '/app/Controllers/Web/PairController.php');
+    $cli = (string) file_get_contents($root . '/app/Controllers/Web/CliAuthController.php');
+    $setup = (string) file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
+    $views = (string) file_get_contents($root . '/app/Views/pair/index.html')
+        . (string) file_get_contents($root . '/app/Views/cli/authorize.html')
+        . (string) file_get_contents($root . '/app/Views/devices/_physical_device_fields.html');
+    foreach (['resolveDevice', 'createPhysicalDevice', 'device_id'] as $required) {
+        if (!str_contains($extension . $cli, $required)) {
+            throw new RuntimeException('Browser or CLI pairing device assignment is missing ' . $required);
+        }
+    }
+    foreach (['resolvePhysicalDevice', 'physicalDeviceId'] as $required) {
+        if (!str_contains($setup, $required)) {
+            throw new RuntimeException('Shortcut or API pairing device assignment is missing ' . $required);
+        }
+    }
+    foreach (['New device', 'new_device_name', 'new_device_type'] as $required) {
+        if (!str_contains($views, $required)) {
+            throw new RuntimeException('Pairing device choice is missing ' . $required);
         }
     }
 });
@@ -372,6 +400,9 @@ $test('Browser labels distinguish common desktop clients', function () {
     $edge = Catch\Services\BrowserInfo::fromUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/150.0 Safari/537.36 Edg/150.0');
     if ($firefox['label'] !== 'Firefox on Windows' || $edge['label'] !== 'Microsoft Edge on Windows') {
         throw new RuntimeException('Browser labels are not specific enough');
+    }
+    if ($firefox['osKey'] !== 'windows' || $firefox['clientIcon'] !== 'brand-firefox') {
+        throw new RuntimeException('Browser identity metadata is incomplete');
     }
 });
 $test('Catch numbers are durable per-user references', function () use ($root) {
@@ -601,25 +632,25 @@ $test('Capture detail supports quiet in-place editing and global request progres
         throw new RuntimeException('Links inside editable capture prose do not advertise navigation');
     }
 });
-$test('Devices expose capture counts, last use time, and capture history', function () use ($root) {
+$test('Devices group clients while client details retain capture history', function () use ($root) {
     $devices = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $captures = (string)file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
     $index = (string)file_get_contents($root . '/app/Views/devices/index.html')
         . (string)file_get_contents($root . '/app/Views/devices/_table.html');
-    $detail = (string)file_get_contents($root . '/app/Views/devices/show.html');
+    $detail = (string)file_get_contents($root . '/app/Views/clients/show.html');
     foreach (['capture_count','capture_last_used_at','MAX(c.created_at)'] as $required) {
         if (!str_contains($devices, $required)) {
             throw new RuntimeException('Device summary query is incomplete: ' . $required);
         }
-    }if (!str_contains($captures, 'listByDevice') || !str_contains($controller, 'listByDevice')) {
-        throw new RuntimeException('Device capture history query is missing');
-    }foreach (['capture_count','last_seen_at','Last used:'] as $required) {
+    }if (!str_contains($captures, 'listByClient') || !str_contains($controller, 'listByClient')) {
+        throw new RuntimeException('Client capture history query is missing');
+    }foreach (['capture_count','last_seen_at','device.clients'] as $required) {
         if (!str_contains($index, $required)) {
             throw new RuntimeException('Device list summary is missing: ' . $required);
         }
-    }if (!str_contains($detail, 'Captures from this device')) {
-        throw new RuntimeException('Device detail capture history is missing');
+    }if (!str_contains($detail, 'Captures from this client')) {
+        throw new RuntimeException('Client detail capture history is missing');
     }
 });
 $test('Add to Catch routes every capture source through its existing setup mechanism', function () use ($root) {
@@ -627,7 +658,7 @@ $test('Add to Catch routes every capture source through its existing setup mecha
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
     $view = (string)file_get_contents($root . '/app/Views/devices/new.html');
     $library = (string)file_get_contents($root . '/app/Views/devices/shortcuts.html');
-    $detail = (string)file_get_contents($root . '/app/Views/devices/show.html');
+    $detail = (string)file_get_contents($root . '/app/Views/clients/show.html');
     $script = (string)file_get_contents($root . '/public/assets/js/devices.js');
     $styles = (string)file_get_contents($root . '/public/assets/css/devices.css');
     $manifest = json_decode((string)file_get_contents($root . '/public/manifest.webmanifest'), true, 512, JSON_THROW_ON_ERROR);
@@ -660,12 +691,12 @@ $test('Add to Catch routes every capture source through its existing setup mecha
             throw new RuntimeException('Removed method decoration returned: ' . $removed);
         }
     }
-    foreach (['/devices/shortcuts','Catch Setup','How to use it','@shortcutUrl'] as $required) {
+    foreach (['/clients/shortcuts','Catch Setup','How to use it','@shortcutUrl'] as $required) {
         if (!str_contains($application . $controller . $view . $library, $required)) {
             throw new RuntimeException('Shortcut library is incomplete: ' . $required);
         }
     }
-    if (strpos($application, "GET /devices/shortcuts") > strpos($application, "GET /devices/@device")) {
+    if (strpos($application, 'GET /clients/shortcuts') > strpos($application, 'GET /clients/@client')) {
         throw new RuntimeException('Shortcut library route must precede the catch-all device route');
     }
     foreach (['visibleMethods.length===1','methodStep.hidden=true'] as $required) {
@@ -726,7 +757,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v66','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v70','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }
@@ -737,32 +768,96 @@ $test('PWA share targets stage originals and open a dedicated processing route',
         }
     }
 });
-$test('Device types drive icons and remain editable', function () use ($root) {
+$test('Physical device, operating system, and client icons remain distinct', function () use ($root) {
     $migration = (string)file_get_contents($root . '/database/migrations/008_device_types.sql') . (string)file_get_contents($root . '/database/migrations/009_refine_device_type_guesses.sql');
+    $identityMigration = (string)file_get_contents($root . '/database/migrations/021_client_identity.sql');
     $repository = (string)file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $controller = (string)file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
     $index = (string)file_get_contents($root . '/app/Views/devices/index.html')
         . (string)file_get_contents($root . '/app/Views/devices/_table.html');
-    $detail = (string)file_get_contents($root . '/app/Views/devices/show.html');
+    $detail = (string)file_get_contents($root . '/app/Views/clients/show.html');
+    $edit = (string)file_get_contents($root . '/app/Views/clients/edit.html');
+    $viewModel = (string)file_get_contents($root . '/app/Core/View.php');
     foreach (["ENUM('laptop','phone','pc','tablet')","DEFAULT 'pc'",'%iphone%',"'%ipad%'"] as $required) {
         if (!str_contains($migration, $required)) {
             throw new RuntimeException('Device type migration is incomplete: ' . $required);
         }
     }
-    foreach (['deviceType(', 'device_type = :device_type'] as $required) {
+    foreach (['deviceType(', 'clientIdentity(', 'client_icon = :client_icon', 'os = :os'] as $required) {
         if (!str_contains($repository, $required)) {
-            throw new RuntimeException('Device type inference or update is missing: ' . $required);
+            throw new RuntimeException('Client identity inference or update is missing: ' . $required);
         }
-    }if (!str_contains($controller, "\$_POST['device_type']")) {
-        throw new RuntimeException('Device type is not accepted by the rename action');
+    }foreach (['ADD COLUMN os', 'ADD COLUMN client_icon', 'brand-chrome', 'brand-firefox'] as $required) {
+        if (!str_contains($identityMigration, $required)) {
+            throw new RuntimeException('Client identity migration is incomplete: ' . $required);
+        }
+    }foreach (["\$_POST['client_app']", "\$_POST['os']", "\$_POST['physical_device_id']"] as $required) {
+        if (!str_contains($controller, $required)) {
+            throw new RuntimeException('Client identity is not accepted by the rename action: ' . $required);
+        }
     }
-    foreach (['glyph-{{ @device.view.deviceType }}','Last used:','capture_count'] as $required) {
+    foreach (['glyph-{{ @device.view.deviceType }}','glyph-{{ @client.view.osIcon }}','glyph-{{ @client.view.clientIcon }}','device-client-row','capture_count'] as $required) {
         if (!str_contains($index, $required)) {
             throw new RuntimeException('Device list type or usage UI is incomplete: ' . $required);
         }
-    }foreach (['device-type-picker','name="device_type"','Last used','Captures from this device'] as $required) {
+    }foreach (['name="client_app"','Chrome extension','Firefox add-on','Installed Catch app','Other browser','name="os"','Physical device'] as $required) {
+        if (!str_contains($edit . $viewModel, $required)) {
+            throw new RuntimeException('Client detail identity UI is incomplete: ' . $required);
+        }
+    }foreach (['Client details','Browser version','Active sessions','Captures from this client'] as $required) {
         if (!str_contains($detail, $required)) {
-            throw new RuntimeException('Device detail type or usage UI is incomplete: ' . $required);
+            throw new RuntimeException('Client detail facts are incomplete: ' . $required);
+        }
+    }
+    foreach (['current-client-label', '@client.current', 'client-overview-actions'] as $required) {
+        if (!str_contains($detail . $controller, $required)) {
+            throw new RuntimeException('Current-client header state is incomplete: ' . $required);
+        }
+    }
+});
+$test('Web client identity survives login sessions in a durable cookie', function () use ($root) {
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $controller = (string) file_get_contents($root . '/app/Controllers/Web/DeviceController.php');
+    foreach (["\$_COOKIE['catch_client_id']", 'rememberWebClient', "'httponly' => true", "'samesite' => 'Lax'", '400 * 24 * 60 * 60'] as $required) {
+        if (!str_contains($application, $required)) {
+            throw new RuntimeException('Durable web-client cookie is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($controller, "setcookie('catch_client_id', ''")) {
+        throw new RuntimeException('Removing the current client does not clear its durable cookie');
+    }
+});
+$test('PHP sessions are database-backed and associated with the current client', function () use ($root) {
+    $migration = (string) file_get_contents($root . '/database/migrations/022_database_sessions.sql');
+    $handler = (string) file_get_contents($root . '/app/Core/DatabaseSessionHandler.php');
+    $application = (string) file_get_contents($root . '/app/Core/Application.php');
+    $repository = (string) file_get_contents($root . '/app/Repositories/DeviceRepository.php');
+    $detail = (string) file_get_contents($root . '/app/Views/clients/show.html');
+
+    foreach (['CREATE TABLE catch_sessions', 'client_id CHAR(36)', 'payload MEDIUMBLOB', 'expires_at DATETIME(6)'] as $required) {
+        if (!str_contains($migration, $required)) {
+            throw new RuntimeException('Database session migration is incomplete: ' . $required);
+        }
+    }
+    foreach (['implements SessionHandlerInterface, SessionUpdateTimestampHandlerInterface', 'LIFETIME_SECONDS = 7 * 24 * 60 * 60', "sessionUuid('catch_web_client_id')", 'ON DUPLICATE KEY UPDATE', 'updateTimestamp', 'expires_at=:expires'] as $required) {
+        if (!str_contains($handler, $required)) {
+            throw new RuntimeException('Database session handler is incomplete: ' . $required);
+        }
+    }
+    if (!str_contains($application, 'new DatabaseSessionHandler')
+        || !str_contains($application, "ini_set('session.gc_maxlifetime', (string) DatabaseSessionHandler::LIFETIME_SECONDS)")
+        || !str_contains($application, "'lifetime' => DatabaseSessionHandler::LIFETIME_SECONDS")
+        || str_contains($application, 'session_save_path')) {
+        throw new RuntimeException('Application does not exclusively register database sessions');
+    }
+    foreach (['sessionsForClient', 'catch_sessions', 'expires_at>UTC_TIMESTAMP(6)'] as $required) {
+        if (!str_contains($repository, $required)) {
+            throw new RuntimeException('Client session lookup is incomplete: ' . $required);
+        }
+    }
+    foreach (['<h2>Sessions</h2>', 'Current session', '@session.ip_address'] as $required) {
+        if (!str_contains($detail, $required)) {
+            throw new RuntimeException('Client session table is incomplete: ' . $required);
         }
     }
 });
@@ -772,7 +867,7 @@ $test('Requested interface icons and danger outline are used consistently', func
     $views = '';
     foreach (glob($root . '/app/Views/*/*.html') as $path) {
         $views .= (string)file_get_contents($path);
-    }foreach (['glyph-tag','glyph-move'] as $required) {
+    }foreach (['glyph-action','glyph-tag','glyph-move'] as $required) {
         if (!str_contains($capture, $required)) {
             throw new RuntimeException('Capture detail action icon is missing: ' . $required);
         }
@@ -861,7 +956,7 @@ $test('Debug capture logging is bounded, redacted, and device scoped', function 
         }
     }
 
-    if (!str_contains($device, 'forDevice') || !str_contains($device, 'debugEnabled')) {
+    if (!str_contains($device, 'forClient') || !str_contains($device, 'debugEnabled')) {
         throw new RuntimeException('Device debug requests are not scoped by the controller');
     }
 
@@ -875,7 +970,7 @@ $test('Capture collections share responsive list and grid presentations', functi
     $repository = (string) file_get_contents($root . '/app/Repositories/CaptureRepository.php');
     $view = (string) file_get_contents($root . '/app/Views/captures/_list.html');
     $item = (string) file_get_contents($root . '/app/Views/captures/_item.html');
-    $device = (string) file_get_contents($root . '/app/Views/devices/show.html');
+    $device = (string) file_get_contents($root . '/app/Views/clients/show.html');
     $style = (string) file_get_contents($root . '/public/assets/css/capture-collection.css');
     $script = (string) file_get_contents($root . '/public/assets/js/capture-view.js');
 
@@ -1174,9 +1269,9 @@ $test('Capture task backlog enhancements remain integrated', function () use ($r
     $deviceMigration = (string) file_get_contents($root . '/database/migrations/013_device_client_icons.sql');
     $devices = (string) file_get_contents($root . '/app/Repositories/DeviceRepository.php');
     $cli = (string) file_get_contents($root . '/app/Repositories/CliAuthRepository.php');
-    $deviceDetail = (string) file_get_contents($root . '/app/Views/devices/show.html');
+    $deviceDetail = (string) file_get_contents($root . '/app/Views/clients/show.html');
     $viewModel = (string) file_get_contents($root . '/app/Core/View.php');
-    foreach (["'extension','cli'", "'extension' => 'Extension'", "'cli' => 'CLI'"] as $required) {
+    foreach (["'extension','cli'", "'extension' => 'Browser extension'", "'cli' => 'CLI'"] as $required) {
         if (!str_contains($deviceMigration . $deviceDetail . $viewModel, $required)) {
             throw new RuntimeException('CLI or extension device icon support is incomplete: ' . $required);
         }
@@ -1501,7 +1596,7 @@ $test('Inbox captures can be moved to Later and return when due', function () us
             throw new RuntimeException('Later action is missing from a capture surface: ' . $required);
         }
     }
-    foreach (["T01:00:00", 'toISOString()', 'captureCollection?.transition'] as $required) {
+    foreach (['T01:00:00', 'toISOString()', 'captureCollection?.transition'] as $required) {
         if (!str_contains($client, $required)) {
             throw new RuntimeException('Later client behavior is incomplete: ' . $required);
         }
@@ -1543,7 +1638,7 @@ $test('Inbox captures can be moved to Later and return when due', function () us
     $releaseDue = new ReflectionMethod($captures, 'releaseDueLater');
     $releaseDue->invoke($captures, 'user-1');
     $states = $database->query(
-        "SELECT id, status, later_until FROM catch_captures ORDER BY id",
+        'SELECT id, status, later_until FROM catch_captures ORDER BY id',
     )->fetchAll(PDO::FETCH_ASSOC);
     $states = array_column($states, null, 'id');
     if (($states['due']['status'] ?? null) !== 'inbox' || ($states['due']['later_until'] ?? null) !== null) {
@@ -1609,9 +1704,13 @@ $test('Targets and ordered actions are wired through settings and captures', fun
         '/settings/targets/{{ urlencode(@target.id) }}/edit',
         '/settings/actions/{{ urlencode(@action.id) }}/edit',
         'data-menu-custom-action',
+        'data-open-action-dialog',
+        'data-action-dialog',
+        'glyph-action',
         'Run action',
     ] as $required) {
-        if (!str_contains($settings . $menu . (string) file_get_contents($root . '/app/Views/captures/show.html'), $required)) {
+        $actionDialog = (string) file_get_contents($root . '/app/Views/captures/_action_dialog.html');
+        if (!str_contains($settings . $menu . $actionDialog . (string) file_get_contents($root . '/app/Views/captures/show.html'), $required)) {
             throw new RuntimeException('Automation UI is incomplete: ' . $required);
         }
     }
@@ -1633,7 +1732,7 @@ $test('Targets and ordered actions are wired through settings and captures', fun
     if (!str_contains($settings, 'class="automation-row-actions"')) {
         throw new RuntimeException('Action edit and delete controls are not grouped.');
     }
-    foreach (['withoutAutocomplete', "autocomplete=\"off\"", 'form|input|textarea|select'] as $required) {
+    foreach (['withoutAutocomplete', 'autocomplete="off"', 'form|input|textarea|select'] as $required) {
         if (!str_contains($view, $required)) {
             throw new RuntimeException('Global autocomplete suppression is incomplete: ' . $required);
         }

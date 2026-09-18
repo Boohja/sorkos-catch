@@ -7,8 +7,8 @@ namespace Catch\Controllers\Web;
 use Catch\Core\Config;
 use Catch\Core\View;
 use Catch\Http\Response;
-use Catch\Repositories\DeviceRepository;
 use Catch\Repositories\CaptureRepository;
+use Catch\Repositories\DeviceRepository;
 use Catch\Repositories\EmailInboxRepository;
 use Catch\Services\AuthService;
 use Catch\Services\Csrf;
@@ -50,18 +50,38 @@ final class AccountController
     public function devices(): void
     {
         $user = $this->user();
-        $devices = $this->devices->all($user['id']);
+        $devices = $this->devices->physicalDevices($user['id']);
+        $currentClientId = (string) ($_SESSION['catch_web_client_id'] ?? $_COOKIE['catch_client_id'] ?? '');
 
         foreach ($devices as &$device) {
-            $device['url'] = $this->deviceUrl($device);
+            $device['current'] = false;
+            foreach ($device['clients'] as &$client) {
+                $client['url'] = $this->clientUrl($client);
+                $client['current'] = $client['id'] === $currentClientId;
+                $device['current'] = $device['current'] || $client['current'];
+            }
+            unset($client);
         }
         unset($device);
+        $unassignedClients = $this->devices->unassignedClients($user['id']);
+        foreach ($unassignedClients as &$client) {
+            $client['url'] = $this->clientUrl($client);
+            $client['current'] = $client['id'] === $currentClientId;
+        }
+        unset($client);
+        $unassignedCurrent = (bool) array_filter(
+            $unassignedClients,
+            static fn (array $client): bool => (bool) ($client['current'] ?? false),
+        );
 
         $this->view->render('account/settings', [
             'title' => 'Settings · Devices',
             'user' => $user,
             'settingsTab' => 'devices',
             'devices' => $devices,
+            'unassignedClients' => $unassignedClients,
+            'currentClientId' => $currentClientId,
+            'unassignedCurrent' => $unassignedCurrent,
             'csrf' => $this->csrf->token(),
         ]);
     }
@@ -205,12 +225,12 @@ final class AccountController
         return $user;
     }
 
-    private function deviceUrl(array $device): string
+    private function clientUrl(array $client): string
     {
-        $asciiName = iconv('UTF-8', 'ASCII//TRANSLIT', $device['name']) ?: $device['name'];
+        $asciiName = iconv('UTF-8', 'ASCII//TRANSLIT', $client['name']) ?: $client['name'];
         $slug = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', $asciiName), '-'));
 
-        return '/devices/' . $device['id'] . '-' . ($slug ?: 'device');
+        return '/clients/' . $client['id'] . '-' . ($slug ?: 'client');
     }
 
     private function emailId(string $routeValue): string
@@ -234,8 +254,8 @@ final class AccountController
     private function buildVcard(array $inbox, bool $includePhoto): string
     {
         $escape = static fn (string $value): string => str_replace(
-            ["\\", ";", ",", "\r\n", "\r", "\n"],
-            ["\\\\", "\\;", "\\,", "\\n", "\\n", "\\n"],
+            ['\\', ';', ',', "\r\n", "\r", "\n"],
+            ['\\\\', '\\;', '\\,', '\\n', '\\n', '\\n'],
             $value,
         );
         $name = $escape((string) $inbox['name']);

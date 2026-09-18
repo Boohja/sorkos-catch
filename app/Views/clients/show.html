@@ -1,0 +1,203 @@
+<a class="back-link" href="/settings/devices">&larr; All devices</a>
+<header class="client-overview-header">
+  <div class="client-overview-identity"><span class="client-overview-icon" aria-hidden="true"><i
+        class="glyph glyph-{{ @client.view.clientIcon }}"></i></span>
+    <div>
+      <div class="client-overview-name">
+        <h1>{{ @client.name }}</h1>
+      </div>
+      <div class="client-overview-state"><span class="connection-status connection-status-{{ @client.status }}"><span
+            aria-hidden="true"></span>{{ @client.view.statusLabel }}</span>
+        <check if="{{ @client.current }}"><span class="current-client-label">Current</span></check>
+      </div>
+    </div>
+  </div>
+  <check if="{{ @client.status!='revoked' }}">
+    <div class="client-overview-actions"><a class="button button-secondary" href="{{ @clientUrl }}/edit"><i
+          class="glyph glyph-edit" aria-hidden="true"></i>Edit</a>
+      <form method="post" action="{{ @clientUrl }}/delete"
+        onsubmit="return confirm('Remove this client and revoke its access?')"><input type="hidden" name="_csrf"
+          value="{{ @csrf }}"><button class="button button-danger-outline" type="submit"><i class="glyph glyph-trash"
+            aria-hidden="true"></i>Remove client</button></form>
+    </div>
+  </check>
+</header>
+<section class="client-stats" aria-label="Client facts">
+  <dl>
+    <div>
+      <dt>Connected since</dt>
+      <dd>
+        <check if="{{ @client.connected_at }}">
+          <true><time datetime="{{ @client.view.utcConnectedAt }}" data-local-time data-date-style="medium"
+              data-time-style="short">UTC {{ @client.connected_at }}</time></true>
+          <false>Not connected</false>
+        </check>
+      </dd>
+    </div>
+    <div>
+      <dt>Last used</dt>
+      <dd>
+        <check if="{{ @client.last_seen_at }}">
+          <true><time datetime="{{ @client.view.utcLastSeenAt }}" data-local-time data-date-style="medium"
+              data-time-style="short">UTC {{ @client.last_seen_at }}</time></true>
+          <false>Not yet</false>
+        </check>
+      </dd>
+    </div>
+    <div>
+      <dt>Captures</dt>
+      <dd>{{ (int)@client.capture_count }}</dd>
+    </div>
+    <div>
+      <dt>Active sessions</dt>
+      <dd>{{ count(@sessions) }}</dd>
+    </div>
+  </dl>
+</section>
+<check if="{{ @client.status=='setup' }}">
+  <section class="pairing-flow" data-device-status-url="{{ @clientUrl }}/status"
+    data-polling="{{ isset(@client.pairing_code) ? 'true' : 'false' }}" <check if="{{ isset(@client.pairing_code) }}">
+    data-pairing-code-expires-at="{{ @client.pairing_code_expires_at }}"
+</check>><ol class="pairing-steps">
+  <li class="pairing-step pairing-step-download pairing-step-active"><span>1</span>
+    <check if="{{ @client.client_type=='api' }}">
+      <true>
+        <div>
+          <h2>Prepare your API client</h2>
+          <p>Your client exchanges the temporary code for a capture-only token.</p>
+          <pre class="pairing-request"><code>POST {{ @apiPairUrl }}
+Content-Type: application/json
+
+{"pairing_code":"12345 67890"}</code></pre>
+        </div>
+      </true>
+      <false>
+        <div class="shortcut-install-options">
+          <div>
+            <h2>Download the setup shortcut</h2>
+            <p>Open the file on your iPhone or iPad to connect this client.</p><a class="button button-primary"
+              href="{{ @shortcutUrl }}" download>Download Catch Setup</a>
+          </div>
+          <div class="shortcut-choice-divider" aria-hidden="true"><span>OR</span></div>
+          <div class="shortcut-qr">
+            <div data-qr-code data-qr-value="{{ @shortcutUrl }}" aria-label="QR code for the shortcut download">
+            </div><small>Scan with your device camera</small>
+          </div>
+        </div>
+      </false>
+    </check>
+  </li>
+  <li class="pairing-step<check if=" {{ isset(@client.pairing_code) }}"> pairing-step-active</check>"><span>2</span>
+    <div>
+      <h2>Enter the pairing code</h2>
+      <check if="{{ isset(@client.pairing_code) }}">
+        <true>
+          <p>Enter this code in {{ @client.client_type=='api' ? 'your API client' : 'the setup shortcut' }}.<span
+              class="pairing-expiry">It expires in <strong data-pairing-countdown>--:--</strong> minutes.</span></p>
+          <div class="pairing-code-row" data-copy-row><code data-copy-source>{{ @client.pairing_code }}</code><button
+              class="button button-secondary" type="button" data-copy-button>Copy code</button></div>
+        </true>
+        <false>
+          <p>Create a code when the client is ready. It remains valid for {{ @pairingCodeTtlMinutes }} minutes.</p>
+          <form method="post" action="{{ @clientUrl }}/pairing-code"><input type="hidden" name="_csrf"
+              value="{{ @csrf }}"><button class="button button-secondary" type="submit">Create pairing code</button>
+          </form>
+        </false>
+      </check>
+    </div>
+  </li>
+  <li class="pairing-step<check if=" {{ isset(@client.pairing_code) }}"> pairing-step-waiting</check>"><span>3</span>
+    <div>
+      <h2>Wait for the connection</h2>
+      <p data-pairing-status>Catch checks automatically whether this client is connected.</p>
+      <check if="{{ isset(@client.pairing_code) }}">
+        <div class="waiting-indicator" role="status"><span aria-hidden="true"></span>Checking every 7 seconds</div>
+      </check>
+    </div>
+  </li>
+</ol>
+</section>
+</check>
+<section class="client-details-card" aria-label="Client details">
+  <dl class="client-details-grid">
+    <div>
+      <dt>Client</dt>
+      <dd><i class="glyph glyph-{{ @client.view.clientIcon }}" aria-hidden="true"></i>{{ @client.view.clientAppLabel }}
+      </dd>
+    </div>
+    <div>
+      <dt>Operating system</dt>
+      <dd><i class="glyph glyph-{{ @client.view.osIcon }}" aria-hidden="true"></i>{{ @client.view.osLabel }}</dd>
+    </div>
+    <div>
+      <dt>Physical device</dt>
+      <dd><i class="glyph glyph-{{ @client.view.physicalDeviceType }}"
+          aria-hidden="true"></i>{{ @client.physical_device_name ?: 'Unassigned' }}</dd>
+    </div>
+    <div>
+      <dt>Type</dt>
+      <dd>{{ @client.view.typeLabel }}</dd>
+    </div>
+    <div>
+      <dt>Browser version</dt>
+      <dd>{{ @client.view.browserVersion }}</dd>
+    </div>
+  </dl>
+</section>
+<section class="client-sessions">
+  <header>
+    <h2>Sessions</h2>
+    <p>{{ count(@sessions) }} active</p>
+  </header>
+  <check if="{{ @sessions }}">
+    <true>
+      <div class="client-sessions-table" role="table" aria-label="Active sessions">
+        <div class="client-session-row client-session-head" role="row"><span role="columnheader">Status</span><span
+            role="columnheader">Connected</span><span role="columnheader">Last used</span><span role="columnheader">IP
+            address</span></div>
+        <repeat group="{{ @sessions }}" value="{{ @session }}">
+          <div class="client-session-row{{ @session.current ? ' is-current' : '' }}" role="row"><span role="cell"><span
+                class="session-active-dot"
+                aria-hidden="true"></span>{{ @session.current ? 'Current session' : 'Active' }}</span><span
+              role="cell"><time datetime="{{ @session.view.utcCreatedAt }}" data-local-time data-date-style="medium"
+                data-time-style="short">UTC {{ @session.created_at }}</time></span><span role="cell"><time
+                datetime="{{ @session.view.utcUpdatedAt }}" data-relative-time data-relative-suffix=" ago">just
+                now</time></span><span role="cell">{{ @session.ip_address ?: 'Not reported' }}</span></div>
+        </repeat>
+      </div>
+    </true>
+    <false>
+      <p class="client-sessions-empty">No active web sessions are associated with this client.</p>
+    </false>
+  </check>
+</section>
+<section class="device-captures">
+  <header>
+    <h2>Captures from this client</h2>
+    <p>{{ count(@captures) }} {{ count(@captures)===1 ? 'capture' : 'captures' }}</p>
+  </header>
+  <set captureCollectionVariant="compact" />
+  <set captureShowActions="{{ false }}" />
+  <set captureShowViewToggle="{{ false }}" />
+  <set captureEmptyTitle="No captures yet" />
+  <set captureEmptyText="No captures have been created by this client." />
+  <include href="captures/_list.html" />
+</section>
+<check if="{{ @client.user_agent || @debugEnabled }}">
+  <section class="client-debug-information">
+    <h2>Debug information</h2>
+    <check if="{{ @client.user_agent }}">
+      <details>
+        <summary>Technical browser information</summary><code>{{ @client.user_agent }}</code>
+      </details>
+    </check>
+    <check if="{{ @debugEnabled }}">
+      <set debugRequestHeading="Incoming capture requests" />
+      <set debugRequestCard="{{ false }}" />
+      <include href="devices/_debug_requests.html" />
+    </check>
+  </section>
+</check>
+<check if="{{ @client.status=='setup' && @client.client_type=='shortcut' }}">
+  <script src="/assets/vendor/qrcode.js"></script>
+</check>

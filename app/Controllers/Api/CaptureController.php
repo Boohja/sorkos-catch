@@ -101,7 +101,7 @@ final class CaptureController
             if ($shortcut && $this->uploadedFileCount($_FILES) > 1) {
                 throw new InvalidArgumentException(json_encode(['attachment' => 'iOS Shortcut captures accept only one attachment.']));
             }
-            $result = $this->service->create($user['id'], $input, $_FILES, $user['device_id']);
+            $result = $this->service->create($user['id'], $input, $_FILES, $user['client_id']);
             $capture = $result['capture'];
             foreach ($tagNames as $tagName) {
                 $tag = $this->tags->assignByName((string) $capture['id'], $tagName, (string) $user['id']);

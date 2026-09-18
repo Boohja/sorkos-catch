@@ -56,7 +56,7 @@ final class CliController
         if ($result['status'] !== 'connected') {
             Response::json(['error' => ['code' => 'authorization_not_found', 'message' => 'The authorization request was not found.']], 404);
         }
-        Response::json(['status' => 'connected', 'token' => $result['device_token'], 'token_type' => 'Bearer', 'scope' => 'capture:read', 'device' => ['id' => $result['device_id'], 'name' => $result['device_name']]]);
+        Response::json(['status' => 'connected', 'token' => $result['device_token'], 'token_type' => 'Bearer', 'scope' => 'capture:read', 'client' => ['id' => $result['client_id'], 'name' => $result['device_name']]]);
     }
 
     public function whoami(): never
@@ -66,7 +66,7 @@ final class CliController
         if (!$user || $user['client_type'] !== 'cli') {
             Response::json(['error' => ['code' => 'unauthorized', 'message' => 'A valid CLI token is required.']], 401);
         }
-        Response::json(['data' => ['id' => $user['id'], 'email' => $user['email'], 'display_name' => $user['display_name'], 'device' => ['id' => $user['device_id'], 'name' => $user['device_name'], 'platform' => $user['platform']]]]);
+        Response::json(['data' => ['id' => $user['id'], 'email' => $user['email'], 'display_name' => $user['display_name'], 'client' => ['id' => $user['client_id'], 'name' => $user['client_name'], 'platform' => $user['platform'], 'os' => $user['os'], 'app' => $user['client_icon']], 'device' => $user['device_id'] ? ['id' => $user['device_id'], 'name' => $user['physical_device_name']] : null]]);
     }
 
     public function logout(): never

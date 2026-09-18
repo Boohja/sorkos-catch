@@ -36,7 +36,7 @@ final class CaptureDebugService
         try {
             $query = $this->db->prepare(<<<'SQL'
                 INSERT INTO catch_capture_debug_requests (
-                    id, user_id, device_id, token_id, token_scope, endpoint, method,
+                    id, user_id, client_id, token_id, token_scope, endpoint, method,
                     remote_ip, user_agent, content_type, content_length, idempotency_key,
                     parameters_json, files_json, created_at
                 ) VALUES (
@@ -48,7 +48,7 @@ final class CaptureDebugService
             $query->execute([
                 'id' => $id,
                 'user' => $user['id'],
-                'device' => $user['device_id'],
+                'device' => $user['client_id'],
                 'token' => $user['token_id'],
                 'scope' => $user['token_scope'],
                 'endpoint' => mb_substr($endpoint, 0, 120),
@@ -103,7 +103,7 @@ final class CaptureDebugService
         }
     }
 
-    public function forDevice(string $userId, string $deviceId, int $limit = 50): array
+    public function forClient(string $userId, string $clientId, int $limit = 50): array
     {
         if (!$this->enabled()) {
             return [];
@@ -113,13 +113,13 @@ final class CaptureDebugService
         $query = $this->db->prepare(<<<SQL
             SELECT *
             FROM catch_capture_debug_requests
-            WHERE user_id = :user AND device_id = :device
+            WHERE user_id = :user AND client_id = :device
             ORDER BY created_at DESC
             LIMIT {$limit}
             SQL);
         $query->execute([
             'user' => $userId,
-            'device' => $deviceId,
+            'device' => $clientId,
         ]);
         $requests = $query->fetchAll();
 

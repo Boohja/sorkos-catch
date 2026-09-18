@@ -56,6 +56,8 @@ final class ShortcutController
         Response::json([
             'device_token' => $result['device_token'],
             'token_type' => 'Bearer',
+            'client' => ['id' => $result['client_id']],
+            'device' => ['id' => $result['device_id']],
             'capture_endpoint' => rtrim((string) $this->config->get('app.url'), '/') . '/api/shortcut/captures',
         ], 201);
     }

@@ -2,6 +2,360 @@
   grid-template-columns: 38px minmax(0, 1fr);
 }
 
+.client-overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  margin: 28px 0 30px;
+}
+
+.client-overview-identity,
+.client-overview-name {
+  display: flex;
+  align-items: center;
+}
+
+.client-overview-identity {
+  gap: 20px;
+  min-width: 0;
+}
+
+.client-overview-icon {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  place-items: center;
+  color: var(--text);
+  font-size: 64px;
+}
+
+.client-overview-icon .glyph {
+  transform: translateY(.04em);
+}
+
+.client-overview-name {
+  margin-bottom: 8px;
+}
+
+.client-overview-name h1 {
+  margin: 0;
+}
+
+.client-overview-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.client-overview-actions form {
+  margin: 0;
+}
+
+.client-overview-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.current-client-label {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.client-stats {
+  margin-bottom: 26px;
+  padding: 22px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.client-stats dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.client-stats dl>div {
+  min-width: 0;
+  padding: 0 24px;
+}
+
+.client-stats dl>div:first-child {
+  padding-left: 0;
+}
+
+.client-stats dl>div+div {
+  border-left: 1px solid var(--border);
+}
+
+.client-stats dt,
+.client-details-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.client-stats dd,
+.client-details-grid dd {
+  margin: 6px 0 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.client-details-card {
+  margin: 34px 0 38px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.client-details-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px 36px;
+  margin: 0;
+}
+
+.client-details-grid>div {
+  min-width: 0;
+}
+
+.client-details-grid dd {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  overflow-wrap: anywhere;
+}
+
+.client-details-grid dd .glyph {
+  color: var(--muted);
+  font-size: 19px;
+}
+
+.client-sessions {
+  margin: 0 0 42px;
+}
+
+.client-sessions>header,
+.device-captures>header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.client-sessions>header h2,
+.client-sessions>header p {
+  margin: 0;
+}
+
+.client-sessions>header p,
+.client-sessions-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.client-sessions-table {
+  width: 100%;
+}
+
+.client-session-row {
+  display: grid;
+  grid-template-columns: minmax(150px, .75fr) repeat(3, minmax(160px, 1fr));
+  align-items: center;
+  gap: 18px;
+  min-height: 58px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.client-session-head {
+  min-height: 42px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.client-session-row>span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.client-session-row.is-current {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.session-active-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.client-sessions-empty {
+  margin: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.client-debug-information {
+  margin-top: 44px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.client-debug-information>h2 {
+  margin: 0 0 12px;
+}
+
+.client-debug-information>details {
+  padding: 12px 0;
+}
+
+.client-debug-information code {
+  display: block;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.client-edit-heading {
+  margin-bottom: 26px;
+}
+
+.client-edit-form {
+  display: grid;
+  gap: 20px;
+  max-width: 640px;
+}
+
+.client-edit-form label {
+  display: grid;
+  gap: 7px;
+  font-weight: 700;
+}
+
+.client-edit-form input,
+.client-edit-form select {
+  width: 100%;
+}
+
+.client-edit-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+@media (max-width: 760px) {
+  .client-overview-header {
+    align-items: flex-start;
+  }
+
+  .client-stats dl,
+  .client-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .client-stats dl>div {
+    padding: 14px 18px;
+  }
+
+  .client-stats dl>div:first-child {
+    padding-left: 18px;
+  }
+
+  .client-stats dl>div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .client-stats dl>div:nth-child(n+3) {
+    border-top: 1px solid var(--border);
+  }
+
+  .client-details-grid>div,
+  .client-details-grid>div:nth-child(3n+2),
+  .client-details-grid>div:nth-child(3n+3) {
+    padding: 0;
+    border: 0;
+  }
+
+  .client-session-row {
+    grid-template-columns: minmax(140px, .8fr) repeat(3, minmax(150px, 1fr));
+  }
+
+  .client-sessions-table {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 560px) {
+
+  .client-overview-header,
+  .client-overview-identity,
+  .client-overview-name {
+    align-items: flex-start;
+  }
+
+  .client-overview-header {
+    flex-direction: column;
+  }
+
+  .client-overview-identity {
+    gap: 14px;
+  }
+
+  .client-overview-icon {
+    width: 56px;
+    height: 56px;
+    flex-basis: 56px;
+    font-size: 50px;
+  }
+
+  .client-overview-name {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .client-stats dl,
+  .client-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-stats dl>div,
+  .client-stats dl>div:first-child,
+  .client-stats dl>div+div {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
+  .client-stats dl>div:first-child {
+    border-top: 0;
+  }
+
+  .client-details-grid>div,
+  .client-details-grid>div:nth-child(even) {
+    padding: 0;
+    border: 0;
+  }
+
+  .client-overview-actions {
+    width: 100%;
+  }
+
+  .client-edit-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 @media (max-width: 900px) {
   .devices-table-row {
     grid-template-columns: 1fr auto;

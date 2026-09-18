@@ -53,14 +53,17 @@ final class Application
     {
         $config = Config::load($this->root);
         date_default_timezone_set((string)$config->get('app.timezone', 'UTC'));
-        $this->startSession($config);
+        $db = new Database($config);
+        $databaseAvailable = $db->available();
+        if ($databaseAvailable) {
+            $this->startSession($config, $db->connection());
+        }
         $f3 = \Base::instance();
         $f3->set('DEBUG', $config->bool('app.debug') ? 3 : 0);
         $f3->set('UI', $this->root . '/app/Views/');
-        $db = new Database($config);
         $view = new View($this->root . '/app/Views');
-        $f3->route('GET /health', fn () => \Catch\Http\Response::json(['status' => 'ok','database' => $db->available() ? 'connected' : 'unavailable','time' => gmdate(DATE_ATOM)]));
-        if (!$db->available()) {
+        $f3->route('GET /health', fn () => \Catch\Http\Response::json(['status' => 'ok','database' => $databaseAvailable ? 'connected' : 'unavailable','time' => gmdate(DATE_ATOM)]));
+        if (!$databaseAvailable) {
             $f3->route('GET /*', fn () => $view->render('errors/setup', ['title' => 'Setup required','configured' => $config->databaseConfigured()], 503));
             $f3->route('POST /*', fn () => \Catch\Http\Request::isShortcutApi() ? \Catch\Http\Response::shortcut('Database is not configured or unavailable.', '', 503) : \Catch\Http\Response::json(['error' => ['code' => 'database_unavailable','message' => 'Database is not configured or unavailable.']], 503));
             $f3->run();
@@ -87,11 +90,17 @@ final class Application
         if ($currentUser && !$access->allowsUser($currentUser)) {
             $auth->logout();
             $currentUser = null;
-        }$webDeviceId = null;
+        }$webClientId = null;
         if ($currentUser) {
-            $webDevice = $devices->ensureWebDevice($currentUser['id'], isset($_SESSION['catch_web_device_id']) ? (string)$_SESSION['catch_web_device_id'] : null, (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
-            $_SESSION['catch_web_device_id'] = $webDevice['id'];
-            $webDeviceId = $webDevice['id'];
+            $storedWebClientId = $_COOKIE['catch_client_id']
+                ?? $_SESSION['catch_web_client_id']
+                ?? $_SESSION['catch_web_device_id']
+                ?? null;
+            $webClient = $devices->ensureWebClient($currentUser['id'], is_string($storedWebClientId) ? $storedWebClientId : null, (string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            $_SESSION['catch_web_client_id'] = $webClient['id'];
+            unset($_SESSION['catch_web_device_id']);
+            $this->rememberWebClient($config, $webClient['id']);
+            $webClientId = $webClient['id'];
         }$path = (string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
         $publicPaths = ['/coming-soon','/login','/auth/start','/auth/callback','/logout','/health','/pair','/share','/cli/authorize','/cron/import-mail'];
         $isApi = $path === '/api' || str_starts_with($path, '/api/');
@@ -109,7 +118,7 @@ final class Application
             $csrf,
         );
         $comingSoon = new ComingSoonController($view, $auth, $csrf);
-        $web = new WebCaptures($view, $auth, $captures, $tags, $actions, $service, $captureDebug, $csrf, $this->root . '/storage/uploads', $webDeviceId);
+        $web = new WebCaptures($view, $auth, $captures, $tags, $actions, $service, $captureDebug, $csrf, $this->root . '/storage/uploads', $webClientId);
         $automationController = new AutomationController(
             $view,
             $auth,
@@ -123,7 +132,7 @@ final class Application
         $deviceController = new DeviceController($view, $auth, $devices, $captures, $csrf, $config, $captureDebug);
         $pairController = new PairController($view, $auth, $devices, $csrf);
         $cliAuth = new CliAuthRepository($pdo);
-        $cliAuthController = new CliAuthController($view, $auth, $cliAuth, $csrf);
+        $cliAuthController = new CliAuthController($view, $auth, $cliAuth, $devices, $csrf);
         $help = new HelpController($view, $auth, $config);
         $emailImport = new EmailImportController(
             $config,
@@ -154,6 +163,7 @@ final class Application
         $f3->route('GET /profile', [$accountController, 'profile']);
         $f3->route('GET /settings', [$accountController, 'settings']);
         $f3->route('GET /settings/devices', [$accountController, 'devices']);
+        $f3->route('POST /settings/devices', [$deviceController, 'createPhysical']);
         $f3->route('GET /settings/email', [$accountController, 'email']);
         $f3->route('GET /settings/email/new', [$accountController, 'newEmail']);
         $f3->route('POST /settings/email', [$accountController, 'createEmail']);
@@ -198,11 +208,21 @@ final class Application
         $f3->route('GET /tags/@tag/captures', [$tagController,'captures']);
         $f3->route('POST /captures/@id/tags', [$tagController,'assign']);
         $f3->route('POST /captures/@id/tags/@tag/delete', [$tagController,'unassign']);
-        $f3->route('GET /devices', [$deviceController,'index']);
-        $f3->route('GET /devices/new', [$deviceController,'new']);
-        $f3->route('GET /devices/shortcuts', [$deviceController,'shortcuts']);
+        $f3->route('GET /clients', [$deviceController,'index']);
+        $f3->route('GET /clients/new', [$deviceController,'new']);
+        $f3->route('GET /clients/shortcuts', [$deviceController,'shortcuts']);
+        $f3->route('POST /clients', [$deviceController,'create']);
+        $f3->route('GET /clients/@client', [$deviceController,'show']);
+        $f3->route('GET /clients/@client/edit', [$deviceController,'edit']);
+        $f3->route('POST /clients/@client/edit', [$deviceController,'rename']);
+        $f3->route('POST /clients/@client/pairing-code', [$deviceController,'createPairingCode']);
+        $f3->route('GET /clients/@client/status', [$deviceController,'status']);
+        $f3->route('POST /clients/@client/delete', [$deviceController,'delete']);
+        $f3->route('GET /devices', fn () => \Catch\Http\Response::redirect('/clients'));
+        $f3->route('GET /devices/new', fn () => \Catch\Http\Response::redirect('/clients/new'));
+        $f3->route('GET /devices/shortcuts', fn () => \Catch\Http\Response::redirect('/clients/shortcuts'));
         $f3->route('POST /devices', [$deviceController,'create']);
-        $f3->route('GET /devices/@device', [$deviceController,'show']);
+        $f3->route('GET /devices/@device', fn (\Base $f3, array $params) => \Catch\Http\Response::redirect('/clients/' . urlencode((string) $params['device'])));
         $f3->route('POST /devices/@device/rename', [$deviceController,'rename']);
         $f3->route('POST /devices/@device/pairing-code', [$deviceController,'createPairingCode']);
         $f3->route('GET /devices/@device/status', [$deviceController,'status']);
@@ -212,6 +232,7 @@ final class Application
         $f3->route('POST /pair', [$pairController,'approve']);
         $f3->route('GET /cli/authorize', [$cliAuthController,'show']);
         $f3->route('POST /cli/authorize', [$cliAuthController,'approve']);
+        $f3->route('POST /api/clients/pair', [$apiShortcut,'pairDevice']);
         $f3->route('POST /api/devices/pair', [$apiShortcut,'pairDevice']);
         $f3->route('POST /api/shortcut/pair', [$apiShortcut,'pairShortcut']);
         $f3->route('POST /api/shortcut/captures', [$api,'createShortcut']);
@@ -242,13 +263,30 @@ final class Application
         });
         $f3->run();
     }
-    private function startSession(Config $config): void
+    private function startSession(Config $config, \PDO $db): void
     {
         ini_set('session.use_only_cookies', '1');
         ini_set('session.use_strict_mode', '1');
+        ini_set('session.gc_maxlifetime', (string) DatabaseSessionHandler::LIFETIME_SECONDS);
         session_name('catch_session');
-        session_save_path($this->root . '/storage/sessions');
-        session_set_cookie_params(['lifetime' => 0,'path' => '/','secure' => $config->bool('session.secure', true),'httponly' => true,'samesite' => 'Lax']);
+        session_set_cookie_params(['lifetime' => DatabaseSessionHandler::LIFETIME_SECONDS,'path' => '/','secure' => $config->bool('session.secure', true),'httponly' => true,'samesite' => 'Lax']);
+        session_set_save_handler(new DatabaseSessionHandler(
+            $db,
+            (string) ($_SERVER['REMOTE_ADDR'] ?? ''),
+            (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''),
+        ), true);
         session_start();
+    }
+
+    private function rememberWebClient(Config $config, string $clientId): void
+    {
+        setcookie('catch_client_id', $clientId, [
+            'expires' => time() + 400 * 24 * 60 * 60,
+            'path' => '/',
+            'secure' => $config->bool('session.secure', true),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+        $_COOKIE['catch_client_id'] = $clientId;
     }
 }

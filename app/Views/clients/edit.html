@@ -1,0 +1,28 @@
+<a class="back-link" href="{{ @clientUrl }}">&larr; Back to client</a>
+<header class="page-heading client-edit-heading">
+  <div>
+    <h1>Edit client</h1>
+    <p>Change how this client is identified and which physical device it belongs to.</p>
+  </div>
+</header>
+<form class="client-edit-form" method="post" action="{{ @clientUrl }}/edit"><input type="hidden" name="_csrf"
+    value="{{ @csrf }}"><label>Client name<input name="name" maxlength="120" required
+      value="{{ @client.name }}"></label><label>Client<select name="client_app" required>
+      <repeat group="{{ @clientApps }}" key="{{ @value }}" value="{{ @label }}">
+        <option value="{{ @value }}" {{ @client.view.clientApp==@value ? 'selected' : '' }}>{{ @label }}</option>
+      </repeat>
+    </select></label><label>Operating system<select name="os" required>
+      <repeat group="{{ @operatingSystems }}" key="{{ @value }}" value="{{ @label }}">
+        <option value="{{ @value }}" {{ @client.view.os==@value ? 'selected' : '' }}>{{ @label }}</option>
+      </repeat>
+    </select></label><label>Physical device<select name="physical_device_id">
+      <option value="">Unassigned</option>
+      <repeat group="{{ @devices }}" value="{{ @physicalDevice }}">
+        <option value="{{ @physicalDevice.id }}" {{ @physicalDevice.id==@client.device_id ? 'selected' : '' }}>
+          {{ @physicalDevice.name }}
+        </option>
+      </repeat>
+    </select></label>
+  <div class="client-edit-actions"><button class="button button-primary" type="submit">Save client</button><a
+      class="button button-secondary" href="{{ @clientUrl }}">Cancel</a></div>
+</form>

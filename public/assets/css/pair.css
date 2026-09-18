@@ -72,6 +72,22 @@
   font-weight: 850
 }
 
+.pair-device-form {
+  display: grid;
+  gap: 14px
+}
+
+.pair-device-form select,
+.pair-device-form input {
+  width: 100%
+}
+
+.pair-new-device {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, .6fr);
+  gap: 10px
+}
+
 @media(max-width:560px) {
   .browser-pair {
     padding-top: 42px
@@ -83,5 +99,9 @@
 
   .browser-pair h1 {
     font-size: 31px
+  }
+
+  .pair-new-device {
+    grid-template-columns: 1fr
   }
 }
