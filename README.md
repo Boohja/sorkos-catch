@@ -72,3 +72,5 @@ The interactive Swagger reference is served at `/docs/api/`; its raw OpenAPI doc
 Swagger UI 5.32.11 is committed under `public/vendor/swagger-ui/` with its Apache 2.0 license. The page does not load scripts, styles, or validators from a CDN, and Swagger introduces no Composer or production runtime dependency.
 
 Composer is an optional local-development convenience for running tests. Production does not use Composer for application autoloading, migrations, or runtime dependencies.
+
+The global footer embeds Pulse feedback using `[pulse] base_url` in `config/config.ini` or `PULSE_BASE_URL`. Use `https://pulse.test` locally and `https://pulse.sorkos.net` in production. Configure the shared widget token with `[pulse] widget_token` or `PULSE_WIDGET_TOKEN`; the Coming Soon footer does not load the widget.

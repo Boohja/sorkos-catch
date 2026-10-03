@@ -17,7 +17,7 @@ final class View
     private const OS_LABELS = ['windows' => 'Windows','macos' => 'macOS','linux' => 'Linux','ios' => 'iOS','ipados' => 'iPadOS','android' => 'Android','unknown' => 'Unknown OS'];
     private const OS_ICONS = ['windows' => 'brand-windows','macos' => 'brand-apple','linux' => 'brand-linux','ios' => 'brand-apple','ipados' => 'brand-apple','android' => 'brand-android','unknown' => 'app'];
 
-    public function __construct(private readonly string $path)
+    public function __construct(private readonly string $path, private readonly ?Config $config = null)
     {
         $f3 = \Base::instance();
         $f3->set('UI', rtrim($this->path, '/\\') . '/');
@@ -85,6 +85,11 @@ final class View
         $data['isComingSoon'] = $data['currentPath'] === '/coming-soon';
         $data['layoutCsrf'] = (string) ($data['csrf'] ?: ($_SESSION['_csrf'] ?? ''));
         $data['year'] = date('Y');
+        $buildFile = dirname($this->path, 2) . '/last-build.json';
+        $build = is_readable($buildFile) ? json_decode((string) file_get_contents($buildFile), true) : null;
+        $data['buildVersion'] = is_scalar($build['version'] ?? null) ? (string) $build['version'] : '';
+        $data['pulseBaseUrl'] = rtrim(trim((string) ($this->config?->get('pulse.base_url', 'https://pulse.sorkos.net') ?? 'https://pulse.sorkos.net')), '/');
+        $data['pulseToken'] = trim((string) ($this->config?->get('pulse.widget_token', '') ?? ''));
         $data['flashMessages'] = $this->flashMessages();
 
         if ($data['isAuthenticated']) {

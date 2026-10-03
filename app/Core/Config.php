@@ -41,6 +41,7 @@ final class Config
             'MAIL_IMAP_FAILED_FOLDER' => 'mail.imap_failed_folder',
             'MAIL_ADDRESS_DOMAIN' => 'mail.address_domain', 'MAIL_MAX_BYTES' => 'mail.max_bytes',
             'MAIL_CRON_SECRET' => 'mail.cron_secret',
+            'PULSE_BASE_URL' => 'pulse.base_url', 'PULSE_WIDGET_TOKEN' => 'pulse.widget_token',
             'PRSM_BASE_URL' => 'prsm.base_url', 'PRSM_TLS_VERIFY' => 'prsm.tls_verify',
             'WEBHOOK_ALLOW_PRIVATE' => 'webhook.allow_private',
             'WEBHOOK_TLS_VERIFY' => 'webhook.tls_verify',

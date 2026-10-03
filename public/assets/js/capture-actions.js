@@ -143,10 +143,11 @@ export function initCaptureActions() {
           : (current - 1 + items.length) % items.length;
     focusItem(next);
   });
-  menu.addEventListener('focusout', () => {
-    queueMicrotask(() => {
-      if (!menu.hidden && !menu.contains(document.activeElement)) close();
-    });
+  menu.addEventListener('focusout', (event) => {
+    // Some browsers blur the focused menu item on pointer-down without
+    // focusing the clicked button. Keep the menu alive until its click/submit
+    // runs; outside clicks and Tab already dismiss it explicitly.
+    if (event.relatedTarget && !menu.contains(event.relatedTarget)) close();
   });
   window.addEventListener('scroll', close, { passive: true });
   window.addEventListener('resize', close);

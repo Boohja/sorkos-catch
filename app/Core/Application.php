@@ -61,7 +61,7 @@ final class Application
         $f3 = \Base::instance();
         $f3->set('DEBUG', $config->bool('app.debug') ? 3 : 0);
         $f3->set('UI', $this->root . '/app/Views/');
-        $view = new View($this->root . '/app/Views');
+        $view = new View($this->root . '/app/Views', $config);
         $f3->route('GET /health', fn () => \Catch\Http\Response::json(['status' => 'ok','database' => $databaseAvailable ? 'connected' : 'unavailable','time' => gmdate(DATE_ATOM)]));
         if (!$databaseAvailable) {
             $f3->route('GET /*', fn () => $view->render('errors/setup', ['title' => 'Setup required','configured' => $config->databaseConfigured()], 503));

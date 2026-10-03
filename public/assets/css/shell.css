@@ -23,6 +23,45 @@
   font-size: 13px
 }
 
+.site-footer:not(.site-footer-coming-soon) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr)
+}
+
+.site-footer:not(.site-footer-coming-soon)>span:first-child {
+  grid-column: 1;
+  grid-row: 1
+}
+
+.footer-version {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: center;
+  overflow-wrap: anywhere
+}
+
+.footer-feedback {
+  grid-column: 3;
+  grid-row: 1;
+  margin-left: auto
+}
+
+.footer-feedback a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  text-decoration: none
+}
+
+.footer-feedback a:hover {
+  text-decoration: underline
+}
+
+.footer-feedback a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 4px
+}
+
 .site-footer a {
   text-underline-offset: 3px
 }

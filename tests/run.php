@@ -757,7 +757,7 @@ $test('PWA share targets stage originals and open a dedicated processing route',
             throw new RuntimeException('The debug-only share trace is incomplete: ' . $required);
         }
     }
-    foreach (['catch-shell-v70','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
+    foreach (['catch-shell-v73','share-target.js?v=3','db.js?v=2','sync-manager.js?v=2'] as $required) {
         if (!str_contains($worker, $required)) {
             throw new RuntimeException('The share diagnostic cache refresh is incomplete: ' . $required);
         }

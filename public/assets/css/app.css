@@ -295,6 +295,71 @@ textarea::placeholder {
   padding-top: 13px
 }
 
+.composer-attachments {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 8px
+}
+
+.composer-attachments[hidden] {
+  display: none
+}
+
+.composer-attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0
+}
+
+.composer-attachment-preview {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--surface-muted)
+}
+
+.composer-attachment-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px
+}
+
+.composer-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer
+}
+
+.composer-attachment-remove:hover {
+  background: var(--surface-muted);
+  color: var(--text)
+}
+
+.composer-attachment-remove:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px
+}
+
+.composer-attachment-remove:disabled {
+  opacity: .5;
+  cursor: wait
+}
+
 .file-button input {
   position: absolute;
   width: 1px;
